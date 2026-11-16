@@ -40,9 +40,9 @@ export function AboutDialog({ onClose }: { onClose(): void }) {
 
         <div className="about-body">
           <p className="about-lead">
-            GridSafety is a <strong>command center for keeping power lines clean and safe</strong>. It brings drone
-            inspections, live monitoring, triage and crew assignments into one place, so problems get found and fixed
-            before they cause a fire or an outage.
+            GridSafety is an <strong>operations dashboard for keeping power lines clear and inspected</strong>. Drone
+            inspections, live monitoring, triage and crew assignments all happen in one place, so problems get found and
+            fixed before they cause a fire or an outage.
           </p>
 
           <section>
