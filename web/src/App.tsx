@@ -37,6 +37,7 @@ export function App() {
   const [findingId, setFindingId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [findingsFilter, setFindingsFilter] = useState('open');
 
   const isSupervisor = Boolean(me.data?.isSupervisor);
   const tabs: [Tab, string][] = [['ops', 'Operations'], ['findings', 'Findings'], ['missions', 'Missions'], ['resources', 'Resources']];
@@ -103,10 +104,13 @@ export function App() {
           </div>
         )}
         <StatsBar onOpenFindings={() => go('findings')} />
-        {tab === 'ops' && <OpsView onOpenFinding={setFindingId} onOpenMission={openMission} />}
+        {tab === 'ops' && (
+          <OpsView onOpenFinding={setFindingId} onOpenMission={openMission}
+            onOpenTriageQueue={() => { setFindingsFilter('New'); go('findings'); window.scrollTo(0, 0); }} />
+        )}
         {tab === 'findings' && (
           <>
-            <FindingsView onOpen={setFindingId} />
+            <FindingsView key={findingsFilter} onOpen={setFindingId} initialFilter={findingsFilter} />
             <CrewsPanel />
           </>
         )}

@@ -407,3 +407,6 @@ button { font: inherit; color: inherit; }
   .member-row > :nth-child(2) { grid-column: 1; }
   .handles-grid { grid-template-columns: 1fr; }
 }
+
+/* Only the finding dots take the mouse; the rest of their layer lets events through to the lines below. */
+.leaflet-findings-pane svg { pointer-events: none; }

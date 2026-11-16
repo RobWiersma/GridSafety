@@ -1,6 +1,6 @@
 import L from 'leaflet';
 import { useEffect, useMemo, useState } from 'react';
-import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, MapContainer, Marker, Pane, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import { FINDING_TYPE_LABEL, TOWER_ZOOM, minKvForZoom, severityHex, voltageHex } from '../lib/format';
 import type { Circuit, DroneState, FindingView, TelemetryPoint } from '../types';
 
@@ -26,6 +26,9 @@ const droneIcon = (d: DroneState) =>
   });
 
 export function OpsMap({ circuits, drones, findings, track, focus, flightNames = {}, onOpenFinding }: Props) {
+  // SVG, not the map's shared canvas: a canvas in its own pane would cover the whole map and swallow
+  // hover and clicks meant for the lines and parked drones underneath. There are only tens of findings.
+  const findingsRenderer = useMemo(() => L.svg({ pane: 'findings' }), []);
   const bounds = useMemo(() => {
     const pts = (focus ? [focus] : circuits).flatMap((c) => c.structures.map((s) => [s.location.lat, s.location.lon] as [number, number]));
     return pts.length ? L.latLngBounds(pts) : null;
@@ -49,8 +52,12 @@ export function OpsMap({ circuits, drones, findings, track, focus, flightNames =
         <Polyline positions={track.map((p) => [p.lat, p.lon] as L.LatLngTuple)} pathOptions={{ color: '#f43f5e', weight: 2.5, dashArray: '6 4' }} />
       )}
 
-      {findings.map((f) => (
-        <CircleMarker key={f.finding.id} center={[f.finding.location.lat, f.finding.location.lon]}
+      {/* Stacking, bottom to top: lines, parked drones, findings (worst on top), flying drones.
+          A drone that landed on a defect must not hide it. */}
+      <Pane name="parked-drones" style={{ zIndex: 590 }} />
+      <Pane name="findings" style={{ zIndex: 595 }}>
+      {[...findings].sort((a, b) => a.finding.severity - b.finding.severity).map((f) => (
+        <CircleMarker key={f.finding.id} pane="findings" renderer={findingsRenderer} center={[f.finding.location.lat, f.finding.location.lon]}
           radius={6 + f.finding.severity * 1.5}
           pathOptions={{ color: '#fff', weight: 2, fillColor: severityHex(f.finding.severity), fillOpacity: 0.9 }}
           eventHandlers={{ click: () => onOpenFinding(f.finding.id) }}>
@@ -60,9 +67,11 @@ export function OpsMap({ circuits, drones, findings, track, focus, flightNames =
           </Tooltip>
         </CircleMarker>
       ))}
+      </Pane>
 
       {drones.map((d) => (
-        <Marker key={d.droneId} position={[d.position.lat, d.position.lon]} icon={droneIcon(d)} zIndexOffset={1000}>
+        <Marker key={d.droneId} position={[d.position.lat, d.position.lon]} icon={droneIcon(d)}
+          pane={d.status === 'Flying' ? 'markerPane' : 'parked-drones'} zIndexOffset={d.status === 'Flying' ? 1000 : 0}>
           <Tooltip direction="top" offset={[0, -14]} permanent={d.status === 'Flying'}>
             {(d.status === 'Flying' && d.missionId && flightNames[d.missionId]) || d.droneId} · {Math.round(d.batteryPct)}% · {Math.round(d.altitudeM)} m{d.rssiDbm != null && ` · ${Math.round(d.rssiDbm)} dBm`}
           </Tooltip>

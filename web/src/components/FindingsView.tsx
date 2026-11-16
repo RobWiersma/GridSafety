@@ -8,8 +8,8 @@ import { SeverityBadge } from './SeverityBadge';
 const SEVERITY_OPTIONS = [['any', 'Any severity'], ['5', 'Sev 5 only'], ['4', 'Sev 4+'], ['3', 'Sev 3+']] as const;
 type Severity = (typeof SEVERITY_OPTIONS)[number][0];
 
-export function FindingsView({ onOpen }: { onOpen(id: string): void }) {
-  const [filter, setFilter] = useState('open');
+export function FindingsView({ onOpen, initialFilter = 'open' }: { onOpen(id: string): void; initialFilter?: string }) {
+  const [filter, setFilter] = useState(initialFilter);
   const findings = useFindings(filter);
   const crews = useCrews();
   const [query, setQuery] = useState('');

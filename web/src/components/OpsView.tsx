@@ -8,7 +8,11 @@ import { SidePanel } from './SidePanel';
 import { useSession } from '../session';
 import { SignalBars } from './SignalBars';
 
-export function OpsView({ onOpenFinding, onOpenMission }: { onOpenFinding(id: string): void; onOpenMission(id: string): void }) {
+export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
+  onOpenFinding(id: string): void;
+  onOpenMission(id: string): void;
+  onOpenTriageQueue(): void;
+}) {
   const circuits = useCircuits();
   const drones = useDrones();
   const missions = useMissions();
@@ -31,7 +35,9 @@ export function OpsView({ onOpenFinding, onOpenMission }: { onOpenFinding(id: st
 
   const flightNames = useMemo(() => Object.fromEntries((missions.data ?? []).filter((m) => m.mission.name).map((m) => [m.mission.id, m.mission.name!])), [missions.data]);
 
-  const urgent = (findings.data ?? []).filter((f) => f.finding.severity >= 4 && f.finding.status === 'New').slice(0, 5);
+  // Every untriaged finding, in work-queue order (overdue, then severity, then oldest: the API sorts it that way).
+  const untriaged = (findings.data ?? []).filter((f) => f.finding.status === 'New');
+  const urgent = untriaged.slice(0, 5);
 
   return (
     <div className="ops">
@@ -70,8 +76,8 @@ export function OpsView({ onOpenFinding, onOpenMission }: { onOpenFinding(id: st
           <FlightAlerts open={open} acknowledged={acknowledged} onOpenMission={onOpenMission} />
         </SidePanel>
 
-        <SidePanel id="triage" title="Needs triage" count={urgent.length}>
-          {urgent.length === 0 && <p className="muted small">No high-severity findings waiting.</p>}
+        <SidePanel id="triage" title="Needs triage" count={untriaged.length}>
+          {untriaged.length === 0 && <p className="muted small">Nothing waiting for triage.</p>}
           {urgent.map((f) => (
             <div key={f.finding.id} className="triage-row">
               <button className="finding-row" onClick={() => onOpenFinding(f.finding.id)} title="Open the finding">
@@ -87,6 +93,11 @@ export function OpsView({ onOpenFinding, onOpenMission }: { onOpenFinding(id: st
               </button>
             </div>
           ))}
+          {untriaged.length > urgent.length && (
+            <button className="link-button" onClick={onOpenTriageQueue}>
+              View all {untriaged.length} in Findings →
+            </button>
+          )}
         </SidePanel>
       </aside>
     </div>
