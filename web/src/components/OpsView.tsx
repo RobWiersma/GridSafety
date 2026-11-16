@@ -4,6 +4,7 @@ import { FINDING_TYPE_LABEL, miles, pct, relativeTime } from '../lib/format';
 import type { DroneAlert, MissionView } from '../types';
 import { OpsMap } from './OpsMap';
 import { SeverityBadge } from './SeverityBadge';
+import { SeverityFilter, useSeverityFilter } from './SeverityFilter';
 import { SidePanel } from './SidePanel';
 import { useSession } from '../session';
 import { SignalBars } from './SignalBars';
@@ -35,8 +36,18 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
 
   const flightNames = useMemo(() => Object.fromEntries((missions.data ?? []).filter((m) => m.mission.name).map((m) => [m.mission.id, m.mission.name!])), [missions.data]);
 
+  // The severity chips filter both the map and the triage panel, so the two always agree.
+  const severity = useSeverityFilter();
+  const allOpen = findings.data ?? [];
+  const sevCounts = useMemo(() => {
+    const c: Record<number, number> = {};
+    for (const f of allOpen) c[f.finding.severity] = (c[f.finding.severity] ?? 0) + 1;
+    return c;
+  }, [allOpen]);
+  const visible = allOpen.filter((f) => severity.shown.has(f.finding.severity));
+
   // Every untriaged finding, in work-queue order (overdue, then severity, then oldest: the API sorts it that way).
-  const untriaged = (findings.data ?? []).filter((f) => f.finding.status === 'New');
+  const untriaged = visible.filter((f) => f.finding.status === 'New');
   const urgent = untriaged.slice(0, 5);
 
   return (
@@ -45,12 +56,13 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
         <OpsMap
           circuits={circuits.data ?? []}
           drones={drones.data ?? []}
-          findings={findings.data ?? []}
+          findings={visible}
           flightNames={flightNames}
           track={track.data ?? []}
           focus={focus ? circuits.data?.find((c) => c.id === focus.mission.circuitId) : null}
           onOpenFinding={onOpenFinding}
         />
+        <SeverityFilter counts={sevCounts} shown={severity.shown} onToggle={severity.toggle} onOnly={severity.only} onAll={severity.all} />
         <div className="map-legend">
           <span><i style={{ background: '#14b8a6' }} />60 kV &amp; below</span>
           <span><i style={{ background: '#0ea5e9' }} />115 kV</span>
@@ -77,7 +89,7 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
         </SidePanel>
 
         <SidePanel id="triage" title="Needs triage" count={untriaged.length}>
-          {untriaged.length === 0 && <p className="muted small">Nothing waiting for triage.</p>}
+          {untriaged.length === 0 && <p className="muted small">{visible.length < allOpen.length ? 'Nothing waiting for triage at the selected severities.' : 'Nothing waiting for triage.'}</p>}
           {urgent.map((f) => (
             <div key={f.finding.id} className="triage-row">
               <button className="finding-row" onClick={() => onOpenFinding(f.finding.id)} title="Open the finding">
