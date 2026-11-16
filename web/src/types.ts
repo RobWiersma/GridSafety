@@ -99,6 +99,25 @@ export interface FindingView {
   nextStatuses: FindingStatus[];
   overdue: boolean;
   severityLabel: string;
+  suggestedCrew: string;
+}
+
+export interface CrewMember {
+  name: string;
+  role: string;
+}
+
+export interface Crew {
+  id: string;
+  name: string;
+  specialty: string;
+  handles: FindingType[];
+  members: CrewMember[];
+}
+
+export interface CrewView {
+  crew: Crew;
+  openWorkOrders: number;
 }
 
 export interface DroneState {

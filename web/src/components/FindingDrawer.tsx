@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useContext, useEffect, useState } from 'react';
-import { FetcherContext, useFindingImage, useFindingStatus } from '../api';
+import { FetcherContext, useCrews, useFindingImage, useFindingStatus } from '../api';
 import { ACTION_LABEL, FINDING_TYPE_LABEL, relativeTime, slaText } from '../lib/format';
 import type { FindingStatus, FindingView } from '../types';
 import { SeverityBadge } from './SeverityBadge';
@@ -20,8 +20,15 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
   const { data, isPending } = useQuery({ queryKey: ['finding', id], queryFn: () => api<FindingView>(`/findings/${id}`), refetchInterval: 5000 });
   const image = useFindingImage(id);
   const change = useFindingStatus();
+  const crews = useCrews();
   const [note, setNote] = useState('');
   const [assignee, setAssignee] = useState('');
+
+  // Start the picker on the crew that normally handles this kind of defect.
+  const suggested = data?.suggestedCrew;
+  useEffect(() => {
+    if (suggested) setAssignee((a) => a || suggested);
+  }, [suggested]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -31,7 +38,7 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
 
   const act = (status: FindingStatus) => {
     if (status === 'Assigned' && !assignee.trim()) {
-      onToast({ kind: 'error', text: 'Enter the crew or person to assign.' });
+      onToast({ kind: 'error', text: 'Pick a crew or crew member to assign.' });
       return;
     }
     change.mutate(
@@ -104,8 +111,22 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
                   <h3>Actions</h3>
                   <input className="input" placeholder="Note for the record (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
                   {data.nextStatuses.includes('Assigned') && (
-                    <input className="input" style={{ marginTop: 8 }} placeholder="Assign to (e.g. Line Crew 4, Veg Mgmt – Davey Tree)"
-                      value={assignee} onChange={(e) => setAssignee(e.target.value)} />
+                    <label className="assign-field">
+                      <span className="muted small">Assign to</span>
+                      <select className="input" value={assignee} onChange={(e) => setAssignee(e.target.value)} disabled={!crews.data}>
+                        {!crews.data && <option value="">Loading crews…</option>}
+                        {crews.data?.map(({ crew, openWorkOrders }) => (
+                          <optgroup key={crew.id} label={`${crew.name} · ${crew.specialty}`}>
+                            <option value={crew.name}>
+                              Whole crew ({openWorkOrders} open){crew.name === suggested ? ' ★ suggested' : ''}
+                            </option>
+                            {crew.members.map((m) => (
+                              <option key={m.name} value={`${m.name} (${crew.name})`}>{m.name}, {m.role}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </label>
                   )}
                   <div className="status-buttons">
                     {data.nextStatuses.map((s) => {

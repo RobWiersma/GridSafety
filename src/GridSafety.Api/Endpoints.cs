@@ -13,7 +13,8 @@ public sealed record MissionStatusRequest(MissionStatus Status, string? Note);
 public sealed record FindingStatusRequest(FindingStatus Status, string? Note, string? Assignee);
 
 public sealed record MissionView(Mission Mission, string CircuitName, double Coverage, IReadOnlyList<MissionStatus> NextStatuses);
-public sealed record FindingView(Finding Finding, string CircuitName, IReadOnlyList<FindingStatus> NextStatuses, bool Overdue, string SeverityLabel);
+public sealed record FindingView(Finding Finding, string CircuitName, IReadOnlyList<FindingStatus> NextStatuses, bool Overdue, string SeverityLabel, string SuggestedCrew);
+public sealed record CrewView(Crew Crew, int OpenWorkOrders);
 public sealed record MeView(string Id, string Name, bool IsSupervisor, IReadOnlyList<string> Groups, bool IsGuest = false);
 public sealed record UrlView(string Url, DateTimeOffset ExpiresAt);
 
@@ -39,6 +40,7 @@ public static class Endpoints
         guest.MapGet("/findings", ListFindings);
         guest.MapGet("/findings/{id}", GetFinding);
         guest.MapGet("/findings/{id}/image", GetFindingImage);
+        guest.MapGet("/crews", ListCrews);
 
         var secured = api.MapGroup("/").AddEndpointFilter(RequireUser);
         secured.MapGet("/me", (HttpContext ctx) => { var u = User(ctx); return TypedResults.Ok(new MeView(u.Id, u.DisplayName, u.IsSupervisor, u.Groups)); });
@@ -59,6 +61,7 @@ public static class Endpoints
         secured.MapGet("/findings/{id}", GetFinding);
         secured.MapGet("/findings/{id}/image", GetFindingImage);
         secured.MapPost("/findings/{id}/status", ChangeFindingStatus);
+        secured.MapGet("/crews", ListCrews);
 
         if (devIngest)
         {
@@ -89,7 +92,7 @@ public static class Endpoints
     }
 
     private static FindingView ToView(Finding f, ICircuitCatalog circuits, DateTimeOffset now) =>
-        new(f, circuits.Find(f.CircuitId)?.Name ?? f.CircuitId, Finding.Workflow.Next(f.Status), f.IsOverdue(now), TriageSla.Describe(f.Severity));
+        new(f, circuits.Find(f.CircuitId)?.Name ?? f.CircuitId, Finding.Workflow.Next(f.Status), f.IsOverdue(now), TriageSla.Describe(f.Severity), CrewRoster.SuggestFor(f.Type).Name);
 
     private static async Task<Ok<OpsStats>> Stats(IGridRepository repo, TimeProvider clock, CancellationToken ct)
     {
@@ -240,6 +243,18 @@ public static class Endpoints
     private static async Task<Results<ContentHttpResult, NotFound>> GetFindingImage(string id, IGridRepository repo, CancellationToken ct) =>
         await repo.GetFindingAsync(id, ct) is { } f ? TypedResults.Content(FindingImage.Svg(f), "image/svg+xml") : TypedResults.NotFound();
 
+    /// <summary>The crew roster with each crew's open work orders (assigned, not yet resolved), crew-wide or to a member.</summary>
+    private static async Task<Ok<IEnumerable<CrewView>>> ListCrews(IGridRepository repo, CancellationToken ct)
+    {
+        var open = (await repo.ListFindingsAsync(ct: ct))
+            .Where(f => f.Status == FindingStatus.Assigned)
+            .Select(f => CrewRoster.Resolve(f.AssignedTo)?.Crew.Id)
+            .Where(id => id is not null)
+            .CountBy(id => id!)
+            .ToDictionary();
+        return TypedResults.Ok(CrewRoster.All.Select(c => new CrewView(c, open.GetValueOrDefault(c.Id))));
+    }
+
     private static async Task<Results<Ok<FindingView>, NotFound, ValidationProblem, Conflict<string>, ProblemHttpResult>> ChangeFindingStatus(
         string id, FindingStatusRequest req, HttpContext ctx, IGridRepository repo, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
     {
@@ -249,9 +264,18 @@ public static class Endpoints
 
         var f = await repo.GetFindingAsync(id, ct);
         if (f is null) return TypedResults.NotFound();
+
+        // Work orders go to someone on the crew roster, stored under their canonical label.
+        var assignee = req.Assignee;
+        if (req.Status == FindingStatus.Assigned && !string.IsNullOrWhiteSpace(assignee))
+        {
+            if (CrewRoster.Resolve(assignee) is not { } who)
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["assignee"] = [$"'{assignee.Trim()}' isn't on the crew roster."] });
+            assignee = who.Label;
+        }
         try
         {
-            f.MoveTo(req.Status, clock.GetUtcNow(), user.DisplayName, req.Note, req.Assignee);
+            f.MoveTo(req.Status, clock.GetUtcNow(), user.DisplayName, req.Note, assignee);
             await repo.SaveFindingAsync(f, ct);
         }
         catch (InvalidTransitionException ex) { return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["status"] = [ex.Message] }); }

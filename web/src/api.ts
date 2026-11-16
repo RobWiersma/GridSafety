@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext } from 'react';
 import { useSession } from './session';
 import type {
-  Circuit, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint,
+  Circuit, CrewView, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint,
 } from './types';
 
 export class ApiError extends Error {
@@ -55,6 +55,7 @@ const keys = {
   missions: ['missions'],
   track: (id: string) => ['track', id],
   findings: (filter: string) => ['findings', filter],
+  crews: ['crews'],
 };
 
 export const useMe = () => {
@@ -104,6 +105,12 @@ export const useFindings = (filter: string) => {
   });
 };
 
+/** Field crews and their open work-order counts. */
+export const useCrews = () => {
+  const api = useFetcher();
+  return useQuery({ queryKey: keys.crews, queryFn: () => api<CrewView[]>('/crews'), refetchInterval: 15_000 });
+};
+
 /** One mission, polled while it is in the air. */
 export const useMission = (id: string) => {
   const api = useFetcher();
@@ -140,6 +147,7 @@ function useInvalidate() {
       qc.invalidateQueries({ queryKey: keys.missions }),
       qc.invalidateQueries({ queryKey: ['findings'] }),
       qc.invalidateQueries({ queryKey: keys.stats }),
+      qc.invalidateQueries({ queryKey: keys.crews }),
     ]);
 }
 

@@ -262,3 +262,16 @@ button { font: inherit; color: inherit; }
   .stats-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mission-grid, .mission-grid-even { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Field crews */
+.assign-field { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.crew-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 10px; }
+.crew-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; }
+.crew-card header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.crew-card h3 { margin: 0; font-size: 14px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.crew-card p { margin: 2px 0 0; }
+.crew-load { white-space: nowrap; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+.crew-load-busy { background: var(--accent-soft); color: var(--text); border-color: var(--accent); }
+.crew-members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.crew-members li { display: flex; align-items: center; gap: 8px; }
+.crew-avatar { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; background: var(--accent); color: #1b2333; flex: none; }

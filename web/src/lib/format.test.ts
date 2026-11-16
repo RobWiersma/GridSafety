@@ -14,6 +14,7 @@ const finding = (status: FindingView['finding']['status'], triageDueAt?: string)
   nextStatuses: [],
   overdue: false,
   severityLabel: '',
+  suggestedCrew: 'Springfield Hot-Stick Crew',
 });
 
 describe('slaText', () => {

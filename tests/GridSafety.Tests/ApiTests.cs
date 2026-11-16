@@ -175,9 +175,14 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         (await inspector.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Triaged, "Confirmed on imagery", null), JsonOpts)).EnsureSuccessStatusCode();
         var noAssignee = await inspector.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Assigned, null, null), JsonOpts);
         Assert.Equal(HttpStatusCode.BadRequest, noAssignee.StatusCode);
-        var assigned = await inspector.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Assigned, null, "Line Crew 4"), JsonOpts);
+        var offRoster = await inspector.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Assigned, null, "Line Crew 4"), JsonOpts);
+        Assert.Equal(HttpStatusCode.BadRequest, offRoster.StatusCode);
+        var assigned = await inspector.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Assigned, null, "lenny leonardo"), JsonOpts);
         var view = (await assigned.Content.ReadFromJsonAsync<FindingView>(JsonOpts))!;
-        Assert.Equal("Line Crew 4", view.Finding.AssignedTo);
+        Assert.Equal("Lenny Leonardo (Sector 7G Line Crew)", view.Finding.AssignedTo);
+
+        var crews = await inspector.GetFromJsonAsync<List<CrewView>>("/api/crews", JsonOpts);
+        Assert.True(crews!.Single(c => c.Crew.Id == "sector-7g").OpenWorkOrders >= 1);
         Assert.Equal(["alex@gridsafety.dev", "alex@gridsafety.dev"], view.Finding.History.Select(h => h.By));
 
         // Supervisors can dismiss a different one.

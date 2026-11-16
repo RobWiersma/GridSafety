@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMe } from './api';
 import { FindingDrawer } from './components/FindingDrawer';
+import { CrewsPanel } from './components/CrewsPanel';
 import { FindingsView } from './components/FindingsView';
 import { MissionDetail } from './components/MissionDetail';
 import { MissionsView } from './components/MissionsView';
@@ -85,7 +86,12 @@ export function App() {
         )}
         <StatsBar onOpenFindings={() => go('findings')} />
         {tab === 'ops' && <OpsView onOpenFinding={setFindingId} />}
-        {tab === 'findings' && <FindingsView onOpen={setFindingId} />}
+        {tab === 'findings' && (
+          <>
+            <FindingsView onOpen={setFindingId} />
+            <CrewsPanel />
+          </>
+        )}
         {tab === 'missions' && !missionId && <MissionsView onToast={setToast} onShowOnMap={() => go('ops')} onOpenMission={openMission} />}
         {tab === 'missions' && missionId && (
           <MissionDetail missionId={missionId} onBack={() => go('missions')} onOpenFinding={setFindingId} onToast={setToast} />
