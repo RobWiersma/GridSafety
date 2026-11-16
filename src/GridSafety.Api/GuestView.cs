@@ -17,7 +17,7 @@ public static partial class GuestView
     public const string Redacted = "Ops user";
 
     /// <summary>Properties that name the person behind an action.</summary>
-    private static readonly HashSet<string> PersonFields = new(StringComparer.OrdinalIgnoreCase) { "createdBy", "by" };
+    private static readonly HashSet<string> PersonFields = new(StringComparer.OrdinalIgnoreCase) { "createdBy", "by", "acknowledgedBy" };
 
     /// <summary>Names the system itself uses in audit trails; these are not people.</summary>
     private static readonly HashSet<string> SystemActors = new(StringComparer.OrdinalIgnoreCase) { "system", "drone" };

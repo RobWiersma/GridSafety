@@ -184,6 +184,47 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
     }
 
     [Fact]
+    public async Task Flight_alerts_can_be_acknowledged_by_signed_in_users_only()
+    {
+        var c = Client("alex");
+        var m = await PlanAsync(c, "DRN-ACK");
+        var circuit = StaticCircuitCatalog.Instance.Find(m.Mission.CircuitId)!;
+        var t0 = DateTimeOffset.UtcNow;
+        // Low battery, then a climb above the ceiling: two alerts.
+        var points = new[]
+        {
+            new TelemetryPoint(t0, circuit.Structures[0].Location.Lat, circuit.Structures[0].Location.Lon, 60, 25, 14),
+            new TelemetryPoint(t0.AddSeconds(2), circuit.Structures[1].Location.Lat, circuit.Structures[1].Location.Lon, 130, 24, 14),
+        };
+        (await c.PostAsJsonAsync("/api/ingest", new DroneMessage { Kind = MessageKinds.Telemetry, DroneId = "DRN-ACK", MissionId = m.Mission.Id, Points = [.. points] }, JsonOpts))
+            .EnsureSuccessStatusCode();
+        var alerts = (await c.GetFromJsonAsync<MissionView>($"/api/missions/{m.Mission.Id}", JsonOpts))!.Mission.RecentAlerts;
+        Assert.Equal(2, alerts.Count);
+
+        // Guests can't acknowledge.
+        var guest = factory.CreateClient();
+        Assert.True((await guest.PostAsJsonAsync($"/api/public/missions/{m.Mission.Id}/alerts/ack", new AlertAckRequest(null, null), JsonOpts)).StatusCode
+            is HttpStatusCode.MethodNotAllowed or HttpStatusCode.NotFound);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await guest.PostAsJsonAsync($"/api/missions/{m.Mission.Id}/alerts/ack", new AlertAckRequest(null, null), JsonOpts)).StatusCode);
+
+        // One alert by time and kind…
+        var altitude = alerts.Single(a => a.Kind == AlertKind.AltitudeCeiling);
+        var res = await c.PostAsJsonAsync($"/api/missions/{m.Mission.Id}/alerts/ack", new AlertAckRequest(altitude.At, altitude.Kind), JsonOpts);
+        var after = (await res.Content.ReadFromJsonAsync<MissionView>(JsonOpts))!.Mission.RecentAlerts;
+        Assert.Equal("alex@gridsafety.dev", after.Single(a => a.Kind == AlertKind.AltitudeCeiling).AcknowledgedBy);
+        Assert.Null(after.Single(a => a.Kind == AlertKind.LowBattery).AcknowledgedAt);
+
+        // …then the rest at once. Guests see that it was acknowledged, but not by whom.
+        (await c.PostAsJsonAsync($"/api/missions/{m.Mission.Id}/alerts/ack", new AlertAckRequest(null, null), JsonOpts)).EnsureSuccessStatusCode();
+        var publicView = await guest.GetStringAsync($"/api/public/missions/{m.Mission.Id}");
+        Assert.DoesNotContain("alex", publicView);
+        var guestAlerts = (await guest.GetFromJsonAsync<MissionView>($"/api/public/missions/{m.Mission.Id}", JsonOpts))!.Mission.RecentAlerts;
+        Assert.All(guestAlerts, a => Assert.NotNull(a.AcknowledgedAt));
+
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PostAsJsonAsync("/api/missions/nope/alerts/ack", new AlertAckRequest(null, null), JsonOpts)).StatusCode);
+    }
+
+    [Fact]
     public async Task Finding_work_order_lifecycle_with_rbac()
     {
         var inspector = Client("alex");

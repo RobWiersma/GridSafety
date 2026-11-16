@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { useCircuits, useDrones, useFindings, useMissions, useTrack } from '../api';
+import { useAcknowledgeAlerts, useCircuits, useDrones, useFindings, useMissions, useTrack } from '../api';
 import { FINDING_TYPE_LABEL, miles, pct, relativeTime } from '../lib/format';
 import type { DroneAlert, MissionView } from '../types';
 import { OpsMap } from './OpsMap';
 import { SeverityBadge } from './SeverityBadge';
 import { SidePanel } from './SidePanel';
+import { useSession } from '../session';
 import { SignalBars } from './SignalBars';
 
 export function OpsView({ onOpenFinding, onOpenMission }: { onOpenFinding(id: string): void; onOpenMission(id: string): void }) {
@@ -19,12 +20,13 @@ export function OpsView({ onOpenFinding, onOpenMission }: { onOpenFinding(id: st
   const focus = (missions.data ?? []).find((m) => m.mission.id === focusId) ?? active.find((m) => m.mission.status === 'InFlight') ?? null;
   const track = useTrack(focus?.mission.id ?? null, focus?.mission.status === 'InFlight');
 
-  const alerts = useMemo(() => {
-    const list: (DroneAlert & { droneId: string; missionId: string; circuitName: string })[] = [];
+  const { open, acknowledged } = useMemo(() => {
+    const list: OpsAlert[] = [];
     for (const m of (missions.data ?? []).slice(0, 10)) {
       list.push(...m.mission.recentAlerts.map((a) => ({ ...a, droneId: m.mission.droneId, missionId: m.mission.id, circuitName: m.circuitName })));
     }
-    return list.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8);
+    list.sort((a, b) => b.at.localeCompare(a.at));
+    return { open: list.filter((a) => !a.acknowledgedAt), acknowledged: list.filter((a) => a.acknowledgedAt).slice(0, 5) };
   }, [missions.data]);
 
   const urgent = (findings.data ?? []).filter((f) => f.finding.severity >= 4 && f.finding.status === 'New').slice(0, 5);
@@ -61,21 +63,8 @@ export function OpsView({ onOpenFinding, onOpenMission }: { onOpenFinding(id: st
           {recent.map((m) => <MissionCard key={m.mission.id} m={m} selected={focus?.mission.id === m.mission.id} onSelect={() => setFocusId(m.mission.id)} />)}
         </SidePanel>
 
-        <SidePanel id="alerts" title="Flight alerts" count={alerts.length}>
-          {alerts.length === 0 && <p className="muted small">All clear.</p>}
-          <ul className="alert-list">
-            {alerts.map((a, i) => (
-              <li key={i} className={a.level === 'Critical' ? 'alert-critical' : 'alert-warning'}>
-                <button className="alert-row" onClick={() => onOpenMission(a.missionId)} title={`Open the flight overview for ${a.circuitName}`}>
-                  <span className="alert-dot" />
-                  <span className="grow">
-                    <strong>{a.droneId}</strong> {a.message}
-                    <span className="muted small alert-meta">{relativeTime(a.at)} · <span className="link">Flight overview →</span></span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+        <SidePanel id="alerts" title="Flight alerts" count={open.length}>
+          <FlightAlerts open={open} acknowledged={acknowledged} onOpenMission={onOpenMission} />
         </SidePanel>
 
         <SidePanel id="triage" title="Needs triage" count={urgent.length}>
@@ -121,6 +110,81 @@ function MissionCard({ m, selected, onSelect }: { m: MissionView; selected: bool
         <span>⚠ {mi.findingCount}</span>
         {mi.status === 'InFlight' && <SignalBars rssi={mi.rssiDbm} />}
       </div>
+    </button>
+  );
+}
+
+type OpsAlert = DroneAlert & { droneId: string; missionId: string; circuitName: string };
+
+const MAX_OPEN_SHOWN = 8;
+
+/** Open alerts with an Acknowledge button each (signed-in users); acknowledged ones fold away below. */
+function FlightAlerts({ open, acknowledged, onOpenMission }: { open: OpsAlert[]; acknowledged: OpsAlert[]; onOpenMission(id: string): void }) {
+  const session = useSession();
+  const ack = useAcknowledgeAlerts();
+  const [showAcked, setShowAcked] = useState(false);
+  const canAck = !session.guest;
+  const shown = open.slice(0, MAX_OPEN_SHOWN);
+
+  const acknowledgeAll = () => {
+    for (const missionId of new Set(open.map((a) => a.missionId))) ack.mutate({ missionId });
+  };
+
+  return (
+    <>
+      {open.length === 0 && <p className="muted small">All clear. No alerts need attention.</p>}
+      {canAck && open.length > 1 && (
+        <button className="btn btn-secondary btn-xs ack-all" onClick={acknowledgeAll} disabled={ack.isPending}>✓ Acknowledge all ({open.length})</button>
+      )}
+      <ul className="alert-list">
+        {shown.map((a) => (
+          <li key={`${a.missionId}|${a.at}|${a.kind}`} className={`alert-item ${a.level === 'Critical' ? 'alert-critical' : 'alert-warning'}`}>
+            <AlertRow a={a} onOpenMission={onOpenMission} />
+            {canAck && (
+              <button className="btn btn-ghost btn-xs ack-btn" disabled={ack.isPending}
+                onClick={() => ack.mutate({ missionId: a.missionId, at: a.at, kind: a.kind })}
+                aria-label={`Acknowledge: ${a.droneId} ${a.message}`} title="Acknowledge">
+                ✓ Ack
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {open.length > shown.length && <p className="muted small">+{open.length - shown.length} older open alerts</p>}
+      {ack.isError && <p className="small text-danger">Couldn't acknowledge: {ack.error.message}</p>}
+
+      {acknowledged.length > 0 && (
+        <>
+          <button className="link-button small" onClick={() => setShowAcked((v) => !v)} aria-expanded={showAcked}>
+            {showAcked ? 'Hide' : 'Show'} recently acknowledged ({acknowledged.length})
+          </button>
+          {showAcked && (
+            <ul className="alert-list alert-list-acked">
+              {acknowledged.map((a) => (
+                <li key={`${a.missionId}|${a.at}|${a.kind}`} className="alert-item alert-acked">
+                  <AlertRow a={a} onOpenMission={onOpenMission} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function AlertRow({ a, onOpenMission }: { a: OpsAlert; onOpenMission(id: string): void }) {
+  return (
+    <button className="alert-row" onClick={() => onOpenMission(a.missionId)} title={`Open the flight overview for ${a.circuitName}`}>
+      <span className="alert-dot" />
+      <span className="grow">
+        <strong>{a.droneId}</strong> {a.message}
+        <span className="muted small alert-meta">
+          {relativeTime(a.at)}
+          {a.acknowledgedAt && <> · ✓ acknowledged by {a.acknowledgedBy ?? 'ops'} {relativeTime(a.acknowledgedAt)}</>}
+          {' · '}<span className="link">Flight overview →</span>
+        </span>
+      </span>
     </button>
   );
 }

@@ -10,7 +10,9 @@ public enum AlertKind { LowBattery, CriticalBattery, CorridorBreach, AltitudeCei
 
 public enum AlertLevel { Warning, Critical }
 
-public sealed record DroneAlert(AlertKind Kind, AlertLevel Level, string Message, DateTimeOffset At, GeoPoint Position);
+/// <param name="AcknowledgedAt">When someone in ops acknowledged the alert; null while it still needs attention.</param>
+public sealed record DroneAlert(AlertKind Kind, AlertLevel Level, string Message, DateTimeOffset At, GeoPoint Position,
+    DateTimeOffset? AcknowledgedAt = null, string? AcknowledgedBy = null);
 
 public enum DroneStatus { Idle, Flying }
 

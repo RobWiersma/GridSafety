@@ -43,6 +43,8 @@ export interface DroneAlert {
   message: string;
   at: string;
   position: GeoPoint;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
 }
 
 export interface Mission {

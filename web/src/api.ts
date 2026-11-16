@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext } from 'react';
 import { useSession } from './session';
 import type {
+  AlertKind,
   Circuit, CrewView, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint,
 } from './types';
 
@@ -183,6 +184,17 @@ export function useMissionStatus() {
   return useMutation({
     mutationFn: ({ id, status, note }: { id: string; status: MissionStatus; note?: string }) =>
       api<MissionView>(`/missions/${id}/status`, { method: 'POST', body: JSON.stringify({ status, note }) }),
+    onSuccess: invalidate,
+  });
+}
+
+/** Acknowledge one flight alert (by time and kind), or every open alert on the mission when `at` is omitted. */
+export function useAcknowledgeAlerts() {
+  const api = useFetcher();
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ missionId, at, kind }: { missionId: string; at?: string; kind?: AlertKind }) =>
+      api<MissionView>(`/missions/${missionId}/alerts/ack`, { method: 'POST', body: JSON.stringify({ at, kind }) }),
     onSuccess: invalidate,
   });
 }

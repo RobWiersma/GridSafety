@@ -228,3 +228,38 @@ public class OsmDatasetTests
         });
     }
 }
+
+public class AlertAcknowledgementTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 11, 16, 12, 0, 0, TimeSpan.Zero);
+
+    private static Mission WithAlerts()
+    {
+        var m = Mission.Plan(TestCircuits.Line, "D", "P", null, Now);
+        m.RecordAlert(new(AlertKind.LowBattery, AlertLevel.Warning, "battery", Now, default));
+        m.RecordAlert(new(AlertKind.AltitudeCeiling, AlertLevel.Critical, "alt", Now, default)); // same time, different kind
+        m.RecordAlert(new(AlertKind.CorridorBreach, AlertLevel.Critical, "corridor", Now.AddSeconds(5), default));
+        return m;
+    }
+
+    [Fact]
+    public void Acknowledges_one_alert_by_time_and_kind()
+    {
+        var m = WithAlerts();
+        Assert.Equal(1, m.AcknowledgeAlerts(Now, AlertKind.AltitudeCeiling, "dana", Now.AddMinutes(1)));
+        var acked = Assert.Single(m.RecentAlerts, a => a.AcknowledgedAt is not null);
+        Assert.Equal((AlertKind.AltitudeCeiling, "dana"), (acked.Kind, acked.AcknowledgedBy));
+    }
+
+    [Fact]
+    public void Acknowledging_all_keeps_earlier_acknowledgements()
+    {
+        var m = WithAlerts();
+        m.AcknowledgeAlerts(Now.AddSeconds(5), null, "alex", Now.AddMinutes(1));
+        Assert.Equal(2, m.AcknowledgeAlerts(null, null, "dana", Now.AddMinutes(2)));
+        Assert.All(m.RecentAlerts, a => Assert.NotNull(a.AcknowledgedAt));
+        Assert.Equal("alex", m.RecentAlerts.Single(a => a.Kind == AlertKind.CorridorBreach).AcknowledgedBy);
+        Assert.Equal(0, m.AcknowledgeAlerts(null, null, "dana", Now.AddMinutes(3)));
+    }
+}
+

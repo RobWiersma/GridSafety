@@ -15,6 +15,7 @@ public sealed record FindingStatusRequest(FindingStatus Status, string? Note, st
 public sealed record MissionView(Mission Mission, string CircuitName, double Coverage, IReadOnlyList<MissionStatus> NextStatuses);
 public sealed record FindingView(Finding Finding, string CircuitName, IReadOnlyList<FindingStatus> NextStatuses, bool Overdue, string SeverityLabel, string SuggestedCrew);
 public sealed record CrewView(Crew Crew, int OpenWorkOrders);
+public sealed record AlertAckRequest(DateTimeOffset? At, AlertKind? Kind);
 public sealed record VisitRequest(string? Page, string? Referrer, bool SignedIn);
 public sealed record CountView(string Name, int Count);
 public sealed record DayVisitsView(DateOnly Day, int PageViews, int UniqueVisitors);
@@ -63,6 +64,7 @@ public static class Endpoints
         secured.MapPost("/missions", PlanMission);
         secured.MapGet("/missions/{id}", GetMission);
         secured.MapPost("/missions/{id}/status", ChangeMissionStatus);
+        secured.MapPost("/missions/{id}/alerts/ack", AcknowledgeAlerts);
         secured.MapGet("/missions/{id}/track", GetTrack);
         secured.MapGet("/missions/{id}/report-url", GetReportUrl);
 
@@ -254,6 +256,31 @@ public static class Endpoints
     /// <summary>Synthetic drone capture of the finding (SVG). A real deployment would serve the uploaded photo from S3.</summary>
     private static async Task<Results<ContentHttpResult, NotFound>> GetFindingImage(string id, IGridRepository repo, CancellationToken ct) =>
         await repo.GetFindingAsync(id, ct) is { } f ? TypedResults.Content(FindingImage.Svg(f), "image/svg+xml") : TypedResults.NotFound();
+
+    /// <summary>
+    /// Any signed-in user can acknowledge a flight alert (one, by its time and kind, or all on the mission).
+    /// Telemetry keeps updating an in-flight mission, so a version conflict is retried on fresh data.
+    /// </summary>
+    private static async Task<Results<Ok<MissionView>, NotFound>> AcknowledgeAlerts(
+        string id, AlertAckRequest? req, HttpContext ctx, IGridRepository repo, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
+    {
+        var user = User(ctx);
+        for (var attempt = 1; ; attempt++)
+        {
+            var m = await repo.GetMissionAsync(id, ct);
+            if (m is null) return TypedResults.NotFound();
+            if (m.AcknowledgeAlerts(req?.At, req?.Kind, user.DisplayName, clock.GetUtcNow()) == 0) return TypedResults.Ok(ToView(m, circuits));
+            try
+            {
+                await repo.SaveMissionAsync(m, ct);
+                return TypedResults.Ok(ToView(m, circuits));
+            }
+            catch (ConcurrencyException) when (attempt < 8)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(20 * attempt + Random.Shared.Next(20)), ct);
+            }
+        }
+    }
 
     private static async Task<NoContent> RecordVisit(VisitRequest? req, HttpContext ctx, IVisitStore visits, TimeProvider clock, ILoggerFactory logs, CancellationToken ct)
     {

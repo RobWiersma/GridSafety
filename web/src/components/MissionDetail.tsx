@@ -135,7 +135,12 @@ export function MissionDetail({ missionId, onBack, onOpenFinding, onToast }: Pro
               {[...m.recentAlerts].sort((a, b) => a.at.localeCompare(b.at)).map((a, i) => (
                 <li key={i}>
                   <span className={`pill ${a.level === 'Critical' ? 'pill-danger' : 'pill-warn'}`}>{a.level}</span>
-                  <div><div>{a.message}</div><div className="muted small">{when(a.at)}</div></div>
+                  <div>
+                    <div>{a.message}</div>
+                    <div className="muted small">
+                      {when(a.at)}{a.acknowledgedAt ? ` · ✓ acknowledged by ${a.acknowledgedBy ?? 'ops'} at ${when(a.acknowledgedAt)}` : ' · not acknowledged'}
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>

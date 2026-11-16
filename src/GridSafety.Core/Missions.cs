@@ -64,6 +64,26 @@ public sealed class Mission
         if (RecentAlerts.Count > MaxRecentAlerts) RecentAlerts.RemoveRange(MaxRecentAlerts, RecentAlerts.Count - MaxRecentAlerts);
     }
 
+    /// <summary>
+    /// Marks unacknowledged alerts as seen: the one raised at <paramref name="at"/> (optionally of <paramref name="kind"/>),
+    /// or all of them when <paramref name="at"/> is null. Already-acknowledged alerts keep their original acknowledgement.
+    /// Returns how many changed.
+    /// </summary>
+    public int AcknowledgeAlerts(DateTimeOffset? at, AlertKind? kind, string by, DateTimeOffset now)
+    {
+        var changed = 0;
+        for (var i = 0; i < RecentAlerts.Count; i++)
+        {
+            var a = RecentAlerts[i];
+            if (a.AcknowledgedAt is not null) continue;
+            if (at is { } t && (a.At != t || (kind is { } k && a.Kind != k))) continue;
+            RecentAlerts[i] = a with { AcknowledgedAt = now, AcknowledgedBy = by };
+            changed++;
+        }
+        if (changed > 0) UpdatedAt = now;
+        return changed;
+    }
+
     /// <summary>Share of the circuit's structures the drone has passed within inspection range of.</summary>
     public double Coverage(Circuit circuit) =>
         circuit.Structures.Count == 0 ? 0 : Math.Round((double)StructuresInspected.Count / circuit.Structures.Count, 3);
