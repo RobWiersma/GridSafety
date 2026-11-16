@@ -1,8 +1,12 @@
 name: Deploy
 
-# Manual only (Actions → Deploy → Run workflow): needs the AWS role from docs/github-oidc.md,
-# and an always-on deploy would fail on every push until that is set up.
+# Continuous deployment: every push to main that passes CI is deployed to dev.
+# The manual button (Actions → Deploy → Run workflow) still deploys any stage on demand.
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       stage:
@@ -12,7 +16,7 @@ on:
         options: [dev, prod]
 
 permissions:
-  id-token: write   # GitHub OIDC -> AWS IAM role; no long-lived AWS keys in GitHub
+  id-token: write   # for an OIDC role, if the account ever allows one (AWS_DEPLOY_ROLE_ARN)
   contents: read
 
 concurrency:
@@ -21,23 +25,35 @@ concurrency:
 
 jobs:
   deploy:
+    # Only deploy commits whose CI passed (a manual run deploys regardless).
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.stage || 'dev' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: '10.0.x' }
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
+      # The org blocks OIDC providers in this account, so a deploy-only IAM user's key is used: it can do
+      # nothing but assume the CDK bootstrap roles in us-east-2. An OIDC role takes over if one is configured.
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-      - run: dotnet test -c Release
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-2' }}
+      - name: Test
+        if: github.event_name == 'workflow_dispatch' # after CI the same commit is already tested
+        run: dotnet test -c Release
       - name: Deploy
+        env:
+          OPS_EMAIL: ${{ secrets.OPS_EMAIL }} # a secret so it is masked in the public logs
         run: |
           ARGS=()
-          [ -n "${{ vars.OPS_EMAIL }}" ] && ARGS+=(-c "opsEmail=${{ vars.OPS_EMAIL }}")
+          [ -n "$OPS_EMAIL" ] && ARGS+=(-c "opsEmail=$OPS_EMAIL")
           [ -n "${{ vars.MONTHLY_BUDGET_USD }}" ] && ARGS+=(-c "monthlyBudgetUsd=${{ vars.MONTHLY_BUDGET_USD }}")
           [ -n "${{ vars.DOMAIN_NAME }}" ] && ARGS+=(-c "domainName=${{ vars.DOMAIN_NAME }}" -c "certificateArn=${{ vars.CERTIFICATE_ARN }}")
           bash scripts/deploy.sh "${{ inputs.stage || 'dev' }}" "${ARGS[@]}" --outputs-file cdk-outputs.json
@@ -46,4 +62,5 @@ jobs:
           SITE=$(jq -r '.[] | .SiteUrl' cdk-outputs.json)
           curl --fail --retry 5 --retry-delay 10 "$SITE/api/health"
           curl --fail "$SITE/" | grep -q '<div id="root">'
+          curl --fail "$SITE/api/public/stats" > /dev/null
           echo "### Deployed :rocket: $SITE" >> "$GITHUB_STEP_SUMMARY"

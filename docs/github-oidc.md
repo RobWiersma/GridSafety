@@ -46,9 +46,24 @@ For **permissions**, the role only needs to assume the roles that `cdk bootstrap
 ## 3. Configure the repository
 
 - Secret `AWS_DEPLOY_ROLE_ARN`: the role's ARN
-- Variables (optional): `AWS_REGION`; `OPS_EMAIL` (receives ops pages, platform alarms and budget alerts); `MONTHLY_BUDGET_USD` (budget alert amount, default 5, 0 = none)
+- Secret `OPS_EMAIL` (optional): receives ops pages, platform alarms and budget alerts. A secret, not a variable, so it is masked in the logs of a public repo
+- Variables (optional): `AWS_REGION` (default `us-east-2`); `MONTHLY_BUDGET_USD` (budget alert amount, default 5, 0 = none); `DOMAIN_NAME` and `CERTIFICATE_ARN` for a custom domain (ACM certificate in us-east-1)
 - Environments `dev` and `prod`: add required reviewers on `prod` for a manual approval gate
 
 ## 4. Deploy
 
-Deploys are manual: **Actions → Deploy → Run workflow**, then pick `dev` or `prod`. Pushing to `main` only runs CI (build, tests, `cdk synth`), so the repo stays green before AWS is set up.
+Every push to `main` that passes CI deploys to `dev` automatically (the Deploy workflow runs on CI's `workflow_run`, checks out the exact commit CI tested, deploys, then smoke-tests the site, the API and the guest API). **Actions → Deploy → Run workflow** still deploys `dev` or `prod` on demand.
+
+## If your AWS Organization blocks OIDC providers
+
+Some organizations deny `iam:*OpenIDConnectProvider*` with a service control policy. Then use a deploy-only IAM user instead:
+
+1. Create an IAM user (no console access) with one inline policy that only lets it assume the CDK bootstrap roles:
+   ```json
+   { "Version": "2012-10-17", "Statement": [{ "Effect": "Allow", "Action": "sts:AssumeRole",
+     "Resource": "arn:aws:iam::ACCOUNT_ID:role/cdk-hnb659fds-*-ACCOUNT_ID-REGION" }] }
+   ```
+2. Create an access key and store it as the secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (pipe it straight into `gh secret set` so it is never printed).
+3. Rotate the key periodically: create a second key, update the secrets, then delete the old key.
+
+The workflow uses `AWS_DEPLOY_ROLE_ARN` when it is set and falls back to the key otherwise.
