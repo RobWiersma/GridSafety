@@ -103,6 +103,26 @@ export interface FindingView {
   suggestedCrew: string;
 }
 
+export interface CountView {
+  name: string;
+  count: number;
+}
+
+export interface VisitorStats {
+  days: number;
+  pageViews: number;
+  visitorDays: number;
+  signedInVisitorDays: number;
+  daily: { day: string; pageViews: number; uniqueVisitors: number }[];
+  pages: CountView[];
+  referrers: CountView[];
+  devices: CountView[];
+  browsers: CountView[];
+  operatingSystems: CountView[];
+  countries: CountView[];
+  languages: CountView[];
+}
+
 export interface CrewMember {
   name: string;
   role: string;

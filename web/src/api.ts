@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext } from 'react';
 import { useSession } from './session';
 import type {
-  Circuit, CrewView, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint,
+  Circuit, CrewView, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint,
 } from './types';
 
 export class ApiError extends Error {
@@ -103,6 +103,12 @@ export const useFindings = (filter: string) => {
     queryFn: () => api<FindingView[]>(`/findings?status=${encodeURIComponent(filter)}`),
     refetchInterval: 5000,
   });
+};
+
+/** Supervisor-only visitor summary for the last N days. */
+export const useVisitorStats = (days: number) => {
+  const api = useFetcher();
+  return useQuery({ queryKey: ['visitors', days], queryFn: () => api<VisitorStats>(`/visitors?days=${days}`), refetchInterval: 60_000 });
 };
 
 /** Field crews and their open work-order counts. */

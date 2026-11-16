@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { App } from './App';
 import { createFetcher, FetcherContext } from './api';
 import { loadConfig, type AppConfig } from './config';
+import { setVisitEndpoint } from './lib/visits';
 import { SessionProvider, useSession } from './session';
 import './styles.css';
 
@@ -27,6 +28,7 @@ function ApiProvider({ config, children }: { config: AppConfig; children: ReactN
 }
 
 void loadConfig().then((config) => {
+  setVisitEndpoint(config.apiBaseUrl);
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>

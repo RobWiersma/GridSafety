@@ -56,6 +56,33 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
     }
 
     [Fact]
+    public async Task Visits_are_counted_anonymously_and_only_supervisors_see_stats()
+    {
+        var guest = factory.CreateClient();
+        guest.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/142.0 Safari/537.36");
+        guest.DefaultRequestHeaders.Add("X-Forwarded-For", "198.51.100.23");
+        var before = (await Client("sam", supervisor: true).GetFromJsonAsync<VisitorStatsView>("/api/visitors?days=1", JsonOpts))!;
+
+        Assert.Equal(HttpStatusCode.NoContent, (await guest.PostAsJsonAsync("/api/public/visit", new VisitRequest("ops", "https://www.linkedin.com/in/x", false), JsonOpts)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await guest.PostAsJsonAsync("/api/public/visit", new VisitRequest("findings", null, false), JsonOpts)).StatusCode);
+
+        // Bots are ignored.
+        var bot = factory.CreateClient();
+        bot.DefaultRequestHeaders.UserAgent.ParseAdd("Googlebot/2.1");
+        Assert.Equal(HttpStatusCode.NoContent, (await bot.PostAsJsonAsync("/api/public/visit", new VisitRequest("ops", null, false), JsonOpts)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await guest.GetAsync("/api/visitors")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client("alex").GetAsync("/api/visitors")).StatusCode);
+
+        var after = (await Client("sam", supervisor: true).GetFromJsonAsync<VisitorStatsView>("/api/visitors?days=1", JsonOpts))!;
+        Assert.Equal(before.PageViews + 2, after.PageViews);
+        Assert.Equal(before.VisitorDays + 1, after.VisitorDays);
+        Assert.Contains(after.Referrers, r => r.Name == "linkedin.com");
+        var raw = await (await Client("sam", supervisor: true).GetAsync("/api/visitors?days=1")).Content.ReadAsStringAsync();
+        Assert.DoesNotContain("198.51.100.23", raw);
+    }
+
+    [Fact]
     public async Task Guests_can_read_but_cannot_change_anything()
     {
         var guest = factory.CreateClient(); // no identity at all

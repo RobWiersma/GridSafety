@@ -15,6 +15,14 @@ public sealed record FindingStatusRequest(FindingStatus Status, string? Note, st
 public sealed record MissionView(Mission Mission, string CircuitName, double Coverage, IReadOnlyList<MissionStatus> NextStatuses);
 public sealed record FindingView(Finding Finding, string CircuitName, IReadOnlyList<FindingStatus> NextStatuses, bool Overdue, string SeverityLabel, string SuggestedCrew);
 public sealed record CrewView(Crew Crew, int OpenWorkOrders);
+public sealed record VisitRequest(string? Page, string? Referrer, bool SignedIn);
+public sealed record CountView(string Name, int Count);
+public sealed record DayVisitsView(DateOnly Day, int PageViews, int UniqueVisitors);
+public sealed record VisitorStatsView(
+    int Days, int PageViews, int VisitorDays, int SignedInVisitorDays, IReadOnlyList<DayVisitsView> Daily,
+    IReadOnlyList<CountView> Pages, IReadOnlyList<CountView> Referrers, IReadOnlyList<CountView> Devices,
+    IReadOnlyList<CountView> Browsers, IReadOnlyList<CountView> OperatingSystems, IReadOnlyList<CountView> Countries,
+    IReadOnlyList<CountView> Languages);
 public sealed record MeView(string Id, string Name, bool IsSupervisor, IReadOnlyList<string> Groups, bool IsGuest = false);
 public sealed record UrlView(string Url, DateTimeOffset ExpiresAt);
 
@@ -28,6 +36,9 @@ public static class Endpoints
         // Guests: a read-only copy of the GET routes, no sign-in needed. API Gateway sends GET /api/public/* to the
         // API without the JWT authorizer; only GETs are mapped here, so nothing can be changed, and GuestView
         // strips who-did-what before it leaves. Must be mapped before the secured catch-all group.
+        // Anonymous page-view beacon for every visitor, signed in or not (see VisitAnonymizer).
+        api.MapPost("/public/visit", RecordVisit);
+
         var guest = api.MapGroup("/public").AddEndpointFilter(GuestView.Filter);
         guest.MapGet("/me", () => TypedResults.Ok(new MeView("guest", "Guest", false, [], IsGuest: true)));
         guest.MapGet("/circuits", (ICircuitCatalog c) => TypedResults.Ok(c.All));
@@ -62,6 +73,7 @@ public static class Endpoints
         secured.MapGet("/findings/{id}/image", GetFindingImage);
         secured.MapPost("/findings/{id}/status", ChangeFindingStatus);
         secured.MapGet("/crews", ListCrews);
+        secured.MapGet("/visitors", GetVisitorStats);
 
         if (devIngest)
         {
@@ -242,6 +254,54 @@ public static class Endpoints
     /// <summary>Synthetic drone capture of the finding (SVG). A real deployment would serve the uploaded photo from S3.</summary>
     private static async Task<Results<ContentHttpResult, NotFound>> GetFindingImage(string id, IGridRepository repo, CancellationToken ct) =>
         await repo.GetFindingAsync(id, ct) is { } f ? TypedResults.Content(FindingImage.Svg(f), "image/svg+xml") : TypedResults.NotFound();
+
+    private static async Task<NoContent> RecordVisit(VisitRequest? req, HttpContext ctx, IVisitStore visits, TimeProvider clock, ILoggerFactory logs, CancellationToken ct)
+    {
+        var headers = ctx.Request.Headers;
+        var ua = headers.UserAgent.ToString();
+        if (req is null || VisitAnonymizer.IsBot(ua)) return TypedResults.NoContent();
+        try
+        {
+            var day = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+            // Behind CloudFront the client's address is the first X-Forwarded-For entry. It is only ever hashed.
+            var ip = headers["X-Forwarded-For"].ToString().Split(',')[0].Trim() is { Length: > 0 } fwd ? fwd : ctx.Connection.RemoteIpAddress?.ToString();
+            var key = VisitAnonymizer.VisitorKey(await visits.GetDailySaltAsync(day, ct), ip, ua);
+            await visits.RecordAsync(VisitAnonymizer.Describe(day, key, req.Page, req.Referrer, ctx.Request.Host.Host, ua,
+                headers["CloudFront-Viewer-Country"].ToString(), headers.AcceptLanguage.ToString(), req.SignedIn), ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Analytics must never break the app.
+            logs.CreateLogger("Visits").LogWarning(ex, "Could not record a page view");
+        }
+        return TypedResults.NoContent();
+    }
+
+    /// <summary>Supervisor-only visitor summary for the last <paramref name="days"/> UTC days (default 30, max 90).</summary>
+    private static async Task<Results<Ok<VisitorStatsView>, ProblemHttpResult>> GetVisitorStats(
+        int? days, HttpContext ctx, IVisitStore visits, TimeProvider clock, CancellationToken ct)
+    {
+        if (!User(ctx).IsSupervisor)
+            return TypedResults.Problem("Only supervisors can see visitor stats.", statusCode: StatusCodes.Status403Forbidden);
+
+        var n = Math.Clamp(days ?? 30, 1, 90);
+        var to = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
+        var list = await visits.GetDaysAsync(to.AddDays(1 - n), to, ct);
+
+        static IReadOnlyList<CountView> Top(IEnumerable<IReadOnlyDictionary<string, int>> dims, int take = 10) => dims
+            .SelectMany(d => d)
+            .GroupBy(kv => kv.Key, kv => kv.Value)
+            .Select(g => new CountView(g.Key, g.Sum()))
+            .OrderByDescending(c => c.Count).ThenBy(c => c.Name, StringComparer.Ordinal)
+            .Take(take).ToList();
+
+        return TypedResults.Ok(new VisitorStatsView(n,
+            list.Sum(d => d.PageViews), list.Sum(d => d.UniqueVisitors), list.Sum(d => d.SignedInVisitors),
+            list.Select(d => new DayVisitsView(d.Day, d.PageViews, d.UniqueVisitors)).ToList(),
+            Top(list.Select(d => d.Pages)), Top(list.Select(d => d.Referrers)), Top(list.Select(d => d.Devices)),
+            Top(list.Select(d => d.Browsers)), Top(list.Select(d => d.OperatingSystems)), Top(list.Select(d => d.Countries)),
+            Top(list.Select(d => d.Languages))));
+    }
 
     /// <summary>The crew roster with each crew's open work orders (assigned, not yet resolved), crew-wide or to a member.</summary>
     private static async Task<Ok<IEnumerable<CrewView>>> ListCrews(IGridRepository repo, CancellationToken ct)

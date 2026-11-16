@@ -600,6 +600,14 @@ public sealed class GridSafetyStack : Stack
             Integration = integration,
             Authorizer = new HttpNoneAuthorizer(),
         });
+        // Anonymous page-view beacon. Stored only as coarse daily counters (no IPs, no cookies); see VisitAnonymizer.
+        httpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/api/public/visit",
+            Methods = new[] { HttpMethod.POST },
+            Integration = integration,
+            Authorizer = new HttpNoneAuthorizer(),
+        });
 
         // Web app caching: Vite fingerprints everything under assets/ (index-<hash>.js), so those files can be
         // cached for a year. index.html, config.json and the icons keep their names, so browsers must revalidate

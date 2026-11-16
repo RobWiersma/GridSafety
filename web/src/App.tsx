@@ -8,16 +8,19 @@ import { MissionDetail } from './components/MissionDetail';
 import { MissionsView } from './components/MissionsView';
 import { OpsView } from './components/OpsView';
 import { StatsBar } from './components/StatsBar';
+import { UserMenu } from './components/UserMenu';
+import { VisitorsView } from './components/VisitorsView';
 import { Toast, type ToastMessage } from './components/Toast';
+import { recordVisit } from './lib/visits';
 import { Logo, useSession } from './session';
 
-type Tab = 'ops' | 'findings' | 'missions';
+type Tab = 'ops' | 'findings' | 'missions' | 'visitors';
 
 /** #ops, #findings, #missions, or #mission/<id> for one mission's overview (linkable, works with back/forward). */
 function parseHash(): { tab: Tab; mission: string | null } {
   const h = location.hash.slice(1);
   if (h.startsWith('mission/')) return { tab: 'missions', mission: decodeURIComponent(h.slice('mission/'.length)) };
-  return { tab: h === 'findings' || h === 'missions' ? h : 'ops', mission: null };
+  return { tab: h === 'findings' || h === 'missions' || h === 'visitors' ? h : 'ops', mission: null };
 }
 
 export function App() {
@@ -33,6 +36,12 @@ export function App() {
   const [findingId, setFindingId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+
+  const isSupervisor = Boolean(me.data?.isSupervisor);
+  const tabs: [Tab, string][] = [['ops', 'Operations'], ['findings', 'Findings'], ['missions', 'Missions']];
+
+  const page = missionId ? 'mission' : tab;
+  useEffect(() => recordVisit(page, !session.guest), [page, session.guest]);
 
   const go = (t: Tab) => {
     setRoute({ tab: t, mission: null });
@@ -52,7 +61,7 @@ export function App() {
           <span>GridSafety</span>
         </div>
         <nav className="tabs" aria-label="Sections">
-          {([['ops', 'Operations'], ['findings', 'Findings'], ['missions', 'Missions']] as const).map(([key, label]) => (
+          {tabs.map(([key, label]) => (
             <button key={key} className={`tab ${tab === key ? 'tab-active' : ''}`} onClick={() => go(key)} aria-current={tab === key}>
               {label}
             </button>
@@ -74,10 +83,14 @@ export function App() {
           ) : (
             me.data?.isSupervisor && <span className="pill pill-accent">Supervisor</span>
           )}
-          <span className="muted user-name">{session.displayName}</span>
-          {session.guest
-            ? session.signIn && <button className="btn btn-primary" onClick={session.signIn}>Sign in</button>
-            : <button className="btn btn-ghost" onClick={session.signOut}>Sign out</button>}
+          {session.guest ? (
+            <>
+              <span className="muted user-name">{session.displayName}</span>
+              {session.signIn && <button className="btn btn-primary" onClick={session.signIn}>Sign in</button>}
+            </>
+          ) : (
+            <UserMenu name={session.displayName} isSupervisor={isSupervisor} onVisitors={() => go('visitors')} onSignOut={session.signOut} />
+          )}
         </div>
       </header>
 
@@ -95,6 +108,7 @@ export function App() {
             <CrewsPanel />
           </>
         )}
+        {tab === 'visitors' && (isSupervisor ? <VisitorsView /> : <div className="banner banner-info">Visitor stats are for supervisors.</div>)}
         {tab === 'missions' && !missionId && <MissionsView onToast={setToast} onShowOnMap={() => go('ops')} onOpenMission={openMission} />}
         {tab === 'missions' && missionId && (
           <MissionDetail missionId={missionId} onBack={() => go('missions')} onOpenFinding={setFindingId} onToast={setToast} />
