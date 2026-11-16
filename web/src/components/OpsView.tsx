@@ -102,7 +102,7 @@ function MissionCard({ m, selected, onSelect }: { m: MissionView; selected: bool
         <strong>{mi.name ?? mi.droneId}</strong>
         <span className={`pill pill-${mi.status.toLowerCase()}`}>{mi.status === 'InFlight' ? 'In flight' : mi.status}</span>
       </div>
-      <div className="muted small">{mi.name ? `${mi.droneId} · ` : ''}{m.circuitName} · PIC {mi.pilot}</div>
+      <div className="muted small">{mi.name ? `Drone ${mi.droneId} · ` : ''}{m.circuitName} · PIC {mi.pilot}</div>
       <div className="progress" title={`Coverage ${pct(m.coverage)}`}>
         <span style={{ width: pct(m.coverage) }} />
       </div>
