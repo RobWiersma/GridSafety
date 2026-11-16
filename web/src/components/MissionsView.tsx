@@ -4,6 +4,7 @@ import { MISSION_STATUS_LABEL, circuitsByVoltage, miles, pct, relativeTime } fro
 import { useSession } from '../session';
 import type { MissionView } from '../types';
 import { FilterBar, matchesSearch, SearchFilter, SelectFilter, ToggleFilter } from './FilterBar';
+import { SimulateButton } from './SimulateButton';
 import type { ToastMessage } from './Toast';
 
 const STATUS_CHIPS = [
@@ -133,6 +134,7 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
                     : m.mission.recentAlerts.length}</td>
                   <td className="row-actions">
                     <button className="btn btn-ghost" onClick={() => onOpenMission(m.mission.id)}>Overview</button>
+                    <SimulateButton mission={m.mission} onToast={onToast} onLaunched={onShowOnMap} />
                     {m.mission.status === 'InFlight' && <button className="btn btn-ghost" onClick={onShowOnMap}>Map</button>}
                     {m.mission.reportKey && (
                       <button className="btn btn-secondary" onClick={() => openReport(m.mission.id).catch((e: Error) => onToast({ kind: 'error', text: e.message }))}>
@@ -157,7 +159,7 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
           }}
         />
       )}
-      {planned && <SimulatorHint mission={planned} onClose={() => setPlanned(null)} />}
+      {planned && <SimulatorHint mission={planned} onClose={() => setPlanned(null)} onToast={onToast} onLaunched={() => { setPlanned(null); onShowOnMap(); }} />}
     </section>
   );
 }
@@ -245,7 +247,7 @@ function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: Miss
   );
 }
 
-function SimulatorHint({ mission, onClose }: { mission: MissionView; onClose(): void }) {
+function SimulatorHint({ mission, onClose, onToast, onLaunched }: { mission: MissionView; onClose(): void; onToast(t: ToastMessage): void; onLaunched(): void }) {
   const { devMode } = useSession();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => ref.current?.showModal(), []);
@@ -258,11 +260,12 @@ function SimulatorHint({ mission, onClose }: { mission: MissionView; onClose(): 
         <h2>Mission planned ✓</h2>
         <p className="muted">
           {m.droneId} is assigned to {mission.circuitName}. The mission goes <strong>In flight</strong> automatically when the first telemetry arrives.
-          To fly it with the simulator{devMode ? '' : ' (publishes to AWS IoT Core with your AWS credentials)'}:
+          Supervisors can fly it right now with a simulated drone. Or fly it from your machine with the simulator CLI{devMode ? '' : ' (publishes to AWS IoT Core with your AWS credentials)'}:
         </p>
         <pre className="code">{cmd}</pre>
         <div className="dialog-actions">
-          <button className="btn btn-secondary" onClick={() => navigator.clipboard?.writeText(cmd)}>Copy</button>
+          <button className="btn btn-ghost" onClick={() => navigator.clipboard?.writeText(cmd)}>Copy command</button>
+          <SimulateButton mission={m} onToast={onToast} onLaunched={onLaunched} />
           <button className="btn btn-primary" onClick={() => ref.current?.close()}>Done</button>
         </div>
       </div>

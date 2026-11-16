@@ -428,6 +428,30 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         Assert.Equal(HttpStatusCode.NoContent, (await sup.DeleteAsync("/api/resources/ground-crews/test-gc")).StatusCode);
     }
 
+    [Fact]
+    public async Task Supervisors_can_fly_a_planned_mission_with_a_simulated_drone()
+    {
+        var inspector = Client("alex");
+        var sup = Client("dana", supervisor: true);
+        var m = await PlanAsync(inspector, "DRN-SIM");
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await inspector.PostAsync($"/api/missions/{m.Mission.Id}/simulate", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await sup.PostAsync("/api/missions/nope/simulate", null)).StatusCode);
+
+        var res = await sup.PostAsync($"/api/missions/{m.Mission.Id}/simulate", null);
+        Assert.Equal(HttpStatusCode.Accepted, res.StatusCode);
+        await WaitForLandingAsync(sup, m.Mission.Id);
+
+        var flown = (await sup.GetFromJsonAsync<MissionView>($"/api/missions/{m.Mission.Id}", JsonOpts))!.Mission;
+        Assert.Equal(MissionStatus.Completed, flown.Status);
+        Assert.Equal("DRN-SIM", flown.DroneId);
+        Assert.NotNull(flown.SimulatedAt);
+        Assert.NotEmpty((await sup.GetFromJsonAsync<List<TelemetryPoint>>($"/api/missions/{m.Mission.Id}/track", JsonOpts))!);
+
+        // Only planned missions can be simulated.
+        Assert.Equal(HttpStatusCode.Conflict, (await sup.PostAsync($"/api/missions/{m.Mission.Id}/simulate", null)).StatusCode);
+    }
+
     private static async Task WaitForLandingAsync(HttpClient c, string missionId)
     {
         for (var i = 0; i < 100; i++)

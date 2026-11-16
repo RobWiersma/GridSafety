@@ -66,6 +66,7 @@ public static partial class Endpoints
         secured.MapGet("/missions/{id}", GetMission);
         secured.MapPost("/missions/{id}/status", ChangeMissionStatus);
         secured.MapPost("/missions/{id}/alerts/ack", AcknowledgeAlerts);
+        secured.MapPost("/missions/{id}/simulate", SimulateMission);
         secured.MapGet("/missions/{id}/track", GetTrack);
         secured.MapGet("/missions/{id}/report-url", GetReportUrl);
 
@@ -187,8 +188,12 @@ public static partial class Endpoints
             await repo.SaveMissionAsync(m, ct);
         }
 
+        if (recent.Count(m => m.SimulatedAt is not null && !Mission.Workflow.IsTerminal(m.Status) && !DemoFlight.IsStale(m, now)) >= MaxSimulatedFlights)
+            return TypedResults.Conflict($"{MaxSimulatedFlights} simulated flights are already in the air. Try again when one lands.");
+
         var mission = Mission.Plan(circuit, DemoFlight.DroneId, DemoFlight.Pilot, user.DisplayName, now,
             name: FlightNames.Generate(Random.Shared, recent.Select(m => m.Name)));
+        mission.SimulatedAt = now;
         await repo.SaveMissionAsync(mission, ct);
         try
         {

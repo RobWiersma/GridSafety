@@ -36,6 +36,8 @@ public sealed class Mission
     public int FindingCount { get; set; }
     public List<DroneAlert> RecentAlerts { get; init; } = [];
     public string? ReportKey { get; set; }
+    /// <summary>When a simulated flight was launched for this mission (demo flights, or "Simulate flight" on a planned one).</summary>
+    public DateTimeOffset? SimulatedAt { get; set; }
     public List<StatusChange<MissionStatus>> History { get; init; } = [];
     public long Version { get; set; }
 

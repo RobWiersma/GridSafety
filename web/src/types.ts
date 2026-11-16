@@ -68,6 +68,8 @@ export interface Mission {
   findingCount: number;
   recentAlerts: DroneAlert[];
   reportKey?: string;
+  /** Set when a simulated flight was launched for this mission. */
+  simulatedAt?: string;
   history: StatusChange<MissionStatus>[];
 }
 

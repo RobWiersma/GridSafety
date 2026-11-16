@@ -155,7 +155,11 @@ export const useMission = (id: string) => {
   return useQuery({
     queryKey: ['mission', id],
     queryFn: () => api<MissionView>(`/missions/${id}`),
-    refetchInterval: (q) => (q.state.data?.mission.status === 'InFlight' ? 3000 : false),
+    // Poll while airborne, or while a simulated flight is taking off.
+    refetchInterval: (q) => {
+      const m = q.state.data?.mission;
+      return m?.status === 'InFlight' || (m?.status === 'Planned' && m.simulatedAt) ? 3000 : false;
+    },
   });
 };
 
@@ -207,6 +211,20 @@ export function useDemoFlight() {
   return useMutation({
     mutationFn: (circuitId?: string) => api<MissionView>('/demo-flights', { method: 'POST', body: JSON.stringify({ circuitId }) }),
     onSuccess: invalidate,
+  });
+}
+
+/** Supervisor-only: fly a planned mission now with a simulated drone. */
+export function useSimulateMission() {
+  const api = useFetcher();
+  const qc = useQueryClient();
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (missionId: string) => api<MissionView>(`/missions/${encodeURIComponent(missionId)}/simulate`, { method: 'POST' }),
+    onSuccess: (m) => {
+      qc.setQueryData(['mission', m.mission.id], m);
+      return invalidate();
+    },
   });
 }
 

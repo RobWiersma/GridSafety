@@ -6,6 +6,7 @@ import { FINDING_TYPE_LABEL, MISSION_STATUS_LABEL, miles, pct, relativeTime, sev
 import type { Circuit, DroneAlert, FindingView, Mission, TelemetryPoint } from '../types';
 import { WEAK_SIGNAL_DBM } from './SignalBars';
 import { SeverityBadge } from './SeverityBadge';
+import { SimulateButton } from './SimulateButton';
 import type { ToastMessage } from './Toast';
 
 interface Props {
@@ -71,6 +72,7 @@ export function MissionDetail({ missionId, onBack, onOpenFinding, onToast }: Pro
           </div>
           <div className="toolbar-actions">
             <span className={`pill pill-${m.status.toLowerCase()}`}>{MISSION_STATUS_LABEL[m.status]}</span>
+            <SimulateButton mission={m} onToast={onToast} />
             {m.reportKey && (
               <button className="btn btn-secondary" onClick={() => openReport(m.id).catch((e: Error) => onToast({ kind: 'error', text: e.message }))}>
                 Report ↗
