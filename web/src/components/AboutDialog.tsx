@@ -3,16 +3,18 @@ import { Logo } from '../session';
 
 const REPO = 'https://github.com/RobWiersma/GridSafety';
 
-const STACK = [
-  ['Backend', '.NET 10, ASP.NET Core Minimal APIs on AWS Lambda behind API Gateway (HTTP API, JWT auth, throttled)'],
-  ['Drone ingest', 'AWS IoT Core (MQTT) → rules → Lambda; telemetry and findings in DynamoDB'],
-  ['Workflows', 'EventBridge + Scheduler for triage SLAs and escalation, SQS, SNS alerts, S3 mission reports'],
-  ['Frontend', 'React 19, TypeScript, TanStack Query and Leaflet, served from S3 through CloudFront'],
-  ['Auth', 'Amazon Cognito with Inspector and Supervisor roles; signed-out visitors get a read-only guest view'],
-  ['Infrastructure', 'AWS CDK in C#; GitHub Actions runs CI and deploys every green push to main'],
+const STEPS = [
+  ['🛰️', 'Inspect', 'Drones fly the lines and visually check every pole and tower, streaming live position and photos of anything wrong.'],
+  ['🖥️', 'Monitor', 'One live map shows every drone, every line and every flight-safety alert as it happens.'],
+  ['🚦', 'Triage', 'Each problem lands in a work queue ranked by severity. Urgent ones carry a deadline and escalate if nobody acts.'],
+  ['👷', 'Assign', 'Supervisors send each issue to the right field crew: tree trimmers for vegetation, linemen for damaged hardware.'],
 ] as const;
 
-/** Project info: what GridSafety is, what is real vs simulated, and how it is built. */
+const PROBLEMS = ['Vegetation growing into lines', 'Cracked or missing insulators', 'Damaged crossarms and conductors', 'Overheating connections'];
+
+const STACK = ['.NET 10', 'AWS Lambda', 'IoT Core (MQTT)', 'DynamoDB', 'EventBridge', 'Cognito', 'CloudFront', 'AWS CDK', 'React 19', 'TypeScript', 'Leaflet', 'GitHub Actions'];
+
+/** Project info: what GridSafety is for, how the workflow runs, and what is simulated. */
 export function AboutDialog({ onClose }: { onClose(): void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -31,36 +33,54 @@ export function AboutDialog({ onClose }: { onClose(): void }) {
           <Logo size={44} />
           <div>
             <h2 id="about-title">About GridSafety</h2>
-            <p className="muted small">Drone power-line inspection platform on AWS</p>
+            <p className="muted small">Inspect, monitor, triage and dispatch for safer power lines</p>
           </div>
           <button ref={closeRef} className="btn btn-ghost icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
 
         <div className="about-body">
-          <p>
-            Drones fly distribution and transmission circuits, stream telemetry over MQTT and report defects such as vegetation
-            encroachment, damaged insulators and thermal hotspots. GridSafety turns that stream into a live ops map, flight-safety
-            alerts, a triage queue with SLA escalation, crew work orders and an inspection report for every mission.
+          <p className="about-lead">
+            GridSafety is a <strong>command center for keeping power lines clean and safe</strong>. It brings drone
+            inspections, live monitoring, triage and crew assignments into one place, so problems get found and fixed
+            before they cause a fire or an outage.
           </p>
 
-          <h3>What's real and what's simulated</h3>
-          <ul className="about-list">
-            <li><strong>Real:</strong> the cloud architecture, APIs, auth, workflows and the power-line map, drawn from public OpenStreetMap data.</li>
-            <li><strong>Simulated:</strong> the drones, their telemetry, the defects they find and the defect images. Crews are fictional.</li>
-            <li>No utility's internal data is used anywhere.</li>
-          </ul>
+          <section>
+            <h3>How it works</h3>
+            <ol className="about-steps">
+              {STEPS.map(([icon, title, text], i) => (
+                <li key={title}>
+                  <span className="about-step-icon" aria-hidden="true">{icon}</span>
+                  <div>
+                    <strong>{i + 1}. {title}</strong>
+                    <p>{text}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
 
-          <h3>How it's built</h3>
-          <dl className="about-stack">
-            {STACK.map(([k, v]) => (
-              <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
-            ))}
-          </dl>
+          <section>
+            <h3>What it looks for</h3>
+            <ul className="about-chips">
+              {PROBLEMS.map((p) => <li key={p}>{p}</li>)}
+            </ul>
+          </section>
 
-          <h3>Try it</h3>
-          <p className="small">
-            Guests can browse everything read-only. Signed-in users can plan missions, launch the demo drone from the Missions
-            tab and triage findings, assigning them to field crews.
+          <section className="about-note">
+            <strong>This is a demo.</strong> The power lines on the map are real, from public OpenStreetMap data. The drones,
+            the problems they find, their photos and the crews are simulated. No utility's internal data is used.
+          </section>
+
+          <section>
+            <h3>Built with</h3>
+            <ul className="about-chips about-chips-muted">
+              {STACK.map((t) => <li key={t}>{t}</li>)}
+            </ul>
+          </section>
+
+          <p className="muted small">
+            Browse as a guest, or sign in to plan missions, fly the demo drone and assign findings to crews.
           </p>
         </div>
 
