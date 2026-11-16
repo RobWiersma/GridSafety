@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>GridSafety.Api</AssemblyName>
+    <!-- Lambda runs on Graviton (arm64); ReadyToRun trims cold starts. -->
+    <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Amazon.Lambda.AspNetCoreServer.Hosting" Version="1.*" />
+    <PackageReference Include="AWSSDK.Lambda" Version="4.*" />
+    <PackageReference Include="AWSSDK.S3" Version="4.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GridSafety.Core\GridSafety.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="GridSafety.Tests" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,4070 @@
+{
+  "source": "OpenStreetMap via Overpass API: way[power~\u0022^(line|minor_line)$\u0022], node[place~\u0022^(city|town|village)$\u0022]",
+  "license": "ODbL 1.0 (https://opendatacommons.org/licenses/odbl/)",
+  "attribution": "\u00A9 OpenStreetMap contributors",
+  "generatedAt": "2026-11-16T17:18:57.333092+00:00",
+  "bbox": [
+    37.92,
+    -122.19,
+    38.05,
+    -122.03
+  ],
+  "circuits": [
+    {
+      "id": "TIDE-SOBR-230",
+      "name": "Tidewater-Sobrante/Tesoro-Sobrante 230 kV",
+      "voltageKv": 230,
+      "voltageInferred": false,
+      "corridorMeters": 100,
+      "osmWayIds": [
+        35759899
+      ],
+      "structures": [
+        {
+          "id": "TIDE-SOBR-230-001",
+          "label": "TS-001",
+          "lat": 37.9301574,
+          "lon": -122.1874112,
+          "kind": "tower",
+          "osmNodeId": 1073987790
+        },
+        {
+          "id": "TIDE-SOBR-230-002",
+          "label": "TS-002",
+          "lat": 37.9319805,
+          "lon": -122.1843708,
+          "kind": "tower",
+          "osmNodeId": 373628676
+        },
+        {
+          "id": "TIDE-SOBR-230-003",
+          "label": "TS-003",
+          "lat": 37.9331699,
+          "lon": -122.1823113,
+          "kind": "tower",
+          "osmNodeId": 1073988386
+        },
+        {
+          "id": "TIDE-SOBR-230-004",
+          "label": "TS-004",
+          "lat": 37.9353382,
+          "lon": -122.1787318,
+          "kind": "tower",
+          "osmNodeId": 373628677
+        },
+        {
+          "id": "TIDE-SOBR-230-005",
+          "label": "TS-005",
+          "lat": 37.9383506,
+          "lon": -122.1737536,
+          "kind": "tower",
+          "osmNodeId": 373628678
+        },
+        {
+          "id": "TIDE-SOBR-230-006",
+          "label": "TS-006",
+          "lat": 37.9422496,
+          "lon": -122.1701573,
+          "kind": "tower",
+          "osmNodeId": 373628680
+        },
+        {
+          "id": "TIDE-SOBR-230-007",
+          "label": "TS-007",
+          "lat": 37.9441516,
+          "lon": -122.1686123,
+          "kind": "tower",
+          "osmNodeId": 373628681
+        },
+        {
+          "id": "TIDE-SOBR-230-008",
+          "label": "TS-008",
+          "lat": 37.9479014,
+          "lon": -122.1655653,
+          "kind": "tower",
+          "osmNodeId": 373628683
+        },
+        {
+          "id": "TIDE-SOBR-230-009",
+          "label": "TS-009",
+          "lat": 37.9504327,
+          "lon": -122.1634711,
+          "kind": "tower",
+          "osmNodeId": 373634626
+        },
+        {
+          "id": "TIDE-SOBR-230-010",
+          "label": "TS-010",
+          "lat": 37.9534715,
+          "lon": -122.1598233,
+          "kind": "tower",
+          "osmNodeId": 373634627
+        },
+        {
+          "id": "TIDE-SOBR-230-011",
+          "label": "TS-011",
+          "lat": 37.9567335,
+          "lon": -122.151257,
+          "kind": "tower",
+          "osmNodeId": 373634628
+        },
+        {
+          "id": "TIDE-SOBR-230-012",
+          "label": "TS-012",
+          "lat": 37.9563748,
+          "lon": -122.149043,
+          "kind": "tower",
+          "osmNodeId": 373634631
+        },
+        {
+          "id": "TIDE-SOBR-230-013",
+          "label": "TS-013",
+          "lat": 37.9558334,
+          "lon": -122.1454123,
+          "kind": "tower",
+          "osmNodeId": 373634633
+        },
+        {
+          "id": "TIDE-SOBR-230-014",
+          "label": "TS-014",
+          "lat": 37.9554869,
+          "lon": -122.1431282,
+          "kind": "tower",
+          "osmNodeId": 373634635
+        },
+        {
+          "id": "TIDE-SOBR-230-015",
+          "label": "TS-015",
+          "lat": 37.9564825,
+          "lon": -122.1354974,
+          "kind": "tower",
+          "osmNodeId": 373634636
+        },
+        {
+          "id": "TIDE-SOBR-230-016",
+          "label": "TS-016",
+          "lat": 37.9571175,
+          "lon": -122.1328066,
+          "kind": "tower",
+          "osmNodeId": 373634637
+        },
+        {
+          "id": "TIDE-SOBR-230-017",
+          "label": "TS-017",
+          "lat": 37.9584389,
+          "lon": -122.127311,
+          "kind": "tower",
+          "osmNodeId": 373634638
+        },
+        {
+          "id": "TIDE-SOBR-230-018",
+          "label": "TS-018",
+          "lat": 37.9597044,
+          "lon": -122.121963,
+          "kind": "tower",
+          "osmNodeId": 373634639
+        },
+        {
+          "id": "TIDE-SOBR-230-019",
+          "label": "TS-019",
+          "lat": 37.9626595,
+          "lon": -122.1180509,
+          "kind": "tower",
+          "osmNodeId": 1073988535
+        },
+        {
+          "id": "TIDE-SOBR-230-020",
+          "label": "TS-020",
+          "lat": 37.9655782,
+          "lon": -122.11405,
+          "kind": "tower",
+          "osmNodeId": 373634641
+        },
+        {
+          "id": "TIDE-SOBR-230-021",
+          "label": "TS-021",
+          "lat": 37.967845,
+          "lon": -122.110934,
+          "kind": "tower",
+          "osmNodeId": 373634643
+        },
+        {
+          "id": "TIDE-SOBR-230-022",
+          "label": "TS-022",
+          "lat": 37.9697155,
+          "lon": -122.1084404,
+          "kind": "untagged",
+          "osmNodeId": 12812098927
+        },
+        {
+          "id": "TIDE-SOBR-230-023",
+          "label": "TS-023",
+          "lat": 37.9698411,
+          "lon": -122.108273,
+          "kind": "tower",
+          "osmNodeId": 373634644
+        },
+        {
+          "id": "TIDE-SOBR-230-024",
+          "label": "TS-024",
+          "lat": 37.9722904,
+          "lon": -122.104952,
+          "kind": "tower",
+          "osmNodeId": 373634647
+        },
+        {
+          "id": "TIDE-SOBR-230-025",
+          "label": "TS-025",
+          "lat": 37.972997,
+          "lon": -122.1040121,
+          "kind": "untagged",
+          "osmNodeId": 5182135626
+        },
+        {
+          "id": "TIDE-SOBR-230-026",
+          "label": "TS-026",
+          "lat": 37.9737834,
+          "lon": -122.1029661,
+          "kind": "untagged",
+          "osmNodeId": 5182135627
+        },
+        {
+          "id": "TIDE-SOBR-230-027",
+          "label": "TS-027",
+          "lat": 37.9739752,
+          "lon": -122.102711,
+          "kind": "tower",
+          "osmNodeId": 373634649
+        }
+      ]
+    },
+    {
+      "id": "CLAY-MEAD-115",
+      "name": "Clayton-Meadow Lane 115 kV",
+      "voltageKv": 115,
+      "voltageInferred": false,
+      "corridorMeters": 75,
+      "osmWayIds": [
+        112587095,
+        1517241577
+      ],
+      "structures": [
+        {
+          "id": "CLAY-MEAD-115-001",
+          "label": "CM-001",
+          "lat": 37.9203784,
+          "lon": -122.0556351,
+          "kind": "pole",
+          "osmNodeId": 1400020233
+        },
+        {
+          "id": "CLAY-MEAD-115-002",
+          "label": "CM-002",
+          "lat": 37.9210845,
+          "lon": -122.0555179,
+          "kind": "pole",
+          "osmNodeId": 1400020230
+        },
+        {
+          "id": "CLAY-MEAD-115-003",
+          "label": "CM-003",
+          "lat": 37.921759,
+          "lon": -122.0554045,
+          "kind": "pole",
+          "osmNodeId": 1400020278
+        },
+        {
+          "id": "CLAY-MEAD-115-004",
+          "label": "CM-004",
+          "lat": 37.9238383,
+          "lon": -122.0550445,
+          "kind": "pole",
+          "osmNodeId": 1400020247
+        },
+        {
+          "id": "CLAY-MEAD-115-005",
+          "label": "CM-005",
+          "lat": 37.9245355,
+          "lon": -122.0549197,
+          "kind": "pole",
+          "osmNodeId": 1400020228
+        },
+        {
+          "id": "CLAY-MEAD-115-006",
+          "label": "CM-006",
+          "lat": 37.9252781,
+          "lon": -122.0547306,
+          "kind": "pole",
+          "osmNodeId": 1400020216
+        },
+        {
+          "id": "CLAY-MEAD-115-007",
+          "label": "CM-007",
+          "lat": 37.9259948,
+          "lon": -122.0546394,
+          "kind": "pole",
+          "osmNodeId": 13413878845
+        },
+        {
+          "id": "CLAY-MEAD-115-008",
+          "label": "CM-008",
+          "lat": 37.9268327,
+          "lon": -122.0545327,
+          "kind": "pole",
+          "osmNodeId": 1313849461
+        },
+        {
+          "id": "CLAY-MEAD-115-009",
+          "label": "CM-009",
+          "lat": 37.927258,
+          "lon": -122.0544563,
+          "kind": "pole",
+          "osmNodeId": 1313849478
+        },
+        {
+          "id": "CLAY-MEAD-115-010",
+          "label": "CM-010",
+          "lat": 37.9277573,
+          "lon": -122.0543731,
+          "kind": "pole",
+          "osmNodeId": 1313849477
+        },
+        {
+          "id": "CLAY-MEAD-115-011",
+          "label": "CM-011",
+          "lat": 37.9290013,
+          "lon": -122.0544777,
+          "kind": "pole",
+          "osmNodeId": 1313849465
+        },
+        {
+          "id": "CLAY-MEAD-115-012",
+          "label": "CM-012",
+          "lat": 37.9295958,
+          "lon": -122.0543691,
+          "kind": "pole",
+          "osmNodeId": 1313849475
+        },
+        {
+          "id": "CLAY-MEAD-115-013",
+          "label": "CM-013",
+          "lat": 37.9298804,
+          "lon": -122.0543208,
+          "kind": "pole",
+          "osmNodeId": 1313849474
+        },
+        {
+          "id": "CLAY-MEAD-115-014",
+          "label": "CM-014",
+          "lat": 37.9305404,
+          "lon": -122.0542136,
+          "kind": "pole",
+          "osmNodeId": 1313849472
+        },
+        {
+          "id": "CLAY-MEAD-115-015",
+          "label": "CM-015",
+          "lat": 37.9312396,
+          "lon": -122.0540875,
+          "kind": "pole",
+          "osmNodeId": 1313849467
+        },
+        {
+          "id": "CLAY-MEAD-115-016",
+          "label": "CM-016",
+          "lat": 37.9319378,
+          "lon": -122.0539669,
+          "kind": "pole",
+          "osmNodeId": 1313849460
+        },
+        {
+          "id": "CLAY-MEAD-115-017",
+          "label": "CM-017",
+          "lat": 37.932692,
+          "lon": -122.0538234,
+          "kind": "pole",
+          "osmNodeId": 1313849471
+        },
+        {
+          "id": "CLAY-MEAD-115-018",
+          "label": "CM-018",
+          "lat": 37.9339835,
+          "lon": -122.0535913,
+          "kind": "pole",
+          "osmNodeId": 1313849476
+        },
+        {
+          "id": "CLAY-MEAD-115-019",
+          "label": "CM-019",
+          "lat": 37.936081,
+          "lon": -122.0532373,
+          "kind": "pole",
+          "osmNodeId": 1313849463
+        },
+        {
+          "id": "CLAY-MEAD-115-020",
+          "label": "CM-020",
+          "lat": 37.9367939,
+          "lon": -122.0531206,
+          "kind": "pole",
+          "osmNodeId": 1313849462
+        },
+        {
+          "id": "CLAY-MEAD-115-021",
+          "label": "CM-021",
+          "lat": 37.9374486,
+          "lon": -122.0530133,
+          "kind": "pole",
+          "osmNodeId": 1313849479
+        },
+        {
+          "id": "CLAY-MEAD-115-022",
+          "label": "CM-022",
+          "lat": 37.9374434,
+          "lon": -122.052489,
+          "kind": "pole",
+          "osmNodeId": 1313849469
+        },
+        {
+          "id": "CLAY-MEAD-115-023",
+          "label": "CM-023",
+          "lat": 37.9381023,
+          "lon": -122.0522288,
+          "kind": "pole",
+          "osmNodeId": 1313849466
+        },
+        {
+          "id": "CLAY-MEAD-115-024",
+          "label": "CM-024",
+          "lat": 37.9386756,
+          "lon": -122.0521309,
+          "kind": "pole",
+          "osmNodeId": 1313849464
+        },
+        {
+          "id": "CLAY-MEAD-115-025",
+          "label": "CM-025",
+          "lat": 37.9392393,
+          "lon": -122.0520316,
+          "kind": "pole",
+          "osmNodeId": 1313849468
+        },
+        {
+          "id": "CLAY-MEAD-115-026",
+          "label": "CM-026",
+          "lat": 37.939729,
+          "lon": -122.0519472,
+          "kind": "pole",
+          "osmNodeId": 1313849473
+        },
+        {
+          "id": "CLAY-MEAD-115-027",
+          "label": "CM-027",
+          "lat": 37.9402177,
+          "lon": -122.0518627,
+          "kind": "pole",
+          "osmNodeId": 1313849459
+        },
+        {
+          "id": "CLAY-MEAD-115-028",
+          "label": "CM-028",
+          "lat": 37.9405709,
+          "lon": -122.0517902,
+          "kind": "pole",
+          "osmNodeId": 1276060246
+        },
+        {
+          "id": "CLAY-MEAD-115-029",
+          "label": "CM-029",
+          "lat": 37.9412309,
+          "lon": -122.0516695,
+          "kind": "pole",
+          "osmNodeId": 1276060767
+        },
+        {
+          "id": "CLAY-MEAD-115-030",
+          "label": "CM-030",
+          "lat": 37.9418422,
+          "lon": -122.0515676,
+          "kind": "pole",
+          "osmNodeId": 1276060787
+        },
+        {
+          "id": "CLAY-MEAD-115-031",
+          "label": "CM-031",
+          "lat": 37.9432467,
+          "lon": -122.0513396,
+          "kind": "pole",
+          "osmNodeId": 1276060665
+        },
+        {
+          "id": "CLAY-MEAD-115-032",
+          "label": "CM-032",
+          "lat": 37.9434159,
+          "lon": -122.0518922,
+          "kind": "pole",
+          "osmNodeId": 1276060464
+        },
+        {
+          "id": "CLAY-MEAD-115-033",
+          "label": "CM-033",
+          "lat": 37.9440082,
+          "lon": -122.051805,
+          "kind": "pole",
+          "osmNodeId": 1276060759
+        },
+        {
+          "id": "CLAY-MEAD-115-034",
+          "label": "CM-034",
+          "lat": 37.9445603,
+          "lon": -122.0517138,
+          "kind": "pole",
+          "osmNodeId": 1276060284
+        },
+        {
+          "id": "CLAY-MEAD-115-035",
+          "label": "CM-035",
+          "lat": 37.9451441,
+          "lon": -122.0515944,
+          "kind": "pole",
+          "osmNodeId": 1276060598
+        },
+        {
+          "id": "CLAY-MEAD-115-036",
+          "label": "CM-036",
+          "lat": 37.9457913,
+          "lon": -122.0515032,
+          "kind": "pole",
+          "osmNodeId": 1276060658
+        },
+        {
+          "id": "CLAY-MEAD-115-037",
+          "label": "CM-037",
+          "lat": 37.9464576,
+          "lon": -122.0513919,
+          "kind": "pole",
+          "osmNodeId": 1276060339
+        },
+        {
+          "id": "CLAY-MEAD-115-038",
+          "label": "CM-038",
+          "lat": 37.9480238,
+          "lon": -122.0511505,
+          "kind": "pole",
+          "osmNodeId": 1276060578
+        },
+        {
+          "id": "CLAY-MEAD-115-039",
+          "label": "CM-039",
+          "lat": 37.9486721,
+          "lon": -122.0511277,
+          "kind": "pole",
+          "osmNodeId": 1276060733
+        },
+        {
+          "id": "CLAY-MEAD-115-040",
+          "label": "CM-040",
+          "lat": 37.9493405,
+          "lon": -122.0511009,
+          "kind": "pole",
+          "osmNodeId": 1276060769
+        },
+        {
+          "id": "CLAY-MEAD-115-041",
+          "label": "CM-041",
+          "lat": 37.9500152,
+          "lon": -122.0510795,
+          "kind": "pole",
+          "osmNodeId": 1276060679
+        },
+        {
+          "id": "CLAY-MEAD-115-042",
+          "label": "CM-042",
+          "lat": 37.9506793,
+          "lon": -122.0510513,
+          "kind": "pole",
+          "osmNodeId": 1276060753
+        },
+        {
+          "id": "CLAY-MEAD-115-043",
+          "label": "CM-043",
+          "lat": 37.9513498,
+          "lon": -122.0510406,
+          "kind": "pole",
+          "osmNodeId": 1276060722
+        },
+        {
+          "id": "CLAY-MEAD-115-044",
+          "label": "CM-044",
+          "lat": 37.9521059,
+          "lon": -122.0509976,
+          "kind": "pole",
+          "osmNodeId": 1276060309
+        },
+        {
+          "id": "CLAY-MEAD-115-045",
+          "label": "CM-045",
+          "lat": 37.9527753,
+          "lon": -122.0509628,
+          "kind": "pole",
+          "osmNodeId": 1276060575
+        },
+        {
+          "id": "CLAY-MEAD-115-046",
+          "label": "CM-046",
+          "lat": 37.9536371,
+          "lon": -122.0508743,
+          "kind": "pole",
+          "osmNodeId": 1276060386
+        },
+        {
+          "id": "CLAY-MEAD-115-047",
+          "label": "CM-047",
+          "lat": 37.954335,
+          "lon": -122.0508501,
+          "kind": "pole",
+          "osmNodeId": 1276060615
+        },
+        {
+          "id": "CLAY-MEAD-115-048",
+          "label": "CM-048",
+          "lat": 37.9549737,
+          "lon": -122.0508287,
+          "kind": "pole",
+          "osmNodeId": 1276060774
+        },
+        {
+          "id": "CLAY-MEAD-115-049",
+          "label": "CM-049",
+          "lat": 37.9556674,
+          "lon": -122.0507965,
+          "kind": "pole",
+          "osmNodeId": 1276060814
+        },
+        {
+          "id": "CLAY-MEAD-115-050",
+          "label": "CM-050",
+          "lat": 37.9563252,
+          "lon": -122.0507723,
+          "kind": "pole",
+          "osmNodeId": 1276060405
+        },
+        {
+          "id": "CLAY-MEAD-115-051",
+          "label": "CM-051",
+          "lat": 37.9569427,
+          "lon": -122.0507482,
+          "kind": "pole",
+          "osmNodeId": 1276060780
+        },
+        {
+          "id": "CLAY-MEAD-115-052",
+          "label": "CM-052",
+          "lat": 37.9573001,
+          "lon": -122.0507402,
+          "kind": "pole",
+          "osmNodeId": 1276060794
+        },
+        {
+          "id": "CLAY-MEAD-115-053",
+          "label": "CM-053",
+          "lat": 37.9579155,
+          "lon": -122.0507831,
+          "kind": "pole",
+          "osmNodeId": 1276060427
+        },
+        {
+          "id": "CLAY-MEAD-115-054",
+          "label": "CM-054",
+          "lat": 37.9584633,
+          "lon": -122.0507683,
+          "kind": "pole",
+          "osmNodeId": 1276060425
+        },
+        {
+          "id": "CLAY-MEAD-115-055",
+          "label": "CM-055",
+          "lat": 37.9590046,
+          "lon": -122.0507509,
+          "kind": "pole",
+          "osmNodeId": 1276060262
+        },
+        {
+          "id": "CLAY-MEAD-115-056",
+          "label": "CM-056",
+          "lat": 37.9595365,
+          "lon": -122.0507294,
+          "kind": "pole",
+          "osmNodeId": 1276060328
+        },
+        {
+          "id": "CLAY-MEAD-115-057",
+          "label": "CM-057",
+          "lat": 37.960374,
+          "lon": -122.0506932,
+          "kind": "pole",
+          "osmNodeId": 1279320062
+        },
+        {
+          "id": "CLAY-MEAD-115-058",
+          "label": "CM-058",
+          "lat": 37.9610454,
+          "lon": -122.0506154,
+          "kind": "pole",
+          "osmNodeId": 1279320194
+        },
+        {
+          "id": "CLAY-MEAD-115-059",
+          "label": "CM-059",
+          "lat": 37.9616989,
+          "lon": -122.0503968,
+          "kind": "pole",
+          "osmNodeId": 1279320082
+        },
+        {
+          "id": "CLAY-MEAD-115-060",
+          "label": "CM-060",
+          "lat": 37.9623692,
+          "lon": -122.0501393,
+          "kind": "pole",
+          "osmNodeId": 1279320089
+        },
+        {
+          "id": "CLAY-MEAD-115-061",
+          "label": "CM-061",
+          "lat": 37.9626949,
+          "lon": -122.0513758,
+          "kind": "pole",
+          "osmNodeId": 1279320125
+        },
+        {
+          "id": "CLAY-MEAD-115-062",
+          "label": "CM-062",
+          "lat": 37.9631749,
+          "lon": -122.0518211,
+          "kind": "pole",
+          "osmNodeId": 1279320073
+        },
+        {
+          "id": "CLAY-MEAD-115-063",
+          "label": "CM-063",
+          "lat": 37.9631028,
+          "lon": -122.052038,
+          "kind": "switch",
+          "osmNodeId": 13850676419
+        },
+        {
+          "id": "CLAY-MEAD-115-064",
+          "label": "CM-064",
+          "lat": 37.9634601,
+          "lon": -122.0523588,
+          "kind": "untagged",
+          "osmNodeId": 1279320086
+        },
+        {
+          "id": "CLAY-MEAD-115-065",
+          "label": "CM-065",
+          "lat": 37.9635619,
+          "lon": -122.0520987,
+          "kind": "pole",
+          "osmNodeId": 1279320163
+        },
+        {
+          "id": "CLAY-MEAD-115-066",
+          "label": "CM-066",
+          "lat": 37.9627964,
+          "lon": -122.0513248,
+          "kind": "pole",
+          "osmNodeId": 1279320171
+        },
+        {
+          "id": "CLAY-MEAD-115-067",
+          "label": "CM-067",
+          "lat": 37.9624905,
+          "lon": -122.0500842,
+          "kind": "pole",
+          "osmNodeId": 1279320133
+        },
+        {
+          "id": "CLAY-MEAD-115-068",
+          "label": "CM-068",
+          "lat": 37.963126,
+          "lon": -122.0498325,
+          "kind": "pole",
+          "osmNodeId": 1279320146
+        },
+        {
+          "id": "CLAY-MEAD-115-069",
+          "label": "CM-069",
+          "lat": 37.963773,
+          "lon": -122.0495782,
+          "kind": "pole",
+          "osmNodeId": 1279320134
+        },
+        {
+          "id": "CLAY-MEAD-115-070",
+          "label": "CM-070",
+          "lat": 37.9644165,
+          "lon": -122.0493386,
+          "kind": "pole",
+          "osmNodeId": 1279320151
+        },
+        {
+          "id": "CLAY-MEAD-115-071",
+          "label": "CM-071",
+          "lat": 37.9650484,
+          "lon": -122.0490623,
+          "kind": "pole",
+          "osmNodeId": 1279320135
+        },
+        {
+          "id": "CLAY-MEAD-115-072",
+          "label": "CM-072",
+          "lat": 37.9656211,
+          "lon": -122.048834,
+          "kind": "pole",
+          "osmNodeId": 1279320162
+        },
+        {
+          "id": "CLAY-MEAD-115-073",
+          "label": "CM-073",
+          "lat": 37.9662194,
+          "lon": -122.0485965,
+          "kind": "pole",
+          "osmNodeId": 1279320112
+        },
+        {
+          "id": "CLAY-MEAD-115-074",
+          "label": "CM-074",
+          "lat": 37.966785,
+          "lon": -122.0483713,
+          "kind": "pole",
+          "osmNodeId": 13850676417
+        },
+        {
+          "id": "CLAY-MEAD-115-075",
+          "label": "CM-075",
+          "lat": 37.9674052,
+          "lon": -122.0481281,
+          "kind": "pole",
+          "osmNodeId": 1279320084
+        },
+        {
+          "id": "CLAY-MEAD-115-076",
+          "label": "CM-076",
+          "lat": 37.9678546,
+          "lon": -122.0479501,
+          "kind": "pole",
+          "osmNodeId": 1279320076
+        },
+        {
+          "id": "CLAY-MEAD-115-077",
+          "label": "CM-077",
+          "lat": 37.9686032,
+          "lon": -122.047635,
+          "kind": "pole",
+          "osmNodeId": 1279320114
+        },
+        {
+          "id": "CLAY-MEAD-115-078",
+          "label": "CM-078",
+          "lat": 37.969367,
+          "lon": -122.0473287,
+          "kind": "pole",
+          "osmNodeId": 13850676416
+        },
+        {
+          "id": "CLAY-MEAD-115-079",
+          "label": "CM-079",
+          "lat": 37.9698829,
+          "lon": -122.0471341,
+          "kind": "pole",
+          "osmNodeId": 1279320155
+        },
+        {
+          "id": "CLAY-MEAD-115-080",
+          "label": "CM-080",
+          "lat": 37.9705432,
+          "lon": -122.0468697,
+          "kind": "pole",
+          "osmNodeId": 1279320160
+        },
+        {
+          "id": "CLAY-MEAD-115-081",
+          "label": "CM-081",
+          "lat": 37.9697998,
+          "lon": -122.0461133,
+          "kind": "pole",
+          "osmNodeId": 1279320091
+        },
+        {
+          "id": "CLAY-MEAD-115-082",
+          "label": "CM-082",
+          "lat": 37.9689083,
+          "lon": -122.0458446,
+          "kind": "pole",
+          "osmNodeId": 1279320148
+        },
+        {
+          "id": "CLAY-MEAD-115-083",
+          "label": "CM-083",
+          "lat": 37.968561,
+          "lon": -122.0450184,
+          "kind": "pole",
+          "osmNodeId": 1279320150
+        },
+        {
+          "id": "CLAY-MEAD-115-084",
+          "label": "CM-084",
+          "lat": 37.968052,
+          "lon": -122.0442074,
+          "kind": "pole",
+          "osmNodeId": 1279320127
+        },
+        {
+          "id": "CLAY-MEAD-115-085",
+          "label": "CM-085",
+          "lat": 37.9672574,
+          "lon": -122.0435523,
+          "kind": "pole",
+          "osmNodeId": 1279320164
+        },
+        {
+          "id": "CLAY-MEAD-115-086",
+          "label": "CM-086",
+          "lat": 37.9665781,
+          "lon": -122.0426847,
+          "kind": "pole",
+          "osmNodeId": 1279320087
+        },
+        {
+          "id": "CLAY-MEAD-115-087",
+          "label": "CM-087",
+          "lat": 37.9661332,
+          "lon": -122.0418982,
+          "kind": "pole",
+          "osmNodeId": 1279320121
+        },
+        {
+          "id": "CLAY-MEAD-115-088",
+          "label": "CM-088",
+          "lat": 37.9653752,
+          "lon": -122.0413973,
+          "kind": "pole",
+          "osmNodeId": 1279320108
+        },
+        {
+          "id": "CLAY-MEAD-115-089",
+          "label": "CM-089",
+          "lat": 37.9644569,
+          "lon": -122.0410444,
+          "kind": "pole",
+          "osmNodeId": 1279320118
+        },
+        {
+          "id": "CLAY-MEAD-115-090",
+          "label": "CM-090",
+          "lat": 37.9636595,
+          "lon": -122.0412871,
+          "kind": "pole",
+          "osmNodeId": 1279320195
+        },
+        {
+          "id": "CLAY-MEAD-115-091",
+          "label": "CM-091",
+          "lat": 37.963029,
+          "lon": -122.0417655,
+          "kind": "pole",
+          "osmNodeId": 1279320077
+        },
+        {
+          "id": "CLAY-MEAD-115-092",
+          "label": "CM-092",
+          "lat": 37.9623028,
+          "lon": -122.0413155,
+          "kind": "pole",
+          "osmNodeId": 1279320123
+        },
+        {
+          "id": "CLAY-MEAD-115-093",
+          "label": "CM-093",
+          "lat": 37.9610781,
+          "lon": -122.0399064,
+          "kind": "pole",
+          "osmNodeId": 1279320175
+        },
+        {
+          "id": "CLAY-MEAD-115-094",
+          "label": "CM-094",
+          "lat": 37.9602672,
+          "lon": -122.0394534,
+          "kind": "pole",
+          "osmNodeId": 1279320185
+        },
+        {
+          "id": "CLAY-MEAD-115-095",
+          "label": "CM-095",
+          "lat": 37.9595395,
+          "lon": -122.0387367,
+          "kind": "pole",
+          "osmNodeId": 1279320096
+        },
+        {
+          "id": "CLAY-MEAD-115-096",
+          "label": "CM-096",
+          "lat": 37.9593454,
+          "lon": -122.0375139,
+          "kind": "pole",
+          "osmNodeId": 1279320144
+        },
+        {
+          "id": "CLAY-MEAD-115-097",
+          "label": "CM-097",
+          "lat": 37.9596043,
+          "lon": -122.0366053,
+          "kind": "pole",
+          "osmNodeId": 1279320180
+        },
+        {
+          "id": "CLAY-MEAD-115-098",
+          "label": "CM-098",
+          "lat": 37.9587391,
+          "lon": -122.0358722,
+          "kind": "pole",
+          "osmNodeId": 1279320136
+        },
+        {
+          "id": "CLAY-MEAD-115-099",
+          "label": "CM-099",
+          "lat": 37.9581841,
+          "lon": -122.0351833,
+          "kind": "pole",
+          "osmNodeId": 1279320093
+        },
+        {
+          "id": "CLAY-MEAD-115-100",
+          "label": "CM-100",
+          "lat": 37.95763,
+          "lon": -122.0346469,
+          "kind": "pole",
+          "osmNodeId": 1279320104
+        },
+        {
+          "id": "CLAY-MEAD-115-101",
+          "label": "CM-101",
+          "lat": 37.9570921,
+          "lon": -122.0341732,
+          "kind": "pole",
+          "osmNodeId": 1279320168
+        },
+        {
+          "id": "CLAY-MEAD-115-102",
+          "label": "CM-102",
+          "lat": 37.9565462,
+          "lon": -122.0337054,
+          "kind": "pole",
+          "osmNodeId": 1279320098
+        },
+        {
+          "id": "CLAY-MEAD-115-103",
+          "label": "CM-103",
+          "lat": 37.9559622,
+          "lon": -122.0335962,
+          "kind": "pole",
+          "osmNodeId": 1279320181
+        },
+        {
+          "id": "CLAY-MEAD-115-104",
+          "label": "CM-104",
+          "lat": 37.9553508,
+          "lon": -122.0334833,
+          "kind": "pole",
+          "osmNodeId": 1279320177
+        },
+        {
+          "id": "CLAY-MEAD-115-105",
+          "label": "CM-105",
+          "lat": 37.9546931,
+          "lon": -122.0333605,
+          "kind": "pole",
+          "osmNodeId": 1279320106
+        },
+        {
+          "id": "CLAY-MEAD-115-106",
+          "label": "CM-106",
+          "lat": 37.9542631,
+          "lon": -122.0332669,
+          "kind": "pole",
+          "osmNodeId": 1279320173
+        },
+        {
+          "id": "CLAY-MEAD-115-107",
+          "label": "CM-107",
+          "lat": 37.9537534,
+          "lon": -122.0331784,
+          "kind": "pole",
+          "osmNodeId": 1279320157
+        },
+        {
+          "id": "CLAY-MEAD-115-108",
+          "label": "CM-108",
+          "lat": 37.9532406,
+          "lon": -122.0330831,
+          "kind": "pole",
+          "osmNodeId": 1279320100
+        },
+        {
+          "id": "CLAY-MEAD-115-109",
+          "label": "CM-109",
+          "lat": 37.9528239,
+          "lon": -122.0329209,
+          "kind": "pole",
+          "osmNodeId": 1279320179
+        },
+        {
+          "id": "CLAY-MEAD-115-110",
+          "label": "CM-110",
+          "lat": 37.9524985,
+          "lon": -122.0325783,
+          "kind": "pole",
+          "osmNodeId": 1279320065
+        },
+        {
+          "id": "CLAY-MEAD-115-111",
+          "label": "CM-111",
+          "lat": 37.9522993,
+          "lon": -122.0320902,
+          "kind": "pole",
+          "osmNodeId": 1279320137
+        },
+        {
+          "id": "CLAY-MEAD-115-112",
+          "label": "CM-112",
+          "lat": 37.95226,
+          "lon": -122.0316057,
+          "kind": "pole",
+          "osmNodeId": 1279320063
+        },
+        {
+          "id": "CLAY-MEAD-115-113",
+          "label": "CM-113",
+          "lat": 37.952383,
+          "lon": -122.0307107,
+          "kind": "pole",
+          "osmNodeId": 1279320120
+        }
+      ]
+    },
+    {
+      "id": "PITT-MART-115",
+      "name": "Pittsburg - Martinez 115 kV",
+      "voltageKv": 115,
+      "voltageInferred": false,
+      "corridorMeters": 75,
+      "osmWayIds": [
+        92107748
+      ],
+      "structures": [
+        {
+          "id": "PITT-MART-115-001",
+          "label": "PM-001",
+          "lat": 38.0320147,
+          "lon": -122.031731,
+          "kind": "tower",
+          "osmNodeId": 418121446
+        },
+        {
+          "id": "PITT-MART-115-002",
+          "label": "PM-002",
+          "lat": 38.0308924,
+          "lon": -122.033816,
+          "kind": "tower",
+          "osmNodeId": 418121445
+        },
+        {
+          "id": "PITT-MART-115-003",
+          "label": "PM-003",
+          "lat": 38.0295268,
+          "lon": -122.036331,
+          "kind": "tower",
+          "osmNodeId": 418121444
+        },
+        {
+          "id": "PITT-MART-115-004",
+          "label": "PM-004",
+          "lat": 38.0279785,
+          "lon": -122.043893,
+          "kind": "tower",
+          "osmNodeId": 418121443
+        },
+        {
+          "id": "PITT-MART-115-005",
+          "label": "PM-005",
+          "lat": 38.027485,
+          "lon": -122.046356,
+          "kind": "tower",
+          "osmNodeId": 418121442
+        },
+        {
+          "id": "PITT-MART-115-006",
+          "label": "PM-006",
+          "lat": 38.0262004,
+          "lon": -122.048579,
+          "kind": "tower",
+          "osmNodeId": 418121441
+        },
+        {
+          "id": "PITT-MART-115-007",
+          "label": "PM-007",
+          "lat": 38.0248617,
+          "lon": -122.050897,
+          "kind": "tower",
+          "osmNodeId": 418121440
+        },
+        {
+          "id": "PITT-MART-115-008",
+          "label": "PM-008",
+          "lat": 38.0235838,
+          "lon": -122.053102,
+          "kind": "tower",
+          "osmNodeId": 418121439
+        },
+        {
+          "id": "PITT-MART-115-009",
+          "label": "PM-009",
+          "lat": 38.0207575,
+          "lon": -122.058046,
+          "kind": "tower",
+          "osmNodeId": 418121438
+        },
+        {
+          "id": "PITT-MART-115-010",
+          "label": "PM-010",
+          "lat": 38.0201801,
+          "lon": -122.0590442,
+          "kind": "tower",
+          "osmNodeId": 803091701
+        },
+        {
+          "id": "PITT-MART-115-011",
+          "label": "PM-011",
+          "lat": 38.0192356,
+          "lon": -122.0614396,
+          "kind": "tower",
+          "osmNodeId": 799409088
+        },
+        {
+          "id": "PITT-MART-115-012",
+          "label": "PM-012",
+          "lat": 38.018626,
+          "lon": -122.0630032,
+          "kind": "tower",
+          "osmNodeId": 799409077
+        },
+        {
+          "id": "PITT-MART-115-013",
+          "label": "PM-013",
+          "lat": 38.0179525,
+          "lon": -122.064666,
+          "kind": "tower",
+          "osmNodeId": 417590529
+        },
+        {
+          "id": "PITT-MART-115-014",
+          "label": "PM-014",
+          "lat": 38.0179793,
+          "lon": -122.0668086,
+          "kind": "tower",
+          "osmNodeId": 417593717
+        },
+        {
+          "id": "PITT-MART-115-015",
+          "label": "PM-015",
+          "lat": 38.0177649,
+          "lon": -122.068396,
+          "kind": "tower",
+          "osmNodeId": 373635755
+        },
+        {
+          "id": "PITT-MART-115-016",
+          "label": "PM-016",
+          "lat": 38.0177784,
+          "lon": -122.0708512,
+          "kind": "tower",
+          "osmNodeId": 373635760
+        },
+        {
+          "id": "PITT-MART-115-017",
+          "label": "PM-017",
+          "lat": 38.0177852,
+          "lon": -122.0717953,
+          "kind": "tower",
+          "osmNodeId": 373635762
+        },
+        {
+          "id": "PITT-MART-115-018",
+          "label": "PM-018",
+          "lat": 38.0175012,
+          "lon": -122.0741642,
+          "kind": "tower",
+          "osmNodeId": 373635764
+        },
+        {
+          "id": "PITT-MART-115-019",
+          "label": "PM-019",
+          "lat": 38.0171428,
+          "lon": -122.0772284,
+          "kind": "tower",
+          "osmNodeId": 373635766
+        },
+        {
+          "id": "PITT-MART-115-020",
+          "label": "PM-020",
+          "lat": 38.0168723,
+          "lon": -122.0795287,
+          "kind": "tower",
+          "osmNodeId": 373635768
+        },
+        {
+          "id": "PITT-MART-115-021",
+          "label": "PM-021",
+          "lat": 38.0164936,
+          "lon": -122.0829018,
+          "kind": "tower",
+          "osmNodeId": 373635770
+        },
+        {
+          "id": "PITT-MART-115-022",
+          "label": "PM-022",
+          "lat": 38.016214,
+          "lon": -122.0852309,
+          "kind": "tower",
+          "osmNodeId": 373635774
+        },
+        {
+          "id": "PITT-MART-115-023",
+          "label": "PM-023",
+          "lat": 38.0158107,
+          "lon": -122.0886525,
+          "kind": "tower",
+          "osmNodeId": 373635775
+        },
+        {
+          "id": "PITT-MART-115-024",
+          "label": "PM-024",
+          "lat": 38.0151615,
+          "lon": -122.094274,
+          "kind": "tower",
+          "osmNodeId": 373635776
+        },
+        {
+          "id": "PITT-MART-115-025",
+          "label": "PM-025",
+          "lat": 38.0142613,
+          "lon": -122.0976828,
+          "kind": "tower",
+          "osmNodeId": 1069535076
+        },
+        {
+          "id": "PITT-MART-115-026",
+          "label": "PM-026",
+          "lat": 38.0133353,
+          "lon": -122.1014812,
+          "kind": "tower",
+          "osmNodeId": 1069534953
+        },
+        {
+          "id": "PITT-MART-115-027",
+          "label": "PM-027",
+          "lat": 38.0138142,
+          "lon": -122.1038509,
+          "kind": "tower",
+          "osmNodeId": 796662570
+        },
+        {
+          "id": "PITT-MART-115-028",
+          "label": "PM-028",
+          "lat": 38.0126662,
+          "lon": -122.1045998,
+          "kind": "tower",
+          "osmNodeId": 373636656
+        },
+        {
+          "id": "PITT-MART-115-029",
+          "label": "PM-029",
+          "lat": 38.0126256,
+          "lon": -122.1070975,
+          "kind": "tower",
+          "osmNodeId": 373636658
+        },
+        {
+          "id": "PITT-MART-115-030",
+          "label": "PM-030",
+          "lat": 38.0125986,
+          "lon": -122.1095866,
+          "kind": "tower",
+          "osmNodeId": 373636660
+        },
+        {
+          "id": "PITT-MART-115-031",
+          "label": "PM-031",
+          "lat": 38.0136038,
+          "lon": -122.1097079,
+          "kind": "tower",
+          "osmNodeId": 373639480
+        },
+        {
+          "id": "PITT-MART-115-032",
+          "label": "PM-032",
+          "lat": 38.0134371,
+          "lon": -122.113089,
+          "kind": "tower",
+          "osmNodeId": 373639573
+        },
+        {
+          "id": "PITT-MART-115-033",
+          "label": "PM-033",
+          "lat": 38.0138834,
+          "lon": -122.116153,
+          "kind": "tower",
+          "osmNodeId": 373639783
+        }
+      ]
+    },
+    {
+      "id": "OLEU-MART-115",
+      "name": "Oleum - Martinez 115 kV",
+      "voltageKv": 115,
+      "voltageInferred": false,
+      "corridorMeters": 75,
+      "osmWayIds": [
+        35601927
+      ],
+      "structures": [
+        {
+          "id": "OLEU-MART-115-001",
+          "label": "OM-001",
+          "lat": 37.9936456,
+          "lon": -122.1294342,
+          "kind": "tower",
+          "osmNodeId": 417266548
+        },
+        {
+          "id": "OLEU-MART-115-002",
+          "label": "OM-002",
+          "lat": 37.993076,
+          "lon": -122.1315889,
+          "kind": "tower",
+          "osmNodeId": 417266813
+        },
+        {
+          "id": "OLEU-MART-115-003",
+          "label": "OM-003",
+          "lat": 37.9929739,
+          "lon": -122.1358382,
+          "kind": "untagged",
+          "osmNodeId": 353451086
+        },
+        {
+          "id": "OLEU-MART-115-004",
+          "label": "OM-004",
+          "lat": 37.9929871,
+          "lon": -122.1361582,
+          "kind": "tower",
+          "osmNodeId": 417266489
+        },
+        {
+          "id": "OLEU-MART-115-005",
+          "label": "OM-005",
+          "lat": 37.9936102,
+          "lon": -122.1369956,
+          "kind": "tower",
+          "osmNodeId": 417259636
+        },
+        {
+          "id": "OLEU-MART-115-006",
+          "label": "OM-006",
+          "lat": 37.9958982,
+          "lon": -122.1398218,
+          "kind": "tower",
+          "osmNodeId": 417259635
+        },
+        {
+          "id": "OLEU-MART-115-007",
+          "label": "OM-007",
+          "lat": 37.9972718,
+          "lon": -122.1415184,
+          "kind": "tower",
+          "osmNodeId": 417259634
+        },
+        {
+          "id": "OLEU-MART-115-008",
+          "label": "OM-008",
+          "lat": 37.9991784,
+          "lon": -122.1438691,
+          "kind": "tower",
+          "osmNodeId": 417259633
+        },
+        {
+          "id": "OLEU-MART-115-009",
+          "label": "OM-009",
+          "lat": 38.0004286,
+          "lon": -122.1462335,
+          "kind": "tower",
+          "osmNodeId": 417259632
+        },
+        {
+          "id": "OLEU-MART-115-010",
+          "label": "OM-010",
+          "lat": 38.0026624,
+          "lon": -122.1488699,
+          "kind": "tower",
+          "osmNodeId": 417259631
+        },
+        {
+          "id": "OLEU-MART-115-011",
+          "label": "OM-011",
+          "lat": 38.0042423,
+          "lon": -122.151784,
+          "kind": "tower",
+          "osmNodeId": 417259630
+        },
+        {
+          "id": "OLEU-MART-115-012",
+          "label": "OM-012",
+          "lat": 38.0052158,
+          "lon": -122.1552612,
+          "kind": "tower",
+          "osmNodeId": 417259629
+        },
+        {
+          "id": "OLEU-MART-115-013",
+          "label": "OM-013",
+          "lat": 38.0074039,
+          "lon": -122.1593869,
+          "kind": "tower",
+          "osmNodeId": 417259628
+        },
+        {
+          "id": "OLEU-MART-115-014",
+          "label": "OM-014",
+          "lat": 38.0083721,
+          "lon": -122.1612119,
+          "kind": "tower",
+          "osmNodeId": 417259627
+        },
+        {
+          "id": "OLEU-MART-115-015",
+          "label": "OM-015",
+          "lat": 38.0096089,
+          "lon": -122.1635515,
+          "kind": "tower",
+          "osmNodeId": 417259626
+        },
+        {
+          "id": "OLEU-MART-115-016",
+          "label": "OM-016",
+          "lat": 38.0109051,
+          "lon": -122.1662464,
+          "kind": "tower",
+          "osmNodeId": 417259625
+        },
+        {
+          "id": "OLEU-MART-115-017",
+          "label": "OM-017",
+          "lat": 38.0122433,
+          "lon": -122.1690289,
+          "kind": "tower",
+          "osmNodeId": 417259624
+        },
+        {
+          "id": "OLEU-MART-115-018",
+          "label": "OM-018",
+          "lat": 38.0138483,
+          "lon": -122.172363,
+          "kind": "tower",
+          "osmNodeId": 417259623
+        },
+        {
+          "id": "OLEU-MART-115-019",
+          "label": "OM-019",
+          "lat": 38.0146767,
+          "lon": -122.1740862,
+          "kind": "tower",
+          "osmNodeId": 417259622
+        },
+        {
+          "id": "OLEU-MART-115-020",
+          "label": "OM-020",
+          "lat": 38.015841,
+          "lon": -122.176463,
+          "kind": "tower",
+          "osmNodeId": 796662432
+        },
+        {
+          "id": "OLEU-MART-115-021",
+          "label": "OM-021",
+          "lat": 38.0172436,
+          "lon": -122.179421,
+          "kind": "tower",
+          "osmNodeId": 417259621
+        },
+        {
+          "id": "OLEU-MART-115-022",
+          "label": "OM-022",
+          "lat": 38.0182173,
+          "lon": -122.181446,
+          "kind": "tower",
+          "osmNodeId": 417259620
+        },
+        {
+          "id": "OLEU-MART-115-023",
+          "label": "OM-023",
+          "lat": 38.0196643,
+          "lon": -122.184459,
+          "kind": "tower",
+          "osmNodeId": 417259619
+        },
+        {
+          "id": "OLEU-MART-115-024",
+          "label": "OM-024",
+          "lat": 38.0210843,
+          "lon": -122.187411,
+          "kind": "tower",
+          "osmNodeId": 417259618
+        },
+        {
+          "id": "OLEU-MART-115-025",
+          "label": "OM-025",
+          "lat": 38.0221864,
+          "lon": -122.189677,
+          "kind": "tower",
+          "osmNodeId": 417259617
+        }
+      ]
+    },
+    {
+      "id": "TIDE-SOBR-230-2",
+      "name": "Tidewater-Sobrante/Tesoro-Sobrante 230 kV, section 2",
+      "voltageKv": 230,
+      "voltageInferred": false,
+      "corridorMeters": 100,
+      "osmWayIds": [
+        1545448623
+      ],
+      "structures": [
+        {
+          "id": "TIDE-SOBR-230-2-001",
+          "label": "TS-001",
+          "lat": 37.9858932,
+          "lon": -122.0903154,
+          "kind": "tower",
+          "osmNodeId": 373634655
+        },
+        {
+          "id": "TIDE-SOBR-230-2-002",
+          "label": "TS-002",
+          "lat": 37.9885611,
+          "lon": -122.090283,
+          "kind": "tower",
+          "osmNodeId": 373634657
+        },
+        {
+          "id": "TIDE-SOBR-230-2-003",
+          "label": "TS-003",
+          "lat": 37.9902117,
+          "lon": -122.090275,
+          "kind": "tower",
+          "osmNodeId": 373634659
+        },
+        {
+          "id": "TIDE-SOBR-230-2-004",
+          "label": "TS-004",
+          "lat": 37.993675,
+          "lon": -122.08982,
+          "kind": "tower",
+          "osmNodeId": 373634661
+        },
+        {
+          "id": "TIDE-SOBR-230-2-005",
+          "label": "TS-005",
+          "lat": 37.9947708,
+          "lon": -122.09067,
+          "kind": "tower",
+          "osmNodeId": 373634662
+        },
+        {
+          "id": "TIDE-SOBR-230-2-006",
+          "label": "TS-006",
+          "lat": 37.9973749,
+          "lon": -122.090275,
+          "kind": "tower",
+          "osmNodeId": 373634663
+        },
+        {
+          "id": "TIDE-SOBR-230-2-007",
+          "label": "TS-007",
+          "lat": 38.0012031,
+          "lon": -122.090137,
+          "kind": "tower",
+          "osmNodeId": 373634664
+        },
+        {
+          "id": "TIDE-SOBR-230-2-008",
+          "label": "TS-008",
+          "lat": 38.0027722,
+          "lon": -122.089871,
+          "kind": "tower",
+          "osmNodeId": 373634666
+        },
+        {
+          "id": "TIDE-SOBR-230-2-009",
+          "label": "TS-009",
+          "lat": 38.0047403,
+          "lon": -122.086575,
+          "kind": "tower",
+          "osmNodeId": 373634667
+        },
+        {
+          "id": "TIDE-SOBR-230-2-010",
+          "label": "TS-010",
+          "lat": 38.005675,
+          "lon": -122.0844257,
+          "kind": "untagged",
+          "osmNodeId": 5041984567
+        },
+        {
+          "id": "TIDE-SOBR-230-2-011",
+          "label": "TS-011",
+          "lat": 38.0059419,
+          "lon": -122.0838118,
+          "kind": "untagged",
+          "osmNodeId": 5041984560
+        },
+        {
+          "id": "TIDE-SOBR-230-2-012",
+          "label": "TS-012",
+          "lat": 38.0065054,
+          "lon": -122.082516,
+          "kind": "tower",
+          "osmNodeId": 373634668
+        },
+        {
+          "id": "TIDE-SOBR-230-2-013",
+          "label": "TS-013",
+          "lat": 38.0083585,
+          "lon": -122.078215,
+          "kind": "tower",
+          "osmNodeId": 373634670
+        },
+        {
+          "id": "TIDE-SOBR-230-2-014",
+          "label": "TS-014",
+          "lat": 38.0090483,
+          "lon": -122.073864,
+          "kind": "tower",
+          "osmNodeId": 373634672
+        },
+        {
+          "id": "TIDE-SOBR-230-2-015",
+          "label": "TS-015",
+          "lat": 38.0115369,
+          "lon": -122.071924,
+          "kind": "tower",
+          "osmNodeId": 373634673
+        },
+        {
+          "id": "TIDE-SOBR-230-2-016",
+          "label": "TS-016",
+          "lat": 38.0140052,
+          "lon": -122.069958,
+          "kind": "tower",
+          "osmNodeId": 373634674
+        },
+        {
+          "id": "TIDE-SOBR-230-2-017",
+          "label": "TS-017",
+          "lat": 38.0164395,
+          "lon": -122.068036,
+          "kind": "tower",
+          "osmNodeId": 373634675
+        },
+        {
+          "id": "TIDE-SOBR-230-2-018",
+          "label": "TS-018",
+          "lat": 38.0177919,
+          "lon": -122.066989,
+          "kind": "tower",
+          "osmNodeId": 373634677
+        },
+        {
+          "id": "TIDE-SOBR-230-2-019",
+          "label": "TS-019",
+          "lat": 38.0176955,
+          "lon": -122.0646574,
+          "kind": "tower",
+          "osmNodeId": 417590227
+        },
+        {
+          "id": "TIDE-SOBR-230-2-020",
+          "label": "TS-020",
+          "lat": 38.0188804,
+          "lon": -122.0617625,
+          "kind": "tower",
+          "osmNodeId": 417592169
+        }
+      ]
+    },
+    {
+      "id": "VH-60-A",
+      "name": "Vine Hill 60 kV line A",
+      "voltageKv": 60,
+      "voltageInferred": false,
+      "corridorMeters": 60,
+      "osmWayIds": [
+        1274779063
+      ],
+      "structures": [
+        {
+          "id": "VH-60-A-001",
+          "label": "VA-001",
+          "lat": 38.0412767,
+          "lon": -122.0301474,
+          "kind": "untagged",
+          "osmNodeId": 11836585078
+        },
+        {
+          "id": "VH-60-A-002",
+          "label": "VA-002",
+          "lat": 38.0412376,
+          "lon": -122.031046,
+          "kind": "untagged",
+          "osmNodeId": 11836585077
+        },
+        {
+          "id": "VH-60-A-003",
+          "label": "VA-003",
+          "lat": 38.0412102,
+          "lon": -122.0315368,
+          "kind": "untagged",
+          "osmNodeId": 11836585076
+        },
+        {
+          "id": "VH-60-A-004",
+          "label": "VA-004",
+          "lat": 38.0425484,
+          "lon": -122.0313142,
+          "kind": "untagged",
+          "osmNodeId": 11836585075
+        },
+        {
+          "id": "VH-60-A-005",
+          "label": "VA-005",
+          "lat": 38.0432053,
+          "lon": -122.0311949,
+          "kind": "untagged",
+          "osmNodeId": 11836585074
+        },
+        {
+          "id": "VH-60-A-006",
+          "label": "VA-006",
+          "lat": 38.0439341,
+          "lon": -122.0314309,
+          "kind": "untagged",
+          "osmNodeId": 11836585073
+        },
+        {
+          "id": "VH-60-A-007",
+          "label": "VA-007",
+          "lat": 38.0451054,
+          "lon": -122.0318212,
+          "kind": "untagged",
+          "osmNodeId": 11836585071
+        },
+        {
+          "id": "VH-60-A-008",
+          "label": "VA-008",
+          "lat": 38.0449232,
+          "lon": -122.0327465,
+          "kind": "untagged",
+          "osmNodeId": 11836585070
+        },
+        {
+          "id": "VH-60-A-009",
+          "label": "VA-009",
+          "lat": 38.0444569,
+          "lon": -122.0343867,
+          "kind": "untagged",
+          "osmNodeId": 11836585069
+        },
+        {
+          "id": "VH-60-A-010",
+          "label": "VA-010",
+          "lat": 38.044008,
+          "lon": -122.0360161,
+          "kind": "untagged",
+          "osmNodeId": 11836585067
+        },
+        {
+          "id": "VH-60-A-011",
+          "label": "VA-011",
+          "lat": 38.0423984,
+          "lon": -122.041744,
+          "kind": "untagged",
+          "osmNodeId": 11836585066
+        },
+        {
+          "id": "VH-60-A-012",
+          "label": "VA-012",
+          "lat": 38.0407988,
+          "lon": -122.0474819,
+          "kind": "untagged",
+          "osmNodeId": 11836585065
+        },
+        {
+          "id": "VH-60-A-013",
+          "label": "VA-013",
+          "lat": 38.0406102,
+          "lon": -122.0483221,
+          "kind": "untagged",
+          "osmNodeId": 11836585064
+        },
+        {
+          "id": "VH-60-A-014",
+          "label": "VA-014",
+          "lat": 38.0405405,
+          "lon": -122.049965,
+          "kind": "untagged",
+          "osmNodeId": 11836585063
+        },
+        {
+          "id": "VH-60-A-015",
+          "label": "VA-015",
+          "lat": 38.040399,
+          "lon": -122.0509118,
+          "kind": "untagged",
+          "osmNodeId": 11836585062
+        },
+        {
+          "id": "VH-60-A-016",
+          "label": "VA-016",
+          "lat": 38.0398413,
+          "lon": -122.0528322,
+          "kind": "untagged",
+          "osmNodeId": 11836585061
+        },
+        {
+          "id": "VH-60-A-017",
+          "label": "VA-017",
+          "lat": 38.0393364,
+          "lon": -122.0545985,
+          "kind": "untagged",
+          "osmNodeId": 11836585060
+        },
+        {
+          "id": "VH-60-A-018",
+          "label": "VA-018",
+          "lat": 38.0389266,
+          "lon": -122.0555426,
+          "kind": "untagged",
+          "osmNodeId": 11836585059
+        },
+        {
+          "id": "VH-60-A-019",
+          "label": "VA-019",
+          "lat": 38.0385274,
+          "lon": -122.0561609,
+          "kind": "untagged",
+          "osmNodeId": 11836585058
+        },
+        {
+          "id": "VH-60-A-020",
+          "label": "VA-020",
+          "lat": 38.0382031,
+          "lon": -122.0570178,
+          "kind": "untagged",
+          "osmNodeId": 11836585057
+        },
+        {
+          "id": "VH-60-A-021",
+          "label": "VA-021",
+          "lat": 38.0357779,
+          "lon": -122.0655982,
+          "kind": "untagged",
+          "osmNodeId": 11836585056
+        },
+        {
+          "id": "VH-60-A-022",
+          "label": "VA-022",
+          "lat": 38.0343889,
+          "lon": -122.0705107,
+          "kind": "untagged",
+          "osmNodeId": 11836585055
+        },
+        {
+          "id": "VH-60-A-023",
+          "label": "VA-023",
+          "lat": 38.0341195,
+          "lon": -122.0714213,
+          "kind": "untagged",
+          "osmNodeId": 11836585054
+        },
+        {
+          "id": "VH-60-A-024",
+          "label": "VA-024",
+          "lat": 38.0338681,
+          "lon": -122.072175,
+          "kind": "untagged",
+          "osmNodeId": 11836585053
+        },
+        {
+          "id": "VH-60-A-025",
+          "label": "VA-025",
+          "lat": 38.0336452,
+          "lon": -122.072926,
+          "kind": "untagged",
+          "osmNodeId": 11836585052
+        },
+        {
+          "id": "VH-60-A-026",
+          "label": "VA-026",
+          "lat": 38.0334128,
+          "lon": -122.0737347,
+          "kind": "untagged",
+          "osmNodeId": 11836585051
+        },
+        {
+          "id": "VH-60-A-027",
+          "label": "VA-027",
+          "lat": 38.0331952,
+          "lon": -122.0744857,
+          "kind": "untagged",
+          "osmNodeId": 11836585050
+        }
+      ]
+    },
+    {
+      "id": "OLEU-MART-115-2",
+      "name": "Oleum - Martinez 115 kV, section 2",
+      "voltageKv": 115,
+      "voltageInferred": false,
+      "corridorMeters": 75,
+      "osmWayIds": [
+        65066724
+      ],
+      "structures": [
+        {
+          "id": "OLEU-MART-115-2-001",
+          "label": "OM-001",
+          "lat": 37.9936456,
+          "lon": -122.1294342,
+          "kind": "tower",
+          "osmNodeId": 417266548
+        },
+        {
+          "id": "OLEU-MART-115-2-002",
+          "label": "OM-002",
+          "lat": 37.9941671,
+          "lon": -122.1274284,
+          "kind": "tower",
+          "osmNodeId": 417266549
+        },
+        {
+          "id": "OLEU-MART-115-2-003",
+          "label": "OM-003",
+          "lat": 37.995138,
+          "lon": -122.1255825,
+          "kind": "tower",
+          "osmNodeId": 796647361
+        },
+        {
+          "id": "OLEU-MART-115-2-004",
+          "label": "OM-004",
+          "lat": 37.9978205,
+          "lon": -122.121659,
+          "kind": "tower",
+          "osmNodeId": 796647465
+        },
+        {
+          "id": "OLEU-MART-115-2-005",
+          "label": "OM-005",
+          "lat": 37.9995793,
+          "lon": -122.1190973,
+          "kind": "tower",
+          "osmNodeId": 796647436
+        },
+        {
+          "id": "OLEU-MART-115-2-006",
+          "label": "OM-006",
+          "lat": 38.0011812,
+          "lon": -122.1167874,
+          "kind": "tower",
+          "osmNodeId": 796647393
+        },
+        {
+          "id": "OLEU-MART-115-2-007",
+          "label": "OM-007",
+          "lat": 38.0024942,
+          "lon": -122.1148967,
+          "kind": "tower",
+          "osmNodeId": 796647313
+        },
+        {
+          "id": "OLEU-MART-115-2-008",
+          "label": "OM-008",
+          "lat": 38.0033309,
+          "lon": -122.1136615,
+          "kind": "tower",
+          "osmNodeId": 796647336
+        },
+        {
+          "id": "OLEU-MART-115-2-009",
+          "label": "OM-009",
+          "lat": 38.0040204,
+          "lon": -122.1116004,
+          "kind": "tower",
+          "osmNodeId": 796647414
+        },
+        {
+          "id": "OLEU-MART-115-2-010",
+          "label": "OM-010",
+          "lat": 38.0062382,
+          "lon": -122.1091645,
+          "kind": "tower",
+          "osmNodeId": 796647385
+        },
+        {
+          "id": "OLEU-MART-115-2-011",
+          "label": "OM-011",
+          "lat": 38.0083191,
+          "lon": -122.109191,
+          "kind": "tower",
+          "osmNodeId": 796647311
+        },
+        {
+          "id": "OLEU-MART-115-2-012",
+          "label": "OM-012",
+          "lat": 38.0104608,
+          "lon": -122.1092397,
+          "kind": "tower",
+          "osmNodeId": 373639114
+        },
+        {
+          "id": "OLEU-MART-115-2-013",
+          "label": "OM-013",
+          "lat": 38.0125369,
+          "lon": -122.1098072,
+          "kind": "tower",
+          "osmNodeId": 1069535010
+        },
+        {
+          "id": "OLEU-MART-115-2-014",
+          "label": "OM-014",
+          "lat": 38.0134313,
+          "lon": -122.1099212,
+          "kind": "tower",
+          "osmNodeId": 796662406
+        },
+        {
+          "id": "OLEU-MART-115-2-015",
+          "label": "OM-015",
+          "lat": 38.0132748,
+          "lon": -122.113097,
+          "kind": "tower",
+          "osmNodeId": 373640034
+        },
+        {
+          "id": "OLEU-MART-115-2-016",
+          "label": "OM-016",
+          "lat": 38.0137076,
+          "lon": -122.11635,
+          "kind": "tower",
+          "osmNodeId": 373640035
+        }
+      ]
+    },
+    {
+      "id": "VH-UNK-A",
+      "name": "Vine Hill line A (voltage not tagged)",
+      "voltageKv": 0,
+      "voltageInferred": false,
+      "corridorMeters": 60,
+      "osmWayIds": [
+        556370172,
+        556370174
+      ],
+      "structures": [
+        {
+          "id": "VH-UNK-A-001",
+          "label": "VA-001",
+          "lat": 38.0125373,
+          "lon": -122.0443042,
+          "kind": "tower",
+          "osmNodeId": 5367045829
+        },
+        {
+          "id": "VH-UNK-A-002",
+          "label": "VA-002",
+          "lat": 38.0128225,
+          "lon": -122.0425044,
+          "kind": "tower",
+          "osmNodeId": 5367045831
+        },
+        {
+          "id": "VH-UNK-A-003",
+          "label": "VA-003",
+          "lat": 38.0126613,
+          "lon": -122.0426191,
+          "kind": "tower",
+          "osmNodeId": 9521041290
+        },
+        {
+          "id": "VH-UNK-A-004",
+          "label": "VA-004",
+          "lat": 38.0126121,
+          "lon": -122.0429337,
+          "kind": "tower",
+          "osmNodeId": 9521041289
+        },
+        {
+          "id": "VH-UNK-A-005",
+          "label": "VA-005",
+          "lat": 38.012607,
+          "lon": -122.043293,
+          "kind": "tower",
+          "osmNodeId": 5367045830
+        },
+        {
+          "id": "VH-UNK-A-006",
+          "label": "VA-006",
+          "lat": 38.0125373,
+          "lon": -122.0443042,
+          "kind": "tower",
+          "osmNodeId": 5367045829
+        },
+        {
+          "id": "VH-UNK-A-007",
+          "label": "VA-007",
+          "lat": 38.0122224,
+          "lon": -122.0461254,
+          "kind": "tower",
+          "osmNodeId": 5367045828
+        },
+        {
+          "id": "VH-UNK-A-008",
+          "label": "VA-008",
+          "lat": 38.0142215,
+          "lon": -122.0466431,
+          "kind": "tower",
+          "osmNodeId": 5367045827
+        },
+        {
+          "id": "VH-UNK-A-009",
+          "label": "VA-009",
+          "lat": 38.0156521,
+          "lon": -122.0469757,
+          "kind": "tower",
+          "osmNodeId": 5367045826
+        },
+        {
+          "id": "VH-UNK-A-010",
+          "label": "VA-010",
+          "lat": 38.0170827,
+          "lon": -122.047319,
+          "kind": "tower",
+          "osmNodeId": 5367045825
+        },
+        {
+          "id": "VH-UNK-A-011",
+          "label": "VA-011",
+          "lat": 38.0181558,
+          "lon": -122.0475655,
+          "kind": "untagged",
+          "osmNodeId": 4974517403
+        },
+        {
+          "id": "VH-UNK-A-012",
+          "label": "VA-012",
+          "lat": 38.0185069,
+          "lon": -122.0476462,
+          "kind": "tower",
+          "osmNodeId": 5367045824
+        },
+        {
+          "id": "VH-UNK-A-013",
+          "label": "VA-013",
+          "lat": 38.0203453,
+          "lon": -122.0479922,
+          "kind": "tower",
+          "osmNodeId": 418124995
+        },
+        {
+          "id": "VH-UNK-A-014",
+          "label": "VA-014",
+          "lat": 38.0207003,
+          "lon": -122.0455273,
+          "kind": "tower",
+          "osmNodeId": 5367045823
+        },
+        {
+          "id": "VH-UNK-A-015",
+          "label": "VA-015",
+          "lat": 38.0210679,
+          "lon": -122.0430328,
+          "kind": "tower",
+          "osmNodeId": 5367045822
+        },
+        {
+          "id": "VH-UNK-A-016",
+          "label": "VA-016",
+          "lat": 38.0213976,
+          "lon": -122.0407851,
+          "kind": "tower",
+          "osmNodeId": 5367045821
+        },
+        {
+          "id": "VH-UNK-A-017",
+          "label": "VA-017",
+          "lat": 38.0217251,
+          "lon": -122.0385482,
+          "kind": "tower",
+          "osmNodeId": 5367045620
+        },
+        {
+          "id": "VH-UNK-A-018",
+          "label": "VA-018",
+          "lat": 38.0220695,
+          "lon": -122.0362012,
+          "kind": "tower",
+          "osmNodeId": 5367045619
+        },
+        {
+          "id": "VH-UNK-A-019",
+          "label": "VA-019",
+          "lat": 38.0223611,
+          "lon": -122.0339562,
+          "kind": "tower",
+          "osmNodeId": 5367045618
+        },
+        {
+          "id": "VH-UNK-A-020",
+          "label": "VA-020",
+          "lat": 38.0244529,
+          "lon": -122.033511,
+          "kind": "tower",
+          "osmNodeId": 5367045617
+        },
+        {
+          "id": "VH-UNK-A-021",
+          "label": "VA-021",
+          "lat": 38.0260735,
+          "lon": -122.033165,
+          "kind": "tower",
+          "osmNodeId": 5367045616
+        },
+        {
+          "id": "VH-UNK-A-022",
+          "label": "VA-022",
+          "lat": 38.0276285,
+          "lon": -122.032819,
+          "kind": "tower",
+          "osmNodeId": 5367045615
+        },
+        {
+          "id": "VH-UNK-A-023",
+          "label": "VA-023",
+          "lat": 38.0291645,
+          "lon": -122.0325119,
+          "kind": "tower",
+          "osmNodeId": 5367045611
+        },
+        {
+          "id": "VH-UNK-A-024",
+          "label": "VA-024",
+          "lat": 38.0302272,
+          "lon": -122.0333407,
+          "kind": "tower",
+          "osmNodeId": 5367045612
+        },
+        {
+          "id": "VH-UNK-A-025",
+          "label": "VA-025",
+          "lat": 38.0307322,
+          "lon": -122.0337886,
+          "kind": "tower",
+          "osmNodeId": 5367045613
+        }
+      ]
+    },
+    {
+      "id": "MART-60-A",
+      "name": "Martinez 60 kV line A",
+      "voltageKv": 60,
+      "voltageInferred": false,
+      "corridorMeters": 60,
+      "osmWayIds": [
+        608004142
+      ],
+      "structures": [
+        {
+          "id": "MART-60-A-001",
+          "label": "MA-001",
+          "lat": 38.021487,
+          "lon": -122.1662216,
+          "kind": "untagged",
+          "osmNodeId": 5761012608
+        },
+        {
+          "id": "MART-60-A-002",
+          "label": "MA-002",
+          "lat": 38.0213021,
+          "lon": -122.1657824,
+          "kind": "untagged",
+          "osmNodeId": 5761012609
+        },
+        {
+          "id": "MART-60-A-003",
+          "label": "MA-003",
+          "lat": 38.0212197,
+          "lon": -122.1654435,
+          "kind": "untagged",
+          "osmNodeId": 5761012610
+        },
+        {
+          "id": "MART-60-A-004",
+          "label": "MA-004",
+          "lat": 38.0207126,
+          "lon": -122.1638365,
+          "kind": "untagged",
+          "osmNodeId": 5761012611
+        },
+        {
+          "id": "MART-60-A-005",
+          "label": "MA-005",
+          "lat": 38.0205869,
+          "lon": -122.1634009,
+          "kind": "untagged",
+          "osmNodeId": 5761012612
+        },
+        {
+          "id": "MART-60-A-006",
+          "label": "MA-006",
+          "lat": 38.0204601,
+          "lon": -122.1629808,
+          "kind": "untagged",
+          "osmNodeId": 5761012613
+        },
+        {
+          "id": "MART-60-A-007",
+          "label": "MA-007",
+          "lat": 38.0201833,
+          "lon": -122.1620783,
+          "kind": "untagged",
+          "osmNodeId": 5761012614
+        },
+        {
+          "id": "MART-60-A-008",
+          "label": "MA-008",
+          "lat": 38.0200026,
+          "lon": -122.1614842,
+          "kind": "untagged",
+          "osmNodeId": 5761012615
+        },
+        {
+          "id": "MART-60-A-009",
+          "label": "MA-009",
+          "lat": 38.019691,
+          "lon": -122.1604716,
+          "kind": "untagged",
+          "osmNodeId": 5761012616
+        },
+        {
+          "id": "MART-60-A-010",
+          "label": "MA-010",
+          "lat": 38.0194194,
+          "lon": -122.1596241,
+          "kind": "untagged",
+          "osmNodeId": 5761012617
+        },
+        {
+          "id": "MART-60-A-011",
+          "label": "MA-011",
+          "lat": 38.0189334,
+          "lon": -122.1580818,
+          "kind": "untagged",
+          "osmNodeId": 5761012618
+        },
+        {
+          "id": "MART-60-A-012",
+          "label": "MA-012",
+          "lat": 38.0186196,
+          "lon": -122.1570652,
+          "kind": "untagged",
+          "osmNodeId": 5761012619
+        },
+        {
+          "id": "MART-60-A-013",
+          "label": "MA-013",
+          "lat": 38.0185045,
+          "lon": -122.1566964,
+          "kind": "untagged",
+          "osmNodeId": 5761012620
+        },
+        {
+          "id": "MART-60-A-014",
+          "label": "MA-014",
+          "lat": 38.0196772,
+          "lon": -122.1519945,
+          "kind": "untagged",
+          "osmNodeId": 5761013121
+        },
+        {
+          "id": "MART-60-A-015",
+          "label": "MA-015",
+          "lat": 38.0200502,
+          "lon": -122.1506574,
+          "kind": "untagged",
+          "osmNodeId": 5761013122
+        },
+        {
+          "id": "MART-60-A-016",
+          "label": "MA-016",
+          "lat": 38.0205298,
+          "lon": -122.1489073,
+          "kind": "untagged",
+          "osmNodeId": 5761013123
+        },
+        {
+          "id": "MART-60-A-017",
+          "label": "MA-017",
+          "lat": 38.0207945,
+          "lon": -122.1476939,
+          "kind": "untagged",
+          "osmNodeId": 5761013124
+        },
+        {
+          "id": "MART-60-A-018",
+          "label": "MA-018",
+          "lat": 38.0205717,
+          "lon": -122.1470255,
+          "kind": "pole",
+          "osmNodeId": 5757546510
+        },
+        {
+          "id": "MART-60-A-019",
+          "label": "MA-019",
+          "lat": 38.020329,
+          "lon": -122.14642,
+          "kind": "pole",
+          "osmNodeId": 5757546509
+        },
+        {
+          "id": "MART-60-A-020",
+          "label": "MA-020",
+          "lat": 38.0201181,
+          "lon": -122.1457138,
+          "kind": "pole",
+          "osmNodeId": 5757546508
+        },
+        {
+          "id": "MART-60-A-021",
+          "label": "MA-021",
+          "lat": 38.0199093,
+          "lon": -122.1450553,
+          "kind": "pole",
+          "osmNodeId": 5757546507
+        },
+        {
+          "id": "MART-60-A-022",
+          "label": "MA-022",
+          "lat": 38.0197759,
+          "lon": -122.1447208,
+          "kind": "pole",
+          "osmNodeId": 5757546505
+        },
+        {
+          "id": "MART-60-A-023",
+          "label": "MA-023",
+          "lat": 38.0196802,
+          "lon": -122.144318,
+          "kind": "pole",
+          "osmNodeId": 5757546504
+        },
+        {
+          "id": "MART-60-A-024",
+          "label": "MA-024",
+          "lat": 38.0195144,
+          "lon": -122.1435862,
+          "kind": "pole",
+          "osmNodeId": 5757546503
+        },
+        {
+          "id": "MART-60-A-025",
+          "label": "MA-025",
+          "lat": 38.0193037,
+          "lon": -122.1426402,
+          "kind": "pole",
+          "osmNodeId": 5757546502
+        },
+        {
+          "id": "MART-60-A-026",
+          "label": "MA-026",
+          "lat": 38.0193392,
+          "lon": -122.1418634,
+          "kind": "pole",
+          "osmNodeId": 5757546501
+        },
+        {
+          "id": "MART-60-A-027",
+          "label": "MA-027",
+          "lat": 38.0193546,
+          "lon": -122.1412958,
+          "kind": "pole",
+          "osmNodeId": 5757546500
+        },
+        {
+          "id": "MART-60-A-028",
+          "label": "MA-028",
+          "lat": 38.019413,
+          "lon": -122.1403105,
+          "kind": "pole",
+          "osmNodeId": 5757546498
+        },
+        {
+          "id": "MART-60-A-029",
+          "label": "MA-029",
+          "lat": 38.0194491,
+          "lon": -122.1395285,
+          "kind": "pole",
+          "osmNodeId": 5757546497
+        },
+        {
+          "id": "MART-60-A-030",
+          "label": "MA-030",
+          "lat": 38.0195682,
+          "lon": -122.1386514,
+          "kind": "pole",
+          "osmNodeId": 5757546496
+        },
+        {
+          "id": "MART-60-A-031",
+          "label": "MA-031",
+          "lat": 38.0196695,
+          "lon": -122.1376326,
+          "kind": "pole",
+          "osmNodeId": 5757546495
+        },
+        {
+          "id": "MART-60-A-032",
+          "label": "MA-032",
+          "lat": 38.0199163,
+          "lon": -122.1367046,
+          "kind": "pole",
+          "osmNodeId": 5757546494
+        },
+        {
+          "id": "MART-60-A-033",
+          "label": "MA-033",
+          "lat": 38.020171,
+          "lon": -122.135757,
+          "kind": "pole",
+          "osmNodeId": 5757546493
+        },
+        {
+          "id": "MART-60-A-034",
+          "label": "MA-034",
+          "lat": 38.0203937,
+          "lon": -122.1349569,
+          "kind": "pole",
+          "osmNodeId": 5757546492
+        },
+        {
+          "id": "MART-60-A-035",
+          "label": "MA-035",
+          "lat": 38.02055,
+          "lon": -122.1341263,
+          "kind": "pole",
+          "osmNodeId": 5757546491
+        },
+        {
+          "id": "MART-60-A-036",
+          "label": "MA-036",
+          "lat": 38.0208517,
+          "lon": -122.1333916,
+          "kind": "pole",
+          "osmNodeId": 5757546490
+        },
+        {
+          "id": "MART-60-A-037",
+          "label": "MA-037",
+          "lat": 38.0212353,
+          "lon": -122.1326445,
+          "kind": "pole",
+          "osmNodeId": 5757546489
+        },
+        {
+          "id": "MART-60-A-038",
+          "label": "MA-038",
+          "lat": 38.0215891,
+          "lon": -122.1320944,
+          "kind": "pole",
+          "osmNodeId": 5757546488
+        },
+        {
+          "id": "MART-60-A-039",
+          "label": "MA-039",
+          "lat": 38.0219717,
+          "lon": -122.1315389,
+          "kind": "pole",
+          "osmNodeId": 5757546487
+        },
+        {
+          "id": "MART-60-A-040",
+          "label": "MA-040",
+          "lat": 38.0223155,
+          "lon": -122.1310211,
+          "kind": "pole",
+          "osmNodeId": 5757546486
+        },
+        {
+          "id": "MART-60-A-041",
+          "label": "MA-041",
+          "lat": 38.0229676,
+          "lon": -122.1301265,
+          "kind": "pole",
+          "osmNodeId": 5757546485
+        },
+        {
+          "id": "MART-60-A-042",
+          "label": "MA-042",
+          "lat": 38.0231394,
+          "lon": -122.1298438,
+          "kind": "pole",
+          "osmNodeId": 1277901858
+        },
+        {
+          "id": "MART-60-A-043",
+          "label": "MA-043",
+          "lat": 38.023526,
+          "lon": -122.1285819,
+          "kind": "untagged",
+          "osmNodeId": 1277901983
+        }
+      ]
+    },
+    {
+      "id": "VH-60-B",
+      "name": "Vine Hill 60 kV line B",
+      "voltageKv": 60,
+      "voltageInferred": false,
+      "corridorMeters": 60,
+      "osmWayIds": [
+        92107766
+      ],
+      "structures": [
+        {
+          "id": "VH-60-B-001",
+          "label": "VB-001",
+          "lat": 38.0331952,
+          "lon": -122.0744857,
+          "kind": "untagged",
+          "osmNodeId": 11836585050
+        },
+        {
+          "id": "VH-60-B-002",
+          "label": "VB-002",
+          "lat": 38.0325783,
+          "lon": -122.0766838,
+          "kind": "untagged",
+          "osmNodeId": 11836585049
+        },
+        {
+          "id": "VH-60-B-003",
+          "label": "VB-003",
+          "lat": 38.0318304,
+          "lon": -122.0794009,
+          "kind": "untagged",
+          "osmNodeId": 11836585019
+        },
+        {
+          "id": "VH-60-B-004",
+          "label": "VB-004",
+          "lat": 38.0308839,
+          "lon": -122.0827402,
+          "kind": "untagged",
+          "osmNodeId": 11836585020
+        },
+        {
+          "id": "VH-60-B-005",
+          "label": "VB-005",
+          "lat": 38.0306336,
+          "lon": -122.0836388,
+          "kind": "untagged",
+          "osmNodeId": 11836585021
+        },
+        {
+          "id": "VH-60-B-006",
+          "label": "VB-006",
+          "lat": 38.0301519,
+          "lon": -122.0853822,
+          "kind": "untagged",
+          "osmNodeId": 11836585022
+        },
+        {
+          "id": "VH-60-B-007",
+          "label": "VB-007",
+          "lat": 38.0296564,
+          "lon": -122.0871149,
+          "kind": "untagged",
+          "osmNodeId": 11836585023
+        },
+        {
+          "id": "VH-60-B-008",
+          "label": "VB-008",
+          "lat": 38.0291716,
+          "lon": -122.0888382,
+          "kind": "untagged",
+          "osmNodeId": 11836585024
+        },
+        {
+          "id": "VH-60-B-009",
+          "label": "VB-009",
+          "lat": 38.0287004,
+          "lon": -122.0905294,
+          "kind": "untagged",
+          "osmNodeId": 11836585025
+        },
+        {
+          "id": "VH-60-B-010",
+          "label": "VB-010",
+          "lat": 38.0281944,
+          "lon": -122.0923117,
+          "kind": "untagged",
+          "osmNodeId": 11836585026
+        },
+        {
+          "id": "VH-60-B-011",
+          "label": "VB-011",
+          "lat": 38.0277116,
+          "lon": -122.0940444,
+          "kind": "untagged",
+          "osmNodeId": 11836585027
+        },
+        {
+          "id": "VH-60-B-012",
+          "label": "VB-012",
+          "lat": 38.0270302,
+          "lon": -122.0965348,
+          "kind": "untagged",
+          "osmNodeId": 11836585028
+        },
+        {
+          "id": "VH-60-B-013",
+          "label": "VB-013",
+          "lat": 38.026764,
+          "lon": -122.0980395,
+          "kind": "untagged",
+          "osmNodeId": 11836585029
+        },
+        {
+          "id": "VH-60-B-014",
+          "label": "VB-014",
+          "lat": 38.0264793,
+          "lon": -122.1000995,
+          "kind": "untagged",
+          "osmNodeId": 11836585030
+        },
+        {
+          "id": "VH-60-B-015",
+          "label": "VB-015",
+          "lat": 38.02639,
+          "lon": -122.1018349,
+          "kind": "untagged",
+          "osmNodeId": 11836585031
+        },
+        {
+          "id": "VH-60-B-016",
+          "label": "VB-016",
+          "lat": 38.0262796,
+          "lon": -122.1043199,
+          "kind": "untagged",
+          "osmNodeId": 11836585032
+        },
+        {
+          "id": "VH-60-B-017",
+          "label": "VB-017",
+          "lat": 38.0262374,
+          "lon": -122.1050676,
+          "kind": "pole",
+          "osmNodeId": 1069534892
+        },
+        {
+          "id": "VH-60-B-018",
+          "label": "VB-018",
+          "lat": 38.0261877,
+          "lon": -122.1060647,
+          "kind": "pole",
+          "osmNodeId": 1069535043
+        },
+        {
+          "id": "VH-60-B-019",
+          "label": "VB-019",
+          "lat": 38.0261566,
+          "lon": -122.1069639,
+          "kind": "pole",
+          "osmNodeId": 1069534851
+        },
+        {
+          "id": "VH-60-B-020",
+          "label": "VB-020",
+          "lat": 38.026109,
+          "lon": -122.1079208,
+          "kind": "pole",
+          "osmNodeId": 1069534990
+        },
+        {
+          "id": "VH-60-B-021",
+          "label": "VB-021",
+          "lat": 38.0260644,
+          "lon": -122.1088529,
+          "kind": "pole",
+          "osmNodeId": 1069535117
+        },
+        {
+          "id": "VH-60-B-022",
+          "label": "VB-022",
+          "lat": 38.0262115,
+          "lon": -122.1101859,
+          "kind": "tower",
+          "osmNodeId": 1069534710
+        },
+        {
+          "id": "VH-60-B-023",
+          "label": "VB-023",
+          "lat": 38.0267978,
+          "lon": -122.1126844,
+          "kind": "untagged",
+          "osmNodeId": 11836585033
+        }
+      ]
+    },
+    {
+      "id": "BENI-60-A",
+      "name": "Benicia 60 kV line A",
+      "voltageKv": 60,
+      "voltageInferred": false,
+      "corridorMeters": 60,
+      "osmWayIds": [
+        608004143
+      ],
+      "structures": [
+        {
+          "id": "BENI-60-A-001",
+          "label": "BA-001",
+          "lat": 38.021487,
+          "lon": -122.1662216,
+          "kind": "untagged",
+          "osmNodeId": 5761012608
+        },
+        {
+          "id": "BENI-60-A-002",
+          "label": "BA-002",
+          "lat": 38.0217898,
+          "lon": -122.1669359,
+          "kind": "untagged",
+          "osmNodeId": 5761013125
+        },
+        {
+          "id": "BENI-60-A-003",
+          "label": "BA-003",
+          "lat": 38.0231885,
+          "lon": -122.1678787,
+          "kind": "pole",
+          "osmNodeId": 5761013126
+        },
+        {
+          "id": "BENI-60-A-004",
+          "label": "BA-004",
+          "lat": 38.0235837,
+          "lon": -122.1681456,
+          "kind": "untagged",
+          "osmNodeId": 5761013127
+        },
+        {
+          "id": "BENI-60-A-005",
+          "label": "BA-005",
+          "lat": 38.0240311,
+          "lon": -122.168452,
+          "kind": "untagged",
+          "osmNodeId": 5761013128
+        },
+        {
+          "id": "BENI-60-A-006",
+          "label": "BA-006",
+          "lat": 38.0255307,
+          "lon": -122.170862,
+          "kind": "untagged",
+          "osmNodeId": 5761013129
+        },
+        {
+          "id": "BENI-60-A-007",
+          "label": "BA-007",
+          "lat": 38.0279441,
+          "lon": -122.1712965,
+          "kind": "untagged",
+          "osmNodeId": 5761013130
+        },
+        {
+          "id": "BENI-60-A-008",
+          "label": "BA-008",
+          "lat": 38.0282943,
+          "lon": -122.1716257,
+          "kind": "untagged",
+          "osmNodeId": 5761013131
+        },
+        {
+          "id": "BENI-60-A-009",
+          "label": "BA-009",
+          "lat": 38.0286075,
+          "lon": -122.1719214,
+          "kind": "untagged",
+          "osmNodeId": 5761013132
+        },
+        {
+          "id": "BENI-60-A-010",
+          "label": "BA-010",
+          "lat": 38.0293612,
+          "lon": -122.1726322,
+          "kind": "untagged",
+          "osmNodeId": 5761013133
+        },
+        {
+          "id": "BENI-60-A-011",
+          "label": "BA-011",
+          "lat": 38.0317433,
+          "lon": -122.1748484,
+          "kind": "untagged",
+          "osmNodeId": 5761013134
+        },
+        {
+          "id": "BENI-60-A-012",
+          "label": "BA-012",
+          "lat": 38.0320391,
+          "lon": -122.1750965,
+          "kind": "untagged",
+          "osmNodeId": 5761013135
+        },
+        {
+          "id": "BENI-60-A-013",
+          "label": "BA-013",
+          "lat": 38.0319314,
+          "lon": -122.1758924,
+          "kind": "untagged",
+          "osmNodeId": 5761013136
+        },
+        {
+          "id": "BENI-60-A-014",
+          "label": "BA-014",
+          "lat": 38.0317153,
+          "lon": -122.1772758,
+          "kind": "untagged",
+          "osmNodeId": 5761013137
+        },
+        {
+          "id": "BENI-60-A-015",
+          "label": "BA-015",
+          "lat": 38.0322129,
+          "lon": -122.1790179,
+          "kind": "untagged",
+          "osmNodeId": 5761013138
+        },
+        {
+          "id": "BENI-60-A-016",
+          "label": "BA-016",
+          "lat": 38.0326492,
+          "lon": -122.1806695,
+          "kind": "untagged",
+          "osmNodeId": 5761013139
+        },
+        {
+          "id": "BENI-60-A-017",
+          "label": "BA-017",
+          "lat": 38.0358815,
+          "lon": -122.1830613,
+          "kind": "untagged",
+          "osmNodeId": 5761013140
+        },
+        {
+          "id": "BENI-60-A-018",
+          "label": "BA-018",
+          "lat": 38.0361434,
+          "lon": -122.1830694,
+          "kind": "untagged",
+          "osmNodeId": 5761013141
+        },
+        {
+          "id": "BENI-60-A-019",
+          "label": "BA-019",
+          "lat": 38.0371648,
+          "lon": -122.1830104,
+          "kind": "untagged",
+          "osmNodeId": 5761013142
+        },
+        {
+          "id": "BENI-60-A-020",
+          "label": "BA-020",
+          "lat": 38.0376523,
+          "lon": -122.1826228,
+          "kind": "untagged",
+          "osmNodeId": 5761013143
+        },
+        {
+          "id": "BENI-60-A-021",
+          "label": "BA-021",
+          "lat": 38.0381313,
+          "lon": -122.1814473,
+          "kind": "untagged",
+          "osmNodeId": 5761013144
+        },
+        {
+          "id": "BENI-60-A-022",
+          "label": "BA-022",
+          "lat": 38.038622,
+          "lon": -122.1802383,
+          "kind": "untagged",
+          "osmNodeId": 5761013145
+        },
+        {
+          "id": "BENI-60-A-023",
+          "label": "BA-023",
+          "lat": 38.038371,
+          "lon": -122.1794499,
+          "kind": "untagged",
+          "osmNodeId": 5761013146
+        },
+        {
+          "id": "BENI-60-A-024",
+          "label": "BA-024",
+          "lat": 38.0378166,
+          "lon": -122.177878,
+          "kind": "untagged",
+          "osmNodeId": 5761013147
+        },
+        {
+          "id": "BENI-60-A-025",
+          "label": "BA-025",
+          "lat": 38.0373105,
+          "lon": -122.1763936,
+          "kind": "untagged",
+          "osmNodeId": 11836585017
+        },
+        {
+          "id": "BENI-60-A-026",
+          "label": "BA-026",
+          "lat": 38.0373972,
+          "lon": -122.1760932,
+          "kind": "untagged",
+          "osmNodeId": 11836585016
+        }
+      ]
+    },
+    {
+      "id": "PITT-TESO-230",
+      "name": "Pittsburg-Tesoro/Pittsburg-Tidewater 230 kV",
+      "voltageKv": 230,
+      "voltageInferred": false,
+      "corridorMeters": 100,
+      "osmWayIds": [
+        1274779038
+      ],
+      "structures": [
+        {
+          "id": "PITT-TESO-230-001",
+          "label": "PT-001",
+          "lat": 38.0188804,
+          "lon": -122.0617625,
+          "kind": "tower",
+          "osmNodeId": 417592169
+        },
+        {
+          "id": "PITT-TESO-230-002",
+          "label": "PT-002",
+          "lat": 38.019949,
+          "lon": -122.0590204,
+          "kind": "tower",
+          "osmNodeId": 417592457
+        },
+        {
+          "id": "PITT-TESO-230-003",
+          "label": "PT-003",
+          "lat": 38.0217138,
+          "lon": -122.055879,
+          "kind": "tower",
+          "osmNodeId": 417592537
+        },
+        {
+          "id": "PITT-TESO-230-004",
+          "label": "PT-004",
+          "lat": 38.023607,
+          "lon": -122.052643,
+          "kind": "tower",
+          "osmNodeId": 418514659
+        },
+        {
+          "id": "PITT-TESO-230-005",
+          "label": "PT-005",
+          "lat": 38.0254866,
+          "lon": -122.049399,
+          "kind": "tower",
+          "osmNodeId": 418514660
+        },
+        {
+          "id": "PITT-TESO-230-006",
+          "label": "PT-006",
+          "lat": 38.0272986,
+          "lon": -122.04624,
+          "kind": "tower",
+          "osmNodeId": 418514661
+        },
+        {
+          "id": "PITT-TESO-230-007",
+          "label": "PT-007",
+          "lat": 38.0280423,
+          "lon": -122.042653,
+          "kind": "tower",
+          "osmNodeId": 418514662
+        },
+        {
+          "id": "PITT-TESO-230-008",
+          "label": "PT-008",
+          "lat": 38.0287049,
+          "lon": -122.039305,
+          "kind": "tower",
+          "osmNodeId": 418514663
+        },
+        {
+          "id": "PITT-TESO-230-009",
+          "label": "PT-009",
+          "lat": 38.0293674,
+          "lon": -122.03619,
+          "kind": "tower",
+          "osmNodeId": 418514664
+        },
+        {
+          "id": "PITT-TESO-230-010",
+          "label": "PT-010",
+          "lat": 38.0309089,
+          "lon": -122.033271,
+          "kind": "tower",
+          "osmNodeId": 418514665
+        },
+        {
+          "id": "PITT-TESO-230-011",
+          "label": "PT-011",
+          "lat": 38.0317626,
+          "lon": -122.0316934,
+          "kind": "untagged",
+          "osmNodeId": 1373637127
+        },
+        {
+          "id": "PITT-TESO-230-012",
+          "label": "PT-012",
+          "lat": 38.0324165,
+          "lon": -122.030482,
+          "kind": "tower",
+          "osmNodeId": 418514666
+        }
+      ]
+    },
+    {
+      "id": "MART-60-B",
+      "name": "Martinez 60 kV line B",
+      "voltageKv": 60,
+      "voltageInferred": false,
+      "corridorMeters": 60,
+      "osmWayIds": [
+        112227634
+      ],
+      "structures": [
+        {
+          "id": "MART-60-B-001",
+          "label": "MB-001",
+          "lat": 38.0083683,
+          "lon": -122.1884689,
+          "kind": "pole",
+          "osmNodeId": 1276241683
+        },
+        {
+          "id": "MART-60-B-002",
+          "label": "MB-002",
+          "lat": 38.0096765,
+          "lon": -122.1857411,
+          "kind": "pole",
+          "osmNodeId": 1276241704
+        },
+        {
+          "id": "MART-60-B-003",
+          "label": "MB-003",
+          "lat": 38.0113946,
+          "lon": -122.1829757,
+          "kind": "pole",
+          "osmNodeId": 1276241702
+        },
+        {
+          "id": "MART-60-B-004",
+          "label": "MB-004",
+          "lat": 38.0121216,
+          "lon": -122.1816936,
+          "kind": "pole",
+          "osmNodeId": 1276241693
+        },
+        {
+          "id": "MART-60-B-005",
+          "label": "MB-005",
+          "lat": 38.0130873,
+          "lon": -122.1800494,
+          "kind": "pole",
+          "osmNodeId": 1276241707
+        },
+        {
+          "id": "MART-60-B-006",
+          "label": "MB-006",
+          "lat": 38.0155725,
+          "lon": -122.1758333,
+          "kind": "untagged",
+          "osmNodeId": 5761012601
+        },
+        {
+          "id": "MART-60-B-007",
+          "label": "MB-007",
+          "lat": 38.0159244,
+          "lon": -122.1752473,
+          "kind": "untagged",
+          "osmNodeId": 5761012602
+        },
+        {
+          "id": "MART-60-B-008",
+          "label": "MB-008",
+          "lat": 38.0167147,
+          "lon": -122.1739303,
+          "kind": "untagged",
+          "osmNodeId": 5761012603
+        },
+        {
+          "id": "MART-60-B-009",
+          "label": "MB-009",
+          "lat": 38.0182182,
+          "lon": -122.171814,
+          "kind": "untagged",
+          "osmNodeId": 5761012604
+        },
+        {
+          "id": "MART-60-B-010",
+          "label": "MB-010",
+          "lat": 38.0190655,
+          "lon": -122.1706325,
+          "kind": "untagged",
+          "osmNodeId": 5761012605
+        },
+        {
+          "id": "MART-60-B-011",
+          "label": "MB-011",
+          "lat": 38.0198135,
+          "lon": -122.1692954,
+          "kind": "untagged",
+          "osmNodeId": 5761012606
+        },
+        {
+          "id": "MART-60-B-012",
+          "label": "MB-012",
+          "lat": 38.0214574,
+          "lon": -122.1662672,
+          "kind": "untagged",
+          "osmNodeId": 5761012607
+        }
+      ]
+    },
+    {
+      "id": "TESO-SOBR-230",
+      "name": "Tesoro-Sobrante 230 kV",
+      "voltageKv": 230,
+      "voltageInferred": false,
+      "corridorMeters": 100,
+      "osmWayIds": [
+        1545448624
+      ],
+      "structures": [
+        {
+          "id": "TESO-SOBR-230-001",
+          "label": "TS-001",
+          "lat": 37.9739752,
+          "lon": -122.102711,
+          "kind": "tower",
+          "osmNodeId": 373634649
+        },
+        {
+          "id": "TESO-SOBR-230-002",
+          "label": "TS-002",
+          "lat": 37.9766241,
+          "lon": -122.0991918,
+          "kind": "tower",
+          "osmNodeId": 14060007198
+        },
+        {
+          "id": "TESO-SOBR-230-003",
+          "label": "TS-003",
+          "lat": 37.9793424,
+          "lon": -122.0955079,
+          "kind": "tower",
+          "osmNodeId": 14060007197
+        },
+        {
+          "id": "TESO-SOBR-230-004",
+          "label": "TS-004",
+          "lat": 37.9820368,
+          "lon": -122.0918888,
+          "kind": "tower",
+          "osmNodeId": 373634652
+        },
+        {
+          "id": "TESO-SOBR-230-005",
+          "label": "TS-005",
+          "lat": 37.9839644,
+          "lon": -122.0902788,
+          "kind": "tower",
+          "osmNodeId": 373634653
+        },
+        {
+          "id": "TESO-SOBR-230-006",
+          "label": "TS-006",
+          "lat": 37.9858932,
+          "lon": -122.0903154,
+          "kind": "tower",
+          "osmNodeId": 373634655
+        }
+      ]
+    },
+    {
+      "id": "TIDE-SOBR-230-3",
+      "name": "Tidewater-Sobrante 230 kV, section 3",
+      "voltageKv": 230,
+      "voltageInferred": false,
+      "corridorMeters": 100,
+      "osmWayIds": [
+        1545448625
+      ],
+      "structures": [
+        {
+          "id": "TIDE-SOBR-230-3-001",
+          "label": "TS-001",
+          "lat": 37.9739752,
+          "lon": -122.102711,
+          "kind": "tower",
+          "osmNodeId": 373634649
+        },
+        {
+          "id": "TIDE-SOBR-230-3-002",
+          "label": "TS-002",
+          "lat": 37.9766561,
+          "lon": -122.0992339,
+          "kind": "tower",
+          "osmNodeId": 373634650
+        },
+        {
+          "id": "TIDE-SOBR-230-3-003",
+          "label": "TS-003",
+          "lat": 37.9793635,
+          "lon": -122.0955385,
+          "kind": "tower",
+          "osmNodeId": 14060007196
+        },
+        {
+          "id": "TIDE-SOBR-230-3-004",
+          "label": "TS-004",
+          "lat": 37.9820828,
+          "lon": -122.091957,
+          "kind": "tower",
+          "osmNodeId": 14056603441
+        },
+        {
+          "id": "TIDE-SOBR-230-3-005",
+          "label": "TS-005",
+          "lat": 37.9839017,
+          "lon": -122.0904101,
+          "kind": "tower",
+          "osmNodeId": 14056603440
+        },
+        {
+          "id": "TIDE-SOBR-230-3-006",
+          "label": "TS-006",
+          "lat": 37.9858932,
+          "lon": -122.0903154,
+          "kind": "tower",
+          "osmNodeId": 373634655
+        }
+      ]
+    },
+    {
+      "id": "VH-UNK-B",
+      "name": "Vine Hill line B (voltage not tagged)",
+      "voltageKv": 0,
+      "voltageInferred": false,
+      "corridorMeters": 60,
+      "osmWayIds": [
+        1274779027
+      ],
+      "structures": [
+        {
+          "id": "VH-UNK-B-001",
+          "label": "VB-001",
+          "lat": 38.0093617,
+          "lon": -122.0574859,
+          "kind": "untagged",
+          "osmNodeId": 11836584903
+        },
+        {
+          "id": "VH-UNK-B-002",
+          "label": "VB-002",
+          "lat": 38.0098329,
+          "lon": -122.057801,
+          "kind": "untagged",
+          "osmNodeId": 11836584904
+        },
+        {
+          "id": "VH-UNK-B-003",
+          "label": "VB-003",
+          "lat": 38.0130145,
+          "lon": -122.0598033,
+          "kind": "untagged",
+          "osmNodeId": 11836584905
+        },
+        {
+          "id": "VH-UNK-B-004",
+          "label": "VB-004",
+          "lat": 38.0146596,
+          "lon": -122.0608333,
+          "kind": "untagged",
+          "osmNodeId": 11836584906
+        },
+        {
+          "id": "VH-UNK-B-005",
+          "label": "VB-005",
+          "lat": 38.0165213,
+          "lon": -122.0619933,
+          "kind": "untagged",
+          "osmNodeId": 11836584907
+        },
+        {
+          "id": "VH-UNK-B-006",
+          "label": "VB-006",
+          "lat": 38.0175779,
+          "lon": -122.0626625,
+          "kind": "untagged",
+          "osmNodeId": 11836584909
+        },
+        {
+          "id": "VH-UNK-B-007",
+          "label": "VB-007",
+          "lat": 38.0182699,
+          "lon": -122.0631064,
+          "kind": "untagged",
+          "osmNodeId": 11836584910
+        },
+        {
+          "id": "VH-UNK-B-008",
+          "label": "VB-008",
+          "lat": 38.0189461,
+          "lon": -122.0635222,
+          "kind": "untagged",
+          "osmNodeId": 11836584911
+        },
+        {
+          "id": "VH-UNK-B-009",
+          "label": "VB-009",
+          "lat": 38.0195557,
+          "lon": -122.0639111,
+          "kind": "untagged",
+          "osmNodeId": 11836584912
+        },
+        {
+          "id": "VH-UNK-B-010",
+          "label": "VB-010",
+          "lat": 38.0202171,
+          "lon": -122.0643168,
+          "kind": "untagged",
+          "osmNodeId": 11836584913
+        },
+        {
+          "id": "VH-UNK-B-011",
+          "label": "VB-011",
+          "lat": 38.0211426,
+          "lon": -122.0649116,
+          "kind": "untagged",
+          "osmNodeId": 11836584914
+        },
+        {
+          "id": "VH-UNK-B-012",
+          "label": "VB-012",
+          "lat": 38.021955,
+          "lon": -122.0654225,
+          "kind": "untagged",
+          "osmNodeId": 11836584917
+        }
+      ]
+    },
+    {
+      "id": "MART-60-C",
+      "name": "Martinez 60 kV line C",
+      "voltageKv": 60,
+      "voltageInferred": false,
+      "corridorMeters": 60,
+      "osmWayIds": [
+        1274779053
+      ],
+      "structures": [
+        {
+          "id": "MART-60-C-001",
+          "label": "MC-001",
+          "lat": 38.023526,
+          "lon": -122.1285819,
+          "kind": "untagged",
+          "osmNodeId": 1277901983
+        },
+        {
+          "id": "MART-60-C-002",
+          "label": "MC-002",
+          "lat": 38.0241036,
+          "lon": -122.1264077,
+          "kind": "tower",
+          "osmNodeId": 1277901892
+        },
+        {
+          "id": "MART-60-C-003",
+          "label": "MC-003",
+          "lat": 38.0246397,
+          "lon": -122.1242576,
+          "kind": "tower",
+          "osmNodeId": 1277901880
+        },
+        {
+          "id": "MART-60-C-004",
+          "label": "MC-004",
+          "lat": 38.0251815,
+          "lon": -122.122107,
+          "kind": "tower",
+          "osmNodeId": 415982857
+        },
+        {
+          "id": "MART-60-C-005",
+          "label": "MC-005",
+          "lat": 38.0255359,
+          "lon": -122.1194362,
+          "kind": "tower",
+          "osmNodeId": 1277901842
+        },
+        {
+          "id": "MART-60-C-006",
+          "label": "MC-006",
+          "lat": 38.025955,
+          "lon": -122.1163515,
+          "kind": "tower",
+          "osmNodeId": 1277901959
+        },
+        {
+          "id": "MART-60-C-007",
+          "label": "MC-007",
+          "lat": 38.0259904,
+          "lon": -122.1141347,
+          "kind": "pole",
+          "osmNodeId": 1069535088
+        },
+        {
+          "id": "MART-60-C-008",
+          "label": "MC-008",
+          "lat": 38.0268688,
+          "lon": -122.1128923,
+          "kind": "pole",
+          "osmNodeId": 1069534688
+        }
+      ]
+    },
+    {
+      "id": "VH-UNK-C",
+      "name": "Vine Hill line C (voltage not tagged)",
+      "voltageKv": 0,
+      "voltageInferred": false,
+      "corridorMeters": 60,
+      "osmWayIds": [
+        92107773
+      ],
+      "structures": [
+        {
+          "id": "VH-UNK-C-001",
+          "label": "VC-001",
+          "lat": 38.0244642,
+          "lon": -122.056122,
+          "kind": "untagged",
+          "osmNodeId": 11836584908
+        },
+        {
+          "id": "VH-UNK-C-002",
+          "label": "VC-002",
+          "lat": 38.0239856,
+          "lon": -122.0556285,
+          "kind": "pole",
+          "osmNodeId": 1069534994
+        },
+        {
+          "id": "VH-UNK-C-003",
+          "label": "VC-003",
+          "lat": 38.023341,
+          "lon": -122.0554505,
+          "kind": "pole",
+          "osmNodeId": 1069535072
+        },
+        {
+          "id": "VH-UNK-C-004",
+          "label": "VC-004",
+          "lat": 38.0229335,
+          "lon": -122.0548777,
+          "kind": "pole",
+          "osmNodeId": 1069534936
+        },
+        {
+          "id": "VH-UNK-C-005",
+          "label": "VC-005",
+          "lat": 38.0223111,
+          "lon": -122.0555131,
+          "kind": "pole",
+          "osmNodeId": 1069534727
+        },
+        {
+          "id": "VH-UNK-C-006",
+          "label": "VC-006",
+          "lat": 38.0218251,
+          "lon": -122.0550478,
+          "kind": "pole",
+          "osmNodeId": 1069535060
+        },
+        {
+          "id": "VH-UNK-C-007",
+          "label": "VC-007",
+          "lat": 38.0212866,
+          "lon": -122.0559833,
+          "kind": "pole",
+          "osmNodeId": 1069534923
+        },
+        {
+          "id": "VH-UNK-C-008",
+          "label": "VC-008",
+          "lat": 38.02115,
+          "lon": -122.0562251,
+          "kind": "untagged",
+          "osmNodeId": 7916868800
+        },
+        {
+          "id": "VH-UNK-C-009",
+          "label": "VC-009",
+          "lat": 38.0207395,
+          "lon": -122.0569521,
+          "kind": "pole",
+          "osmNodeId": 1069534785
+        },
+        {
+          "id": "VH-UNK-C-010",
+          "label": "VC-010",
+          "lat": 38.0201382,
+          "lon": -122.0580093,
+          "kind": "pole",
+          "osmNodeId": 1069535091
+        },
+        {
+          "id": "VH-UNK-C-011",
+          "label": "VC-011",
+          "lat": 38.0196538,
+          "lon": -122.0590664,
+          "kind": "pole",
+          "osmNodeId": 1069534968
+        },
+        {
+          "id": "VH-UNK-C-012",
+          "label": "VC-012",
+          "lat": 38.0192264,
+          "lon": -122.0602033,
+          "kind": "pole",
+          "osmNodeId": 1069534808
+        },
+        {
+          "id": "VH-UNK-C-013",
+          "label": "VC-013",
+          "lat": 38.018913,
+          "lon": -122.0610325,
+          "kind": "pole",
+          "osmNodeId": 1069535113
+        },
+        {
+          "id": "VH-UNK-C-014",
+          "label": "VC-014",
+          "lat": 38.0185482,
+          "lon": -122.0620469,
+          "kind": "pole",
+          "osmNodeId": 1069535048
+        },
+        {
+          "id": "VH-UNK-C-015",
+          "label": "VC-015",
+          "lat": 38.0182102,
+          "lon": -122.0629561,
+          "kind": "pole",
+          "osmNodeId": 1069534899
+        }
+      ]
+    },
+    {
+      "id": "MV-60-A",
+      "name": "Mountain View 60 kV line A",
+      "voltageKv": 60,
+      "voltageInferred": false,
+      "corridorMeters": 60,
+      "osmWayIds": [
+        92107756
+      ],
+      "structures": [
+        {
+          "id": "MV-60-A-001",
+          "label": "MA-001",
+          "lat": 38.033941,
+          "lon": -122.1160499,
+          "kind": "transformer",
+          "osmNodeId": 11836585034
+        },
+        {
+          "id": "MV-60-A-002",
+          "label": "MA-002",
+          "lat": 38.0338047,
+          "lon": -122.1162759,
+          "kind": "untagged",
+          "osmNodeId": 11836585035
+        },
+        {
+          "id": "MV-60-A-003",
+          "label": "MA-003",
+          "lat": 38.0332892,
+          "lon": -122.1162933,
+          "kind": "untagged",
+          "osmNodeId": 11836585036
+        },
+        {
+          "id": "MV-60-A-004",
+          "label": "MA-004",
+          "lat": 38.0327674,
+          "lon": -122.1160921,
+          "kind": "untagged",
+          "osmNodeId": 11836585037
+        },
+        {
+          "id": "MV-60-A-005",
+          "label": "MA-005",
+          "lat": 38.0316287,
+          "lon": -122.1159446,
+          "kind": "untagged",
+          "osmNodeId": 11836585038
+        },
+        {
+          "id": "MV-60-A-006",
+          "label": "MA-006",
+          "lat": 38.0303167,
+          "lon": -122.1157824,
+          "kind": "untagged",
+          "osmNodeId": 11836585039
+        },
+        {
+          "id": "MV-60-A-007",
+          "label": "MA-007",
+          "lat": 38.0292909,
+          "lon": -122.1145029,
+          "kind": "untagged",
+          "osmNodeId": 11836585040
+        },
+        {
+          "id": "MV-60-A-008",
+          "label": "MA-008",
+          "lat": 38.0289275,
+          "lon": -122.1140201,
+          "kind": "untagged",
+          "osmNodeId": 11836585041
+        },
+        {
+          "id": "MV-60-A-009",
+          "label": "MA-009",
+          "lat": 38.0284363,
+          "lon": -122.1133536,
+          "kind": "untagged",
+          "osmNodeId": 11836585042
+        },
+        {
+          "id": "MV-60-A-010",
+          "label": "MA-010",
+          "lat": 38.0279173,
+          "lon": -122.1129323,
+          "kind": "pole",
+          "osmNodeId": 1069535026
+        },
+        {
+          "id": "MV-60-A-011",
+          "label": "MA-011",
+          "lat": 38.0268688,
+          "lon": -122.1128923,
+          "kind": "pole",
+          "osmNodeId": 1069534688
+        }
+      ]
+    },
+    {
+      "id": "VH-230-A",
+      "name": "Vine Hill 230 kV line A",
+      "voltageKv": 230,
+      "voltageInferred": true,
+      "corridorMeters": 100,
+      "osmWayIds": [
+        1274779025,
+        1274779032,
+        1274779031
+      ],
+      "structures": [
+        {
+          "id": "VH-230-A-001",
+          "label": "VA-001",
+          "lat": 38.0267133,
+          "lon": -122.0681101,
+          "kind": "untagged",
+          "osmNodeId": 11836584899
+        },
+        {
+          "id": "VH-230-A-002",
+          "label": "VA-002",
+          "lat": 38.0265654,
+          "lon": -122.0684749,
+          "kind": "untagged",
+          "osmNodeId": 11836584900
+        },
+        {
+          "id": "VH-230-A-003",
+          "label": "VA-003",
+          "lat": 38.0258745,
+          "lon": -122.0679908,
+          "kind": "untagged",
+          "osmNodeId": 11836584901
+        },
+        {
+          "id": "VH-230-A-004",
+          "label": "VA-004",
+          "lat": 38.0250917,
+          "lon": -122.0675106,
+          "kind": "untagged",
+          "osmNodeId": 11836584921
+        },
+        {
+          "id": "VH-230-A-005",
+          "label": "VA-005",
+          "lat": 38.0244441,
+          "lon": -122.0671029,
+          "kind": "untagged",
+          "osmNodeId": 11836584922
+        },
+        {
+          "id": "VH-230-A-006",
+          "label": "VA-006",
+          "lat": 38.0235567,
+          "lon": -122.0665477,
+          "kind": "untagged",
+          "osmNodeId": 11836584923
+        },
+        {
+          "id": "VH-230-A-007",
+          "label": "VA-007",
+          "lat": 38.0227264,
+          "lon": -122.0660257,
+          "kind": "untagged",
+          "osmNodeId": 11836584920
+        },
+        {
+          "id": "VH-230-A-008",
+          "label": "VA-008",
+          "lat": 38.0221103,
+          "lon": -122.0656465,
+          "kind": "untagged",
+          "osmNodeId": 11836584924
+        },
+        {
+          "id": "VH-230-A-009",
+          "label": "VA-009",
+          "lat": 38.0214881,
+          "lon": -122.0658517,
+          "kind": "untagged",
+          "osmNodeId": 11836584925
+        }
+      ]
+    },
+    {
+      "id": "VH-230-B",
+      "name": "Vine Hill 230 kV line B",
+      "voltageKv": 230,
+      "voltageInferred": true,
+      "corridorMeters": 100,
+      "osmWayIds": [
+        92513765
+      ],
+      "structures": [
+        {
+          "id": "VH-230-B-001",
+          "label": "VB-001",
+          "lat": 38.0192981,
+          "lon": -122.063267,
+          "kind": "tower",
+          "osmNodeId": 417594185
+        },
+        {
+          "id": "VH-230-B-002",
+          "label": "VB-002",
+          "lat": 38.0192237,
+          "lon": -122.0646489,
+          "kind": "tower",
+          "osmNodeId": 417593915
+        },
+        {
+          "id": "VH-230-B-003",
+          "label": "VB-003",
+          "lat": 38.0193117,
+          "lon": -122.0656827,
+          "kind": "tower",
+          "osmNodeId": 417593777
+        },
+        {
+          "id": "VH-230-B-004",
+          "label": "VB-004",
+          "lat": 38.0199678,
+          "lon": -122.0665866,
+          "kind": "tower",
+          "osmNodeId": 1069535094
+        },
+        {
+          "id": "VH-230-B-005",
+          "label": "VB-005",
+          "lat": 38.020981,
+          "lon": -122.0669152,
+          "kind": "untagged",
+          "osmNodeId": 1069534976
+        },
+        {
+          "id": "VH-230-B-006",
+          "label": "VB-006",
+          "lat": 38.021356,
+          "lon": -122.0659469,
+          "kind": "untagged",
+          "osmNodeId": 11836584927
+        }
+      ]
+    }
+  ]
+}

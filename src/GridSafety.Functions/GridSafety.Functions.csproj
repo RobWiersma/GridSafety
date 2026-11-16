@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>GridSafety.Functions</AssemblyName>
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Amazon.Lambda.Core" Version="2.*" />
+    <PackageReference Include="Amazon.Lambda.Serialization.SystemTextJson" Version="2.*" />
+    <PackageReference Include="Amazon.Lambda.DynamoDBEvents" Version="3.*" />
+    <PackageReference Include="Amazon.Lambda.SQSEvents" Version="2.*" />
+    <PackageReference Include="Amazon.Lambda.CloudWatchEvents" Version="4.*" />
+    <PackageReference Include="AWS.Lambda.Powertools.Logging" Version="*" />
+    <PackageReference Include="AWS.Lambda.Powertools.Metrics" Version="*" />
+    <PackageReference Include="AWSSDK.EventBridge" Version="4.*" />
+    <PackageReference Include="AWSSDK.IoT" Version="4.*" />
+    <PackageReference Include="AWSSDK.IotData" Version="4.*" />
+    <PackageReference Include="AWSSDK.Scheduler" Version="4.*" />
+    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="4.*" />
+    <PackageReference Include="AWSSDK.S3" Version="4.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GridSafety.Core\GridSafety.Core.csproj" />
+  </ItemGroup>
+</Project>

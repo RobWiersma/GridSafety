@@ -1,0 +1,11 @@
+bin/
+obj/
+artifacts/
+cdk.out/
+node_modules/
+web/dist/
+*.user
+.vs/
+.idea/
+.env*
+!.env.example

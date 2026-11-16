@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Real OpenStreetMap power lines; regenerate with tools/GridSafety.CircuitImport. -->
+    <EmbeddedResource Include="Data\circuits.json" LogicalName="GridSafety.Core.Data.circuits.json" />
+  </ItemGroup>
+</Project>

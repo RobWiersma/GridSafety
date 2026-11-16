@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/infra/">
+    <Project Path="infra/GridSafety.Infra.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/GridSafety.Api/GridSafety.Api.csproj" />
+    <Project Path="src/GridSafety.Core/GridSafety.Core.csproj" />
+    <Project Path="src/GridSafety.Functions/GridSafety.Functions.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GridSafety.Tests/GridSafety.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/GridSafety.CircuitImport/GridSafety.CircuitImport.csproj" />
+    <Project Path="tools/GridSafety.Simulator/GridSafety.Simulator.csproj" />
+  </Folder>
+</Solution>

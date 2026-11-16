@@ -1,0 +1,156 @@
+using System.Diagnostics.CodeAnalysis;
+
+[assembly: SuppressMessage("Security", "CA5394:Do not use insecure randomness",
+    Scope = "namespaceanddescendants", Target = "~N:GridSafety.Core.Simulation",
+    Justification = "Simulated flights only need varied, optionally reproducible, values; nothing here is security-sensitive.")]
+
+namespace GridSafety.Core.Simulation;
+
+/// <summary>Where a simulated drone sends its messages: the local API, AWS IoT Core, or a test double.</summary>
+public interface IDroneLink
+{
+    Task SendAsync(DroneMessage message, CancellationToken ct = default);
+}
+
+/// <summary>Pre-computed flight: follows the line with GPS jitter, drains battery, and (optionally) has incidents.</summary>
+public sealed record FlightPlan(IReadOnlyList<TelemetryPoint> Points, Structure SevereAt)
+{
+    public const double SpeedMps = 14;
+    public const double SecondsPerTick = 2;
+
+    public static FlightPlan Build(Circuit c, Random rng, bool scriptedIncidents, DateTimeOffset start)
+    {
+        ArgumentNullException.ThrowIfNull(c);
+        ArgumentNullException.ThrowIfNull(rng);
+        const double step = SpeedMps * SecondsPerTick;
+        var path = c.Path;
+        var samples = new List<GeoPoint>();
+        for (var i = 0; i < path.Count - 1; i++)
+        {
+            var n = Math.Max(1, (int)(Geo.DistanceMeters(path[i], path[i + 1]) / step));
+            for (var k = 0; k < n; k++) samples.Add(Geo.Lerp(path[i], path[i + 1], (double)k / n));
+        }
+        samples.Add(path[^1]);
+
+        var severeAt = c.Structures[rng.Next(c.Structures.Count / 3, Math.Max(c.Structures.Count / 3 + 1, c.Structures.Count * 2 / 3))];
+        var breachStart = scriptedIncidents ? rng.Next(samples.Count / 4, Math.Max(samples.Count / 4 + 1, samples.Count / 2)) : -1;
+        var climbAt = scriptedIncidents && rng.NextDouble() < 0.6 ? rng.Next(samples.Count / 2, Math.Max(samples.Count / 2 + 1, samples.Count * 3 / 4)) : -1;
+
+        var points = new List<TelemetryPoint>(samples.Count);
+        for (var i = 0; i < samples.Count; i++)
+        {
+            // Drift sideways off the corridor for a few ticks (wind gust / pilot error), then recover.
+            // "Sideways" is perpendicular to the line, whatever direction the line runs.
+            var drift = breachStart >= 0 && i >= breachStart && i < breachStart + 8
+                ? (c.CorridorMeters + 70) * Math.Sin(Math.PI * (i - breachStart) / 8)
+                : 0;
+            var (sideN, sideE) = drift == 0 ? (0d, 0d) : Perpendicular(samples, i);
+            var pos = Geo.Offset(samples[i], rng.NextDouble() * 12 - 6 + drift * sideN, rng.NextDouble() * 12 - 6 + drift * sideE);
+            var altitude = climbAt >= 0 && i >= climbAt && i < climbAt + 3 ? 126 + rng.NextDouble() * 4 : 58 + rng.NextDouble() * 10;
+            var battery = 100 - 78.0 * i / Math.Max(1, samples.Count - 1);
+            points.Add(new TelemetryPoint(start.AddSeconds(i * SecondsPerTick), pos.Lat, pos.Lon,
+                Math.Round(altitude, 1), Math.Round(battery, 1), SpeedMps + rng.NextDouble() * 2 - 1));
+        }
+        return new FlightPlan(points, severeAt);
+    }
+
+    /// <summary>Unit vector (north, east) pointing left of the direction of travel at sample <paramref name="i"/>.</summary>
+    private static (double North, double East) Perpendicular(List<GeoPoint> samples, int i)
+    {
+        var a = samples[Math.Max(0, Math.Min(i, samples.Count - 2))];
+        var b = samples[Math.Max(1, Math.Min(i + 1, samples.Count - 1))];
+        const double mPerDegree = 111_320;
+        var north = (b.Lat - a.Lat) * mPerDegree;
+        var east = (b.Lon - a.Lon) * mPerDegree * Math.Cos(a.Lat * Math.PI / 180);
+        var len = Math.Sqrt(north * north + east * east);
+        return len == 0 ? (0, 1) : (east / len, -north / len);
+    }
+}
+
+/// <summary>What the drone's onboard model "sees" at a structure: usually nothing, sometimes a defect.</summary>
+public static class FindingGenerator
+{
+    private static readonly (FindingType Type, string[] Notes)[] Catalog =
+    [
+        (FindingType.VegetationEncroachment, ["Oak limb within 4 ft of primary conductor", "Eucalyptus overhang above span", "Brush build-up at pole base"]),
+        (FindingType.DamagedInsulator, ["Chipped porcelain bell on B phase", "Flashover tracking on pin insulator", "Polymer insulator shed damage"]),
+        (FindingType.CrossarmDamage, ["Split crossarm at bolt hole", "Crossarm rot visible at brace", "Crossarm leaning ~10°"]),
+        (FindingType.ThermalHotspot, ["Connector 38 °C above ambient", "Hot clamp on jumper (ΔT 25 °C)", "Transformer bushing warm"]),
+        (FindingType.MissingHardware, ["Missing cotter key on clevis", "Bird guard missing", "Guy wire marker missing"]),
+        (FindingType.ConductorDamage, ["Broken strands near splice", "Conductor clashing marks mid-span", "Bird-caging at dead-end"]),
+    ];
+
+    public static FindingReport? Maybe(Structure s, Random rng, bool forceSevere)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        ArgumentNullException.ThrowIfNull(rng);
+        if (!forceSevere && rng.NextDouble() > 0.22) return null;
+        var (type, notes) = Catalog[rng.Next(Catalog.Length)];
+        var roll = rng.NextDouble();
+        var severity = forceSevere ? (rng.NextDouble() < 0.5 ? 5 : 4)
+            : roll < 0.15 ? 1 : roll < 0.45 ? 2 : roll < 0.78 ? 3 : roll < 0.95 ? 4 : 5;
+        return new FindingReport(s.Id, type, severity, Math.Round(0.62 + rng.NextDouble() * 0.36, 2), notes[rng.Next(notes.Length)]);
+    }
+}
+
+/// <summary>Start a demo flight: which mission to fly. Sent from the API to the DemoFlight Lambda.</summary>
+public sealed record DemoFlightLaunch(string MissionId, string CircuitId, string DroneId);
+
+/// <summary>
+/// Flies a whole simulated mission through an <see cref="IDroneLink"/>: telemetry every tick, a finding
+/// when a structure looks defective, then "landed". Used by the simulator CLI, the API's in-process demo
+/// flight (local dev) and the DemoFlight Lambda (AWS, publishing through IoT Core).
+/// </summary>
+public static class DemoFlight
+{
+    /// <summary>The drone the console's "Demo flight" button uses.</summary>
+    public const string DroneId = "DEMO-01";
+    public const string Pilot = "Demo autopilot";
+
+    /// <summary>A demo mission with no progress for this long is treated as abandoned (e.g. the flight crashed).</summary>
+    public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(10);
+
+    /// <summary>Real-time delay between telemetry messages for on-demand demos (a 9 km line takes about 3 minutes).</summary>
+    public static readonly TimeSpan DefaultTick = TimeSpan.FromMilliseconds(500);
+
+    public static bool IsStale(Mission m, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(m);
+        return !Mission.Workflow.IsTerminal(m.Status) && now - m.UpdatedAt > StaleAfter;
+    }
+
+    public static async Task FlyAsync(
+        Circuit circuit, string droneId, string missionId, IDroneLink link, TimeSpan tick, Random rng, TimeProvider clock,
+        bool scriptedIncidents = true, Func<bool>? keepFlying = null,
+        Action<int, int, TelemetryPoint>? onPoint = null, Action<Structure, FindingReport>? onFinding = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(circuit);
+        ArgumentNullException.ThrowIfNull(link);
+        ArgumentNullException.ThrowIfNull(clock);
+
+        var plan = FlightPlan.Build(circuit, rng, scriptedIncidents, clock.GetUtcNow());
+        var reported = new HashSet<string>();
+        for (var i = 0; i < plan.Points.Count; i++)
+        {
+            if (keepFlying is not null && !keepFlying()) break; // e.g. Lambda about to time out: land early
+            var p = plan.Points[i] with { Timestamp = clock.GetUtcNow() };
+            await link.SendAsync(new DroneMessage { Kind = MessageKinds.Telemetry, DroneId = droneId, MissionId = missionId, Points = [p] }, ct);
+            onPoint?.Invoke(i, plan.Points.Count, p);
+
+            foreach (var s in circuit.Structures.Where(s => !reported.Contains(s.Id) && Geo.DistanceMeters(s.Location, p.Position) < 30))
+            {
+                reported.Add(s.Id);
+                if (FindingGenerator.Maybe(s, rng, forceSevere: s == plan.SevereAt) is { } finding)
+                {
+                    await link.SendAsync(new DroneMessage { Kind = MessageKinds.Finding, DroneId = droneId, MissionId = missionId, Finding = finding }, ct);
+                    onFinding?.Invoke(s, finding);
+                }
+            }
+
+            if (tick > TimeSpan.Zero) await Task.Delay(tick, clock, ct);
+        }
+
+        await link.SendAsync(new DroneMessage { Kind = MessageKinds.Landed, DroneId = droneId, MissionId = missionId }, ct);
+    }
+}

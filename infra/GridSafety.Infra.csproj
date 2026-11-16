@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- CDK construct names collide with System.* types (HttpMethod, Attribute…), so no implicit usings here. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RollForward>Major</RollForward>
+    <NoWarn>$(NoWarn);CA1806;CA1859;CA1861;CA1711;CA1305</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Amazon.CDK.Lib" Version="2.*" />
+    <PackageReference Include="Constructs" Version="10.*" />
+  </ItemGroup>
+</Project>

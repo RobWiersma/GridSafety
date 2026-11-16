@@ -1,0 +1,9 @@
+# Optional: run the API against DynamoDB Local instead of the in-memory store.
+#   docker compose up -d
+#   dotnet run --project src/GridSafety.Api --launch-profile "GridSafety.Api (DynamoDB Local)"
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    command: -jar DynamoDBLocal.jar -sharedDb -inMemory
+    ports:
+      - "8000:8000"

@@ -1,0 +1,10 @@
+{
+  "app": "dotnet run --project GridSafety.Infra.csproj",
+  "watch": { "include": ["**"], "exclude": ["bin", "obj", "cdk.out"] },
+  "context": {
+    "stage": "dev",
+    "opsEmail": "",
+    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
+    "@aws-cdk/core:target-partitions": ["aws"]
+  }
+}
