@@ -16,6 +16,8 @@ public sealed class Mission
     public const int MaxRecentAlerts = 25;
 
     public required string Id { get; init; }
+    /// <summary>Human-friendly callsign, e.g. "Amber Kestrel 07". Demo flights always get one; older missions may not.</summary>
+    public string? Name { get; init; }
     public required string CircuitId { get; init; }
     public required string DroneId { get; init; }
     public required string Pilot { get; init; }
@@ -37,9 +39,10 @@ public sealed class Mission
     public List<StatusChange<MissionStatus>> History { get; init; } = [];
     public long Version { get; set; }
 
-    public static Mission Plan(Circuit circuit, string droneId, string pilot, string? createdBy, DateTimeOffset now) => new()
+    public static Mission Plan(Circuit circuit, string droneId, string pilot, string? createdBy, DateTimeOffset now, string? name = null) => new()
     {
         Id = Ids.New(),
+        Name = string.IsNullOrWhiteSpace(name) ? null : name.Trim(),
         CircuitId = circuit.Id,
         DroneId = droneId.Trim(),
         Pilot = pilot.Trim(),

@@ -66,6 +66,16 @@ public class DemoFlightTests
     }
 
     [Fact]
+    public void Flight_names_never_repeat_one_already_taken()
+    {
+        var rng = new Random(1);
+        var taken = new List<string?> { null };
+        for (var i = 0; i < 2000; i++) taken.Add(FlightNames.Generate(rng, taken));
+        Assert.Equal(taken.Count - 1, taken.OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(taken.OfType<string>(), n => Assert.Matches(@"^[A-Z][a-z]+ [A-Z][a-z]+ \d{2}$", n));
+    }
+
+    [Fact]
     public void Every_point_reports_a_plausible_rssi()
     {
         var plan = FlightPlan.Build(TestCircuits.Line, new Random(5), scriptedIncidents: true, Now);

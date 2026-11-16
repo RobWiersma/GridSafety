@@ -294,6 +294,7 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         Assert.Equal(HttpStatusCode.Accepted, res.StatusCode);
         var launched = (await res.Content.ReadFromJsonAsync<MissionView>(JsonOpts))!;
         Assert.Equal(DemoFlight.DroneId, launched.Mission.DroneId);
+        Assert.Matches(@"^[A-Z][a-z]+ [A-Z][a-z]+ \d{2}$", launched.Mission.Name);
 
         MissionView? m = null;
         for (var i = 0; i < 100 && m?.Mission.Status != MissionStatus.Completed; i++)
@@ -310,5 +311,32 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         var busy = (await manual.Content.ReadFromJsonAsync<MissionView>(JsonOpts))!;
         Assert.Equal(HttpStatusCode.Conflict, (await sup.PostAsJsonAsync("/api/demo-flights", new DemoFlightRequest(null), JsonOpts)).StatusCode);
         (await sup.PostAsJsonAsync($"/api/missions/{busy.Mission.Id}/status", new MissionStatusRequest(MissionStatus.Aborted, null), JsonOpts)).EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Each_demo_flight_gets_a_new_name()
+    {
+        var sup = Client("dana", supervisor: true);
+        var names = new List<string>();
+        for (var i = 0; i < 3; i++)
+        {
+            var res = await sup.PostAsJsonAsync("/api/demo-flights", new DemoFlightRequest("CLAY-MEAD-115"), JsonOpts);
+            Assert.Equal(HttpStatusCode.Accepted, res.StatusCode);
+            var launched = await res.Content.ReadFromJsonAsync<MissionView>(JsonOpts);
+            names.Add(launched!.Mission.Name!);
+            await WaitForLandingAsync(sup, launched.Mission.Id);
+        }
+        Assert.Equal(3, names.Distinct().Count());
+    }
+
+    private static async Task WaitForLandingAsync(HttpClient c, string missionId)
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            var m = await c.GetFromJsonAsync<MissionView>($"/api/missions/{missionId}", JsonOpts);
+            if (Mission.Workflow.IsTerminal(m!.Mission.Status)) return;
+            await Task.Delay(100);
+        }
+        Assert.Fail($"Demo flight {missionId} never landed");
     }
 }

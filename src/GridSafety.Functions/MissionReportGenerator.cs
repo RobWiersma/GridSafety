@@ -70,7 +70,7 @@ public sealed class MissionReportGenerator(IGridRepository repo, ICircuitCatalog
               figure{margin:0}figure img{width:100%;height:auto;border-radius:8px;display:block}figcaption{font-size:13px;margin-top:4px}
             </style></head><body>
             <h1>Inspection report: {{H(c.Name)}}</h1>
-            <div class="muted">Mission {{H(m.Id)}} · Drone {{H(m.DroneId)}} · PIC {{H(m.Pilot)}} · {{m.Status}} · Generated {{generatedAt:u}}</div>
+            <div class="muted">{{(m.Name is null ? "" : $"Flight {H(m.Name)} · ")}}Mission {{H(m.Id)}} · Drone {{H(m.DroneId)}} · PIC {{H(m.Pilot)}} · {{m.Status}} · Generated {{generatedAt:u}}</div>
             <div class="grid">
               <div class="tile">Coverage<b>{{m.Coverage(c) * 100:0}}%</b>{{m.StructuresInspected.Count}} / {{c.Structures.Count}} structures</div>
               <div class="tile">Distance<b>{{m.DistanceFlownMeters / 1609.344:0.0}} mi</b>{{(c.VoltageKv > 0 ? $"{c.VoltageKv} kV circuit" : "voltage not tagged")}}</div>

@@ -166,17 +166,19 @@ public static class Endpoints
         }
 
         var now = clock.GetUtcNow();
-        var active = (await repo.ListMissionsAsync(200, ct))
+        var recent = await repo.ListMissionsAsync(1000, ct);
+        var active = recent
             .Where(m => m.DroneId.Equals(DemoFlight.DroneId, StringComparison.OrdinalIgnoreCase) && !Mission.Workflow.IsTerminal(m.Status));
         foreach (var m in active)
         {
             if (!DemoFlight.IsStale(m, now))
-                return TypedResults.Conflict($"The demo drone is already on mission {m.Id} ({circuits.Find(m.CircuitId)?.Name ?? m.CircuitId}). Try again when it lands.");
+                return TypedResults.Conflict($"The demo drone is already flying {m.Name ?? m.Id} ({circuits.Find(m.CircuitId)?.Name ?? m.CircuitId}). Try again when it lands.");
             m.MoveTo(MissionStatus.Aborted, now, "system", "Demo flight stopped reporting");
             await repo.SaveMissionAsync(m, ct);
         }
 
-        var mission = Mission.Plan(circuit, DemoFlight.DroneId, DemoFlight.Pilot, user.DisplayName, now);
+        var mission = Mission.Plan(circuit, DemoFlight.DroneId, DemoFlight.Pilot, user.DisplayName, now,
+            name: FlightNames.Generate(Random.Shared, recent.Select(m => m.Name)));
         await repo.SaveMissionAsync(mission, ct);
         try
         {

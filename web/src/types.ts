@@ -49,6 +49,8 @@ export interface DroneAlert {
 
 export interface Mission {
   id: string;
+  /** Callsign, e.g. "Amber Kestrel 07"; demo flights always have one. */
+  name?: string;
   circuitId: string;
   droneId: string;
   pilot: string;

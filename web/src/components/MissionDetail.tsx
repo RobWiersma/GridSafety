@@ -63,8 +63,9 @@ export function MissionDetail({ missionId, onBack, onOpenFinding, onToast }: Pro
         <button className="btn btn-ghost back-link" onClick={onBack}>← Missions</button>
         <div className="mission-title">
           <div>
-            <h2>{mission.data.circuitName}</h2>
+            <h2>{m.name ?? mission.data.circuitName}</h2>
             <p className="muted">
+              {m.name && <>{mission.data.circuitName} · </>}
               <span className="mono">{m.id}</span> · {m.droneId} · PIC {m.pilot} · planned {relativeTime(m.createdAt)}
             </p>
           </div>

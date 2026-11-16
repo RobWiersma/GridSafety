@@ -23,11 +23,13 @@ export function OpsView({ onOpenFinding, onOpenMission }: { onOpenFinding(id: st
   const { open, acknowledged } = useMemo(() => {
     const list: OpsAlert[] = [];
     for (const m of (missions.data ?? []).slice(0, 10)) {
-      list.push(...m.mission.recentAlerts.map((a) => ({ ...a, droneId: m.mission.droneId, missionId: m.mission.id, circuitName: m.circuitName })));
+      list.push(...m.mission.recentAlerts.map((a) => ({ ...a, droneId: m.mission.name ?? m.mission.droneId, missionId: m.mission.id, circuitName: m.circuitName })));
     }
     list.sort((a, b) => b.at.localeCompare(a.at));
     return { open: list.filter((a) => !a.acknowledgedAt), acknowledged: list.filter((a) => a.acknowledgedAt).slice(0, 5) };
   }, [missions.data]);
+
+  const flightNames = useMemo(() => Object.fromEntries((missions.data ?? []).filter((m) => m.mission.name).map((m) => [m.mission.id, m.mission.name!])), [missions.data]);
 
   const urgent = (findings.data ?? []).filter((f) => f.finding.severity >= 4 && f.finding.status === 'New').slice(0, 5);
 
@@ -38,6 +40,7 @@ export function OpsView({ onOpenFinding, onOpenMission }: { onOpenFinding(id: st
           circuits={circuits.data ?? []}
           drones={drones.data ?? []}
           findings={findings.data ?? []}
+          flightNames={flightNames}
           track={track.data ?? []}
           focus={focus ? circuits.data?.find((c) => c.id === focus.mission.circuitId) : null}
           onOpenFinding={onOpenFinding}
@@ -96,10 +99,10 @@ function MissionCard({ m, selected, onSelect }: { m: MissionView; selected: bool
   return (
     <button className={`mission-card ${selected ? 'mission-card-selected' : ''}`} onClick={onSelect}>
       <div className="mission-card-top">
-        <strong>{mi.droneId}</strong>
+        <strong>{mi.name ?? mi.droneId}</strong>
         <span className={`pill pill-${mi.status.toLowerCase()}`}>{mi.status === 'InFlight' ? 'In flight' : mi.status}</span>
       </div>
-      <div className="muted small">{m.circuitName} · PIC {mi.pilot}</div>
+      <div className="muted small">{mi.name ? `${mi.droneId} · ` : ''}{m.circuitName} · PIC {mi.pilot}</div>
       <div className="progress" title={`Coverage ${pct(m.coverage)}`}>
         <span style={{ width: pct(m.coverage) }} />
       </div>

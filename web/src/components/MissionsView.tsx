@@ -17,7 +17,7 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
   const flyDemo = () =>
     demo.mutate(undefined, {
       onSuccess: (m) => {
-        onToast({ kind: 'success', text: `Demo drone launched over ${m.circuitName}` });
+        onToast({ kind: 'success', text: `${m.mission.name ?? 'Demo drone'} launched over ${m.circuitName}` });
         onShowOnMap();
       },
       onError: (e) => onToast({ kind: 'error', text: e.message }),
@@ -52,7 +52,7 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
           <table className="table">
             <thead>
               <tr>
-                <th>Mission</th><th>Circuit</th><th>Drone / PIC</th><th>Status</th><th>Coverage</th><th>Distance</th><th>Findings</th><th>Alerts</th><th />
+                <th>Mission</th><th>Circuit</th><th>Flight / PIC</th><th>Status</th><th>Coverage</th><th>Distance</th><th>Findings</th><th>Alerts</th><th />
               </tr>
             </thead>
             <tbody>
@@ -60,7 +60,7 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
                 <tr key={m.mission.id}>
                   <td><button className="mission-link mono" onClick={() => onOpenMission(m.mission.id)}>{m.mission.id}</button><div className="muted small">{relativeTime(m.mission.createdAt)}</div></td>
                   <td>{m.circuitName}</td>
-                  <td>{m.mission.droneId}<div className="muted small">{m.mission.pilot}</div></td>
+                  <td>{m.mission.name ? <strong>{m.mission.name}</strong> : m.mission.droneId}<div className="muted small">{m.mission.name ? `${m.mission.droneId} · ` : ''}{m.mission.pilot}</div></td>
                   <td><span className={`pill pill-${m.mission.status.toLowerCase()}`}>{MISSION_STATUS_LABEL[m.mission.status]}</span></td>
                   <td>
                     <div className="progress progress-sm"><span style={{ width: pct(m.coverage) }} /></div>
