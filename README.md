@@ -1,3 +1,5 @@
+<img src="web/public/favicon.svg" alt="GridSafety logo: a drone inspecting a power line" width="96" align="right" />
+
 # GridSafety
 
 [![CI](https://github.com/RobWiersma/GridSafety/actions/workflows/ci.yml/badge.svg)](https://github.com/RobWiersma/GridSafety/actions/workflows/ci.yml)
