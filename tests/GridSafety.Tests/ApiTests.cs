@@ -329,6 +329,105 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         Assert.Equal(3, names.Distinct().Count());
     }
 
+    [Fact]
+    public async Task Resources_list_the_fleet_and_crews_for_everyone()
+    {
+        var guest = await factory.CreateClient().GetFromJsonAsync<ResourcesView>("/api/public/resources", JsonOpts);
+        Assert.Contains(guest!.Drones, d => d.Drone.Id == DemoFlight.DroneId);
+        var res = await Client().GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts);
+        Assert.Contains(res!.Drones, d => d.Drone.Id == DemoFlight.DroneId);
+        Assert.Contains(res.FlightCrews, c => c.Crew.Id == "air-1" && c.Crew.Members.Any(m => m.Role == FlightCrew.PilotRole));
+        Assert.Contains(res.GroundCrews, c => c.Crew.Id == "sector-7g");
+    }
+
+    [Fact]
+    public async Task Only_supervisors_change_resources()
+    {
+        var drone = new DroneAsset("DRN-RBAC", "Test quad", "Test yard");
+        var denied = await Client("alex").PutAsJsonAsync("/api/resources/drones/DRN-RBAC", drone, JsonOpts);
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+
+        var sup = Client("dana", supervisor: true);
+        var invalid = await sup.PutAsJsonAsync("/api/resources/drones/DRN-RBAC", drone with { Model = "" }, JsonOpts);
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        (await sup.PutAsJsonAsync("/api/resources/drones/DRN-RBAC", drone, JsonOpts)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.NoContent, (await sup.DeleteAsync("/api/resources/drones/DRN-RBAC")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await sup.DeleteAsync("/api/resources/drones/DRN-RBAC")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Grounded_drones_cannot_be_planned_and_flying_drones_cannot_be_grounded()
+    {
+        var sup = Client("dana", supervisor: true);
+        var drone = new DroneAsset("DRN-GND", "Test quad", "Test yard", DroneAssetStatus.Maintenance);
+        (await sup.PutAsJsonAsync("/api/resources/drones/DRN-GND", drone, JsonOpts)).EnsureSuccessStatusCode();
+
+        var plan = await sup.PostAsJsonAsync("/api/missions", new PlanMissionRequest("PITT-MART-115", "DRN-GND", "Edna Krabble"), JsonOpts);
+        Assert.Equal(HttpStatusCode.Conflict, plan.StatusCode);
+
+        (await sup.PutAsJsonAsync("/api/resources/drones/DRN-GND", drone with { Status = DroneAssetStatus.Active }, JsonOpts)).EnsureSuccessStatusCode();
+        var m = await PlanAsync(sup, "DRN-GND");
+        Assert.Equal(HttpStatusCode.Conflict, (await sup.PutAsJsonAsync("/api/resources/drones/DRN-GND", drone, JsonOpts)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await sup.DeleteAsync("/api/resources/drones/DRN-GND")).StatusCode);
+
+        var res = await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts);
+        var view = res!.Drones.Single(d => d.Drone.Id == "DRN-GND");
+        Assert.Equal(m.Mission.Id, view.ActiveMissionId);
+        Assert.Equal(1, view.Missions);
+
+        (await sup.PostAsJsonAsync($"/api/missions/{m.Mission.Id}/status", new MissionStatusRequest(MissionStatus.Aborted, null), JsonOpts)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.NoContent, (await sup.DeleteAsync("/api/resources/drones/DRN-GND")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Flight_crews_need_a_pilot_and_count_their_missions()
+    {
+        var sup = Client("dana", supervisor: true);
+        var noPilot = new FlightCrew("air-test", "Test Air Ops", "Test yard", [new("Ralph Wiggum", FlightCrew.ObserverRole)]);
+        Assert.Equal(HttpStatusCode.BadRequest, (await sup.PutAsJsonAsync("/api/resources/flight-crews/air-test", noPilot, JsonOpts)).StatusCode);
+
+        var crew = noPilot with { Members = [new("Chief Wigglesworth", FlightCrew.PilotRole), new("Ralph Wiggum", FlightCrew.ObserverRole)] };
+        (await sup.PutAsJsonAsync("/api/resources/flight-crews/air-test", crew, JsonOpts)).EnsureSuccessStatusCode();
+        var plan = await sup.PostAsJsonAsync("/api/missions", new PlanMissionRequest("PITT-MART-115", "DRN-AIRTEST", "Chief Wigglesworth"), JsonOpts);
+        Assert.Equal(HttpStatusCode.Created, plan.StatusCode);
+
+        var res = await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts);
+        var view = res!.FlightCrews.Single(c => c.Crew.Id == "air-test");
+        Assert.Equal(1, view.Missions);
+        Assert.Equal(1, view.ActiveMissions);
+        Assert.Equal(HttpStatusCode.NoContent, (await sup.DeleteAsync("/api/resources/flight-crews/air-test")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Ground_crew_edits_cannot_orphan_open_work_orders()
+    {
+        var sup = Client("dana", supervisor: true);
+        var crew = new Crew("test-gc", "Test Ground Crew", "Testing", [FindingType.MissingHardware], [new("Apu Nahasa", "Foreman"), new("Sanjay Nahasa", "Lineman")]);
+        (await sup.PutAsJsonAsync("/api/resources/ground-crews/test-gc", crew, JsonOpts)).EnsureSuccessStatusCode();
+
+        var m = await PlanAsync(sup, "DRN-GC");
+        var id = await ReportFindingAsync(sup, m, 3);
+        (await sup.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Triaged, null, null), JsonOpts)).EnsureSuccessStatusCode();
+        var assigned = await sup.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Assigned, null, "Apu Nahasa"), JsonOpts);
+        Assert.Equal("Apu Nahasa (Test Ground Crew)", (await assigned.Content.ReadFromJsonAsync<FindingView>(JsonOpts))!.Finding.AssignedTo);
+
+        // Renaming the crew or dropping Apu would leave the work order pointing at nobody.
+        Assert.Equal(HttpStatusCode.Conflict, (await sup.PutAsJsonAsync("/api/resources/ground-crews/test-gc", crew with { Name = "Renamed Crew" }, JsonOpts)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await sup.PutAsJsonAsync("/api/resources/ground-crews/test-gc", crew with { Members = [new("Sanjay Nahasa", "Lineman")] }, JsonOpts)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await sup.DeleteAsync("/api/resources/ground-crews/test-gc")).StatusCode);
+
+        // Adding someone is fine; an off-duty crew takes no new work.
+        (await sup.PutAsJsonAsync("/api/resources/ground-crews/test-gc", crew with { Members = [.. crew.Members, new("Manjula Nahasa", "Apprentice")], Status = CrewStatus.OffDuty }, JsonOpts)).EnsureSuccessStatusCode();
+        var other = await ReportFindingAsync(sup, m, 3);
+        (await sup.PostAsJsonAsync($"/api/findings/{other}/status", new FindingStatusRequest(FindingStatus.Triaged, null, null), JsonOpts)).EnsureSuccessStatusCode();
+        var offDuty = await sup.PostAsJsonAsync($"/api/findings/{other}/status", new FindingStatusRequest(FindingStatus.Assigned, null, "Sanjay Nahasa"), JsonOpts);
+        Assert.Equal(HttpStatusCode.BadRequest, offDuty.StatusCode);
+
+        // Once the work order is resolved the crew can go.
+        (await sup.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Resolved, "Fixed", null), JsonOpts)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.NoContent, (await sup.DeleteAsync("/api/resources/ground-crews/test-gc")).StatusCode);
+    }
+
     private static async Task WaitForLandingAsync(HttpClient c, string missionId)
     {
         for (var i = 0; i < 100; i++)

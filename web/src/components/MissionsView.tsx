@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ApiError, useCircuits, useDemoFlight, useMe, useMissions, useMissionStatus, useOpenReport, usePlanMission } from '../api';
+import { ApiError, useCircuits, useDemoFlight, useMe, useMissions, useMissionStatus, useOpenReport, usePlanMission, useResources } from '../api';
 import { MISSION_STATUS_LABEL, circuitsByVoltage, miles, pct, relativeTime } from '../lib/format';
 import { useSession } from '../session';
 import type { MissionView } from '../types';
@@ -164,11 +164,17 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
 
 function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: MissionView): void }) {
   const circuits = useCircuits();
+  const resources = useResources();
   const plan = usePlanMission();
   const ref = useRef<HTMLDialogElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => ref.current?.showModal(), []);
+
+  const firstReadyDrone = resources.data?.drones.find(({ drone, activeMissionId }) => drone.status === 'Active' && !activeMissionId && drone.id !== 'DEMO-01')?.drone.id;
+  const pilots = (resources.data?.flightCrews ?? [])
+    .filter(({ crew }) => crew.status === 'Available')
+    .flatMap(({ crew }) => crew.members.filter((m) => m.role === 'Remote pilot (PIC)').map((m) => ({ crewId: crew.id, value: m.name })));
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -197,20 +203,42 @@ function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: Miss
             ))}
           </select>
         </label>
-        <div className="grid-2">
-          <label>
-            Drone ID
-            <input className="input" name="droneId" defaultValue="DRN-07" required pattern="[A-Za-z0-9-]{1,40}" />
-          </label>
-          <label>
-            Pilot in command
-            <input className="input" name="pilot" defaultValue="J. Rivera (Part 107)" required maxLength={100} />
-          </label>
-        </div>
+        {resources.data ? (
+          <div className="grid-2">
+            <label>
+              Drone
+              <select className="input" name="droneId" required defaultValue={firstReadyDrone ?? ''}>
+                {!firstReadyDrone && <option value="">No drone is free</option>}
+                {resources.data.drones.map(({ drone, activeMissionName }) => {
+                  const why = drone.id === 'DEMO-01' ? 'demo flights only' : drone.status !== 'Active' ? drone.status.toLowerCase() : activeMissionName ? `on ${activeMissionName}` : null;
+                  return (
+                    <option key={drone.id} value={drone.id} disabled={Boolean(why)}>
+                      {drone.id} · {drone.model}{why ? ` (${why})` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <label>
+              Pilot in command
+              <select className="input" name="pilot" required defaultValue={pilots[0]?.value ?? ''}>
+                {pilots.length === 0 && <option value="">No pilot is on duty</option>}
+                {resources.data.flightCrews.filter(({ crew }) => crew.status === 'Available').map(({ crew }) => (
+                  <optgroup key={crew.id} label={crew.name}>
+                    {pilots.filter((p) => p.crewId === crew.id).map((p) => <option key={p.value} value={p.value}>{p.value}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : (
+          <div className="center"><div className="spinner" /></div>
+        )}
+        <p className="muted small">Drones, pilots and their duty status are managed under Resources.</p>
         {error && <div className="banner banner-error">{error}</div>}
         <div className="dialog-actions">
           <button type="button" className="btn btn-ghost" onClick={() => ref.current?.close()}>Cancel</button>
-          <button className="btn btn-primary" disabled={plan.isPending}>{plan.isPending ? 'Planning…' : 'Plan mission'}</button>
+          <button className="btn btn-primary" disabled={plan.isPending || !firstReadyDrone || pilots.length === 0}>{plan.isPending ? 'Planning…' : 'Plan mission'}</button>
         </div>
       </form>
     </dialog>

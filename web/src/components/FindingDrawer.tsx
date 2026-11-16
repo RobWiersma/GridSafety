@@ -116,7 +116,7 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
                       <select className="input" value={assignee} onChange={(e) => setAssignee(e.target.value)} disabled={!crews.data}>
                         {!crews.data && <option value="">Loading crews…</option>}
                         {crews.data?.map(({ crew, openWorkOrders }) => (
-                          <optgroup key={crew.id} label={`${crew.name} · ${crew.specialty}`}>
+                          <optgroup key={crew.id} label={`${crew.name} · ${crew.status === 'OffDuty' ? 'off duty' : crew.specialty}`} disabled={crew.status === 'OffDuty'}>
                             <option value={crew.name}>
                               Whole crew ({openWorkOrders} open){crew.name === suggested ? ' ★ suggested' : ''}
                             </option>

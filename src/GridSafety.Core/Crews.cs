@@ -2,8 +2,11 @@ namespace GridSafety.Core;
 
 public sealed record CrewMember(string Name, string Role);
 
-/// <summary>A field crew that work orders (assigned findings) go to. <see cref="Handles"/> drives the suggested crew.</summary>
-public sealed record Crew(string Id, string Name, string Specialty, IReadOnlyList<FindingType> Handles, IReadOnlyList<CrewMember> Members);
+public enum CrewStatus { Available, OffDuty }
+
+/// <summary>A ground (field) crew that work orders (assigned findings) go to. <see cref="Handles"/> drives the suggested crew.</summary>
+public sealed record Crew(string Id, string Name, string Specialty, IReadOnlyList<FindingType> Handles, IReadOnlyList<CrewMember> Members,
+    CrewStatus Status = CrewStatus.Available);
 
 /// <summary>Who an assignee string points at: a whole crew, or one member of it.</summary>
 public sealed record CrewAssignee(Crew Crew, CrewMember? Member)
@@ -35,17 +38,26 @@ public static class CrewRoster
     ];
 
     /// <summary>The crew that normally handles this kind of defect.</summary>
-    public static Crew SuggestFor(FindingType type) => All.FirstOrDefault(c => c.Handles.Contains(type)) ?? All[0];
+    public static Crew SuggestFor(FindingType type) => SuggestFor(All, type)!;
+
+    /// <summary>The first on-duty crew that handles this defect type (any crew that handles it, failing that); null for an empty roster.</summary>
+    public static Crew? SuggestFor(IReadOnlyList<Crew> crews, FindingType type) =>
+        crews.FirstOrDefault(c => c.Status == CrewStatus.Available && c.Handles.Contains(type))
+        ?? crews.FirstOrDefault(c => c.Handles.Contains(type))
+        ?? crews.FirstOrDefault();
 
     /// <summary>
     /// Matches a crew id, crew name, member name, or a stored "Member (Crew)" label, ignoring case.
     /// Returns null when the text names nobody on the roster.
     /// </summary>
-    public static CrewAssignee? Resolve(string? text)
+    public static CrewAssignee? Resolve(string? text) => Resolve(All, text);
+
+    /// <inheritdoc cref="Resolve(string?)"/>
+    public static CrewAssignee? Resolve(IReadOnlyList<Crew> crews, string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
         var t = text.Trim();
-        foreach (var crew in All)
+        foreach (var crew in crews)
         {
             if (Same(t, crew.Id) || Same(t, crew.Name)) return new(crew, null);
             foreach (var m in crew.Members)

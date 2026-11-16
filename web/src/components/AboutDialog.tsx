@@ -8,6 +8,7 @@ const STEPS = [
   ['🖥️', 'Monitor', 'One live map shows every drone, every line and every flight-safety alert as it happens.'],
   ['🚦', 'Triage', 'Each problem lands in a work queue ranked by severity. Urgent ones carry a deadline and escalate if nobody acts.'],
   ['👷', 'Assign', 'Supervisors send each issue to the right field crew: tree trimmers for vegetation, linemen for damaged hardware.'],
+  ['🧰', 'Manage', 'The drone fleet, flight crews and ground crews are managed in one place, so only airworthy drones and on-duty crews get the work.'],
 ] as const;
 
 const PROBLEMS = ['Vegetation growing into lines', 'Cracked or missing insulators', 'Damaged crossarms and conductors', 'Overheating connections'];

@@ -27,7 +27,7 @@ public sealed record VisitorStatsView(
 public sealed record MeView(string Id, string Name, bool IsSupervisor, IReadOnlyList<string> Groups, bool IsGuest = false);
 public sealed record UrlView(string Url, DateTimeOffset ExpiresAt);
 
-public static class Endpoints
+public static partial class Endpoints
 {
     public static void MapGridSafetyApi(this IEndpointRouteBuilder routes, bool devIngest)
     {
@@ -53,6 +53,7 @@ public static class Endpoints
         guest.MapGet("/findings/{id}", GetFinding);
         guest.MapGet("/findings/{id}/image", GetFindingImage);
         guest.MapGet("/crews", ListCrews);
+        guest.MapGet("/resources", ListResources);
 
         var secured = api.MapGroup("/").AddEndpointFilter(RequireUser);
         secured.MapGet("/me", (HttpContext ctx) => { var u = User(ctx); return TypedResults.Ok(new MeView(u.Id, u.DisplayName, u.IsSupervisor, u.Groups)); });
@@ -75,6 +76,7 @@ public static class Endpoints
         secured.MapGet("/findings/{id}/image", GetFindingImage);
         secured.MapPost("/findings/{id}/status", ChangeFindingStatus);
         secured.MapGet("/crews", ListCrews);
+        MapResources(secured);
         secured.MapGet("/visitors", GetVisitorStats);
 
         if (devIngest)
@@ -105,8 +107,9 @@ public static class Endpoints
         return new MissionView(m, circuit?.Name ?? m.CircuitId, circuit is null ? 0 : m.Coverage(circuit), Mission.Workflow.Next(m.Status));
     }
 
-    private static FindingView ToView(Finding f, ICircuitCatalog circuits, DateTimeOffset now) =>
-        new(f, circuits.Find(f.CircuitId)?.Name ?? f.CircuitId, Finding.Workflow.Next(f.Status), f.IsOverdue(now), TriageSla.Describe(f.Severity), CrewRoster.SuggestFor(f.Type).Name);
+    private static FindingView ToView(Finding f, ICircuitCatalog circuits, DateTimeOffset now, IReadOnlyList<Crew> crews) =>
+        new(f, circuits.Find(f.CircuitId)?.Name ?? f.CircuitId, Finding.Workflow.Next(f.Status), f.IsOverdue(now), TriageSla.Describe(f.Severity),
+            CrewRoster.SuggestFor(crews, f.Type)?.Name ?? "");
 
     private static async Task<Ok<OpsStats>> Stats(IGridRepository repo, TimeProvider clock, CancellationToken ct)
     {
@@ -120,7 +123,7 @@ public static class Endpoints
         TypedResults.Ok((await repo.ListMissionsAsync(100, ct)).Select(m => ToView(m, circuits)));
 
     private static async Task<Results<Created<MissionView>, ValidationProblem, Conflict<string>>> PlanMission(
-        PlanMissionRequest req, HttpContext ctx, IGridRepository repo, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
+        PlanMissionRequest req, HttpContext ctx, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
     {
         var errors = new Dictionary<string, string[]>();
         var circuit = circuits.Find(req.CircuitId ?? "");
@@ -129,6 +132,10 @@ public static class Endpoints
             errors["droneId"] = ["Drone ID is required: letters, digits and dashes, max 40."];
         if (string.IsNullOrWhiteSpace(req.Pilot) || req.Pilot.Length > 100) errors["pilot"] = ["Pilot in command is required."];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
+
+        // Fleet drones in maintenance or retired stay on the ground. (IDs outside the fleet, e.g. a contractor's drone, are allowed.)
+        if ((await resources.GetAsync(ct)).FindDrone(req.DroneId) is { Status: not DroneAssetStatus.Active } grounded)
+            return TypedResults.Conflict($"{grounded.Id} is {grounded.Status.ToString().ToLowerInvariant()} and can't fly.");
 
         // A drone can only fly one mission at a time.
         var busy = (await repo.ListMissionsAsync(200, ct))
@@ -145,7 +152,7 @@ public static class Endpoints
     /// One demo flight at a time; a demo mission that stopped reporting for 10 minutes is aborted and replaced.
     /// </summary>
     private static async Task<Results<Accepted<MissionView>, ValidationProblem, Conflict<string>, ProblemHttpResult>> StartDemoFlight(
-        DemoFlightRequest? req, HttpContext ctx, IGridRepository repo, ICircuitCatalog circuits, IDemoFlightLauncher launcher,
+        DemoFlightRequest? req, HttpContext ctx, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, IDemoFlightLauncher launcher,
         TimeProvider clock, CancellationToken ct)
     {
         var user = User(ctx);
@@ -153,6 +160,9 @@ public static class Endpoints
             return TypedResults.Problem("Only supervisors can launch demo flights.", statusCode: StatusCodes.Status403Forbidden);
         if (!launcher.Enabled)
             return TypedResults.Problem("Demo flights are not configured for this deployment.", statusCode: StatusCodes.Status503ServiceUnavailable);
+
+        if ((await resources.GetAsync(ct)).FindDrone(DemoFlight.DroneId) is { Status: not DroneAssetStatus.Active } demoDrone)
+            return TypedResults.Conflict($"The demo drone {demoDrone.Id} is {demoDrone.Status.ToString().ToLowerInvariant()}. Set it back to active under Resources to fly.");
 
         Circuit? circuit;
         if (req?.CircuitId is { Length: > 0 } circuitId)
@@ -231,9 +241,10 @@ public static class Endpoints
     }
 
     private static async Task<Ok<IEnumerable<FindingView>>> ListFindings(
-        string? status, string? missionId, IGridRepository repo, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
+        string? status, string? missionId, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
+        var crews = (await resources.GetAsync(ct)).GroundCrews;
         var all = await repo.ListFindingsAsync(1000, ct);
         var filtered = all.Where(f =>
             (missionId is null || f.MissionId == missionId) &&
@@ -249,11 +260,14 @@ public static class Endpoints
             .OrderByDescending(f => f.IsOverdue(now))
             .ThenByDescending(f => f.Severity)
             .ThenBy(f => f.CreatedAt)
-            .Select(f => ToView(f, circuits, now)));
+            .Select(f => ToView(f, circuits, now, crews)));
     }
 
-    private static async Task<Results<Ok<FindingView>, NotFound>> GetFinding(string id, IGridRepository repo, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct) =>
-        await repo.GetFindingAsync(id, ct) is { } f ? TypedResults.Ok(ToView(f, circuits, clock.GetUtcNow())) : TypedResults.NotFound();
+    private static async Task<Results<Ok<FindingView>, NotFound>> GetFinding(
+        string id, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct) =>
+        await repo.GetFindingAsync(id, ct) is { } f
+            ? TypedResults.Ok(ToView(f, circuits, clock.GetUtcNow(), (await resources.GetAsync(ct)).GroundCrews))
+            : TypedResults.NotFound();
 
     /// <summary>Synthetic drone capture of the finding (SVG). A real deployment would serve the uploaded photo from S3.</summary>
     private static async Task<Results<ContentHttpResult, NotFound>> GetFindingImage(string id, IGridRepository repo, CancellationToken ct) =>
@@ -333,21 +347,27 @@ public static class Endpoints
     }
 
     /// <summary>The crew roster with each crew's open work orders (assigned, not yet resolved), crew-wide or to a member.</summary>
-    private static async Task<Ok<IEnumerable<CrewView>>> ListCrews(IGridRepository repo, CancellationToken ct)
+    private static async Task<Ok<IEnumerable<CrewView>>> ListCrews(IGridRepository repo, IResourceStore resources, CancellationToken ct)
     {
-        var open = (await repo.ListFindingsAsync(ct: ct))
+        var crews = (await resources.GetAsync(ct)).GroundCrews;
+        var open = OpenWorkOrders(await repo.ListFindingsAsync(1000, ct), crews);
+        return TypedResults.Ok(crews.Select(c => new CrewView(c, open.GetValueOrDefault(c.Id))));
+    }
+
+    /// <summary>Open work orders (assigned, not yet resolved) per crew id, crew-wide or to a member.</summary>
+    private static Dictionary<string, int> OpenWorkOrders(IEnumerable<Finding> findings, IReadOnlyList<Crew> crews) =>
+        findings
             .Where(f => f.Status == FindingStatus.Assigned)
-            .Select(f => CrewRoster.Resolve(f.AssignedTo)?.Crew.Id)
+            .Select(f => CrewRoster.Resolve(crews, f.AssignedTo)?.Crew.Id)
             .Where(id => id is not null)
             .CountBy(id => id!)
             .ToDictionary();
-        return TypedResults.Ok(CrewRoster.All.Select(c => new CrewView(c, open.GetValueOrDefault(c.Id))));
-    }
 
     private static async Task<Results<Ok<FindingView>, NotFound, ValidationProblem, Conflict<string>, ProblemHttpResult>> ChangeFindingStatus(
-        string id, FindingStatusRequest req, HttpContext ctx, IGridRepository repo, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
+        string id, FindingStatusRequest req, HttpContext ctx, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
     {
         var user = User(ctx);
+        var crews = (await resources.GetAsync(ct)).GroundCrews;
         if (Finding.RequiresSupervisor(req.Status) && !user.IsSupervisor)
             return TypedResults.Problem($"Only supervisors can move a finding to {req.Status}.", statusCode: StatusCodes.Status403Forbidden);
 
@@ -358,8 +378,10 @@ public static class Endpoints
         var assignee = req.Assignee;
         if (req.Status == FindingStatus.Assigned && !string.IsNullOrWhiteSpace(assignee))
         {
-            if (CrewRoster.Resolve(assignee) is not { } who)
+            if (CrewRoster.Resolve(crews, assignee) is not { } who)
                 return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["assignee"] = [$"'{assignee.Trim()}' isn't on the crew roster."] });
+            if (who.Crew.Status == CrewStatus.OffDuty)
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["assignee"] = [$"{who.Crew.Name} is off duty."] });
             assignee = who.Label;
         }
         try
@@ -370,6 +392,6 @@ public static class Endpoints
         catch (InvalidTransitionException ex) { return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["status"] = [ex.Message] }); }
         catch (ArgumentException ex) { return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["assignee"] = [ex.Message] }); }
         catch (ConcurrencyException ex) { return TypedResults.Conflict(ex.Message); }
-        return TypedResults.Ok(ToView(f, circuits, clock.GetUtcNow()));
+        return TypedResults.Ok(ToView(f, circuits, clock.GetUtcNow(), crews));
     }
 }

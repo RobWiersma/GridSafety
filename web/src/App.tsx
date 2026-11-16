@@ -7,6 +7,7 @@ import { FindingsView } from './components/FindingsView';
 import { MissionDetail } from './components/MissionDetail';
 import { MissionsView } from './components/MissionsView';
 import { OpsView } from './components/OpsView';
+import { ResourcesView } from './components/ResourcesView';
 import { StatsBar } from './components/StatsBar';
 import { UserMenu } from './components/UserMenu';
 import { VisitorsView } from './components/VisitorsView';
@@ -14,13 +15,13 @@ import { Toast, type ToastMessage } from './components/Toast';
 import { recordVisit } from './lib/visits';
 import { Logo, useSession } from './session';
 
-type Tab = 'ops' | 'findings' | 'missions' | 'visitors';
+type Tab = 'ops' | 'findings' | 'missions' | 'resources' | 'visitors';
 
-/** #ops, #findings, #missions, or #mission/<id> for one mission's overview (linkable, works with back/forward). */
+/** #ops, #findings, #missions, #resources, or #mission/<id> for one mission's overview (linkable, works with back/forward). */
 function parseHash(): { tab: Tab; mission: string | null } {
   const h = location.hash.slice(1);
   if (h.startsWith('mission/')) return { tab: 'missions', mission: decodeURIComponent(h.slice('mission/'.length)) };
-  return { tab: h === 'findings' || h === 'missions' || h === 'visitors' ? h : 'ops', mission: null };
+  return { tab: h === 'findings' || h === 'missions' || h === 'resources' || h === 'visitors' ? h : 'ops', mission: null };
 }
 
 export function App() {
@@ -38,7 +39,7 @@ export function App() {
   const [aboutOpen, setAboutOpen] = useState(false);
 
   const isSupervisor = Boolean(me.data?.isSupervisor);
-  const tabs: [Tab, string][] = [['ops', 'Operations'], ['findings', 'Findings'], ['missions', 'Missions']];
+  const tabs: [Tab, string][] = [['ops', 'Operations'], ['findings', 'Findings'], ['missions', 'Missions'], ['resources', 'Resources']];
 
   const page = missionId ? 'mission' : tab;
   useEffect(() => recordVisit(page, !session.guest), [page, session.guest]);
@@ -109,6 +110,7 @@ export function App() {
             <CrewsPanel />
           </>
         )}
+        {tab === 'resources' && <ResourcesView onToast={setToast} onOpenMission={openMission} />}
         {tab === 'visitors' && (isSupervisor ? <VisitorsView /> : <div className="banner banner-info">Visitor stats are for supervisors.</div>)}
         {tab === 'missions' && !missionId && <MissionsView onToast={setToast} onShowOnMap={() => go('ops')} onOpenMission={openMission} />}
         {tab === 'missions' && missionId && (

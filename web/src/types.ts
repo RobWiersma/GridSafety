@@ -132,12 +132,57 @@ export interface CrewMember {
   role: string;
 }
 
+export type CrewStatus = 'Available' | 'OffDuty';
+
 export interface Crew {
   id: string;
   name: string;
   specialty: string;
   handles: FindingType[];
   members: CrewMember[];
+  status: CrewStatus;
+}
+
+export type DroneAssetStatus = 'Active' | 'Maintenance' | 'Retired';
+
+export interface DroneAsset {
+  id: string;
+  model: string;
+  homeBase: string;
+  status: DroneAssetStatus;
+  notes?: string;
+}
+
+export interface FlightCrew {
+  id: string;
+  name: string;
+  homeBase: string;
+  members: CrewMember[];
+  status: CrewStatus;
+}
+
+export interface DroneResourceView {
+  drone: DroneAsset;
+  live?: DroneState;
+  activeMissionId?: string;
+  activeMissionName?: string;
+  missions: number;
+  flightHours: number;
+  distanceMeters: number;
+  lastFlight?: string;
+}
+
+export interface FlightCrewView {
+  crew: FlightCrew;
+  missions: number;
+  activeMissions: number;
+  lastFlight?: string;
+}
+
+export interface Resources {
+  drones: DroneResourceView[];
+  flightCrews: FlightCrewView[];
+  groundCrews: CrewView[];
 }
 
 export interface CrewView {

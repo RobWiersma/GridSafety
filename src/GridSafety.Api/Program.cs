@@ -26,6 +26,7 @@ if ((config["GridSafety:Storage"] ?? "DynamoDb").Equals("InMemory", StringCompar
 {
     builder.Services.AddSingleton<IGridRepository, InMemoryGridRepository>();
     builder.Services.AddSingleton<IVisitStore, InMemoryVisitStore>();
+    builder.Services.AddSingleton<IResourceStore, InMemoryResourceStore>();
 }
 else
 {
@@ -37,6 +38,8 @@ else
         new DynamoGridRepository(sp.GetRequiredService<IAmazonDynamoDB>(), config["GridSafety:TableName"]!));
     builder.Services.AddSingleton<IVisitStore>(sp =>
         new DynamoVisitStore(sp.GetRequiredService<IAmazonDynamoDB>(), config["GridSafety:TableName"]!));
+    builder.Services.AddSingleton<IResourceStore>(sp =>
+        new DynamoResourceStore(sp.GetRequiredService<IAmazonDynamoDB>(), config["GridSafety:TableName"]!));
     if (config.GetValue<bool>("GridSafety:CreateTableOnStartup"))
     {
         builder.Services.AddHostedService<LocalTableBootstrapper>();

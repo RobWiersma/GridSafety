@@ -3,7 +3,7 @@ import { createContext, useContext } from 'react';
 import { useSession } from './session';
 import type {
   AlertKind,
-  Circuit, CrewView, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint,
+  Circuit, Crew, CrewView, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint,
 } from './types';
 
 export class ApiError extends Error {
@@ -57,6 +57,7 @@ const keys = {
   track: (id: string) => ['track', id],
   findings: (filter: string) => ['findings', filter],
   crews: ['crews'],
+  resources: ['resources'],
 };
 
 export const useMe = () => {
@@ -118,6 +119,36 @@ export const useCrews = () => {
   return useQuery({ queryKey: keys.crews, queryFn: () => api<CrewView[]>('/crews'), refetchInterval: 15_000 });
 };
 
+/** Drones, flight crews and ground crews, with live state and usage. */
+export const useResources = () => {
+  const api = useFetcher();
+  return useQuery({ queryKey: keys.resources, queryFn: () => api<Resources>('/resources'), refetchInterval: 15_000 });
+};
+
+export type ResourceKind = 'drones' | 'flight-crews' | 'ground-crews';
+/** A save (with record) or a removal (without) of one drone or crew. */
+export type ResourceChange =
+  | { kind: 'drones'; id: string; record?: DroneAsset }
+  | { kind: 'flight-crews'; id: string; record?: FlightCrew }
+  | { kind: 'ground-crews'; id: string; record?: Crew };
+
+/** Supervisor-only: add or update (PUT) or remove (DELETE) one drone or crew. */
+export function useSaveResource() {
+  const api = useFetcher();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ResourceChange) =>
+      api<unknown>(`/resources/${input.kind}/${encodeURIComponent(input.id)}`, input.record
+        ? { method: 'PUT', body: JSON.stringify(input.record) }
+        : { method: 'DELETE' }),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: keys.resources }),
+      qc.invalidateQueries({ queryKey: keys.crews }),
+      qc.invalidateQueries({ queryKey: ['findings'] }),
+    ]),
+  });
+}
+
 /** One mission, polled while it is in the air. */
 export const useMission = (id: string) => {
   const api = useFetcher();
@@ -155,6 +186,7 @@ function useInvalidate() {
       qc.invalidateQueries({ queryKey: ['findings'] }),
       qc.invalidateQueries({ queryKey: keys.stats }),
       qc.invalidateQueries({ queryKey: keys.crews }),
+      qc.invalidateQueries({ queryKey: keys.resources }),
     ]);
 }
 
