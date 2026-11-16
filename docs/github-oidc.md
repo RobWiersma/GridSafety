@@ -46,7 +46,7 @@ For **permissions**, the role only needs to assume the roles that `cdk bootstrap
 ## 3. Configure the repository
 
 - Secret `AWS_DEPLOY_ROLE_ARN`: the role's ARN
-- Variables (optional): `AWS_REGION`, and `OPS_EMAIL` (receives ops pages and platform alarms)
+- Variables (optional): `AWS_REGION`; `OPS_EMAIL` (receives ops pages, platform alarms and budget alerts); `MONTHLY_BUDGET_USD` (budget alert amount, default 5, 0 = none)
 - Environments `dev` and `prod`: add required reviewers on `prod` for a manual approval gate
 
 ## 4. Deploy

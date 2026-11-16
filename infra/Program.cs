@@ -13,6 +13,8 @@ public static class Program
         {
             Stage = stage,
             OpsEmail = (string?)app.Node.TryGetContext("opsEmail"),
+            MonthlyBudgetUsd = double.TryParse(app.Node.TryGetContext("monthlyBudgetUsd")?.ToString(), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var budget) ? budget : 5,
             Description = $"GridSafety drone power-line inspection platform ({stage})",
             Env = new Amazon.CDK.Environment
             {

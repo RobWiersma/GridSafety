@@ -145,7 +145,7 @@ This publishes the Lambdas (linux-arm64, ReadyToRun), builds the SPA, and runs `
    ```bash
    dotnet run --project tools/GridSafety.Simulator -- --aws --drone DRN-07 --mission <missionId>
    ```
-3. Confirm the SNS email subscription to receive pages.
+3. Confirm the SNS email subscription to receive pages. The same `opsEmail` also gets **AWS Budget alerts** (see Cost below).
 
 GitHub Actions: `.github/workflows/ci.yml` builds, tests and runs `cdk synth` on every push and PR. `deploy.yml` is run by hand (**Actions → Deploy → Run workflow**) and deploys through GitHub OIDC with no stored AWS keys (see `docs/github-oidc.md`).
 
@@ -156,6 +156,8 @@ GitHub Actions: `.github/workflows/ci.yml` builds, tests and runs `cdk synth` on
 | TelemetryPoints, FindingsReported, DroneAlerts, MessagesRejected, SlaEscalations | Pages sent → SNS `NumberOfMessagesPublished`; reports and SLA timers → Lambda `Invocations`; events published → logs; cold starts → `Init Duration` in the Lambda logs (Powertools `CaptureColdStart` would add one billed series per function) |
 
 `CostGuardTests` fails the build if a handler turns cold-start capture back on or emits a metric that isn't on the list. The free allowance is per account, so other workloads in the same account share it.
+
+**Budget alert:** when `opsEmail` is set, the stack also creates an AWS Budget (`GridSafety-<stage>-monthly`, default **$5/month**) that emails at 85% and 100% of actual spend, and as soon as the month's *forecast* goes over. It covers the whole account and only alerts; nothing is shut off. Change it with `-c monthlyBudgetUsd=10`, or `-c monthlyBudgetUsd=0` to skip it (for example on a second stage in the same account).
 
 ## Design decisions
 

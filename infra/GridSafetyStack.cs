@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Amazon.CDK;
 using Amazon.CDK.AWS.Apigatewayv2;
+using Amazon.CDK.AWS.Budgets;
 using Amazon.CDK.AWS.CloudFront;
 using Amazon.CDK.AWS.CloudFront.Origins;
 using Amazon.CDK.AWS.CloudWatch;
@@ -42,6 +43,9 @@ public sealed class GridSafetyStackProps : StackProps
 {
     public required string Stage { get; init; }
     public string? OpsEmail { get; init; }
+
+    /// <summary>Monthly AWS Budget in USD that emails <see cref="OpsEmail"/>; 0 disables it.</summary>
+    public double MonthlyBudgetUsd { get; init; } = 5;
 }
 
 /// <summary>
@@ -162,6 +166,42 @@ public sealed class GridSafetyStack : Stack
         {
             opsTopic.AddSubscription(new EmailSubscription(opsEmail));
             alarmTopic.AddSubscription(new EmailSubscription(opsEmail));
+        }
+
+        // ───────────── Cost guardrail ─────────────
+        // A monthly AWS Budget that emails the ops address before the bill surprises anyone. Budgets cover the
+        // whole account (no cost-allocation tags to activate first), so it also catches spend outside this stack.
+        // Alerts only: nothing is stopped. Set -c monthlyBudgetUsd=0 to skip it (e.g. on a second stage in the same account).
+        if (props.OpsEmail is { Length: > 0 } budgetEmail && props.MonthlyBudgetUsd > 0)
+        {
+            CfnBudget.NotificationWithSubscribersProperty Alert(string type, double percent) => new()
+            {
+                Notification = new CfnBudget.NotificationProperty
+                {
+                    NotificationType = type,                // ACTUAL spend so far, or FORECASTED for the month
+                    ComparisonOperator = "GREATER_THAN",
+                    Threshold = percent,
+                    ThresholdType = "PERCENTAGE",
+                },
+                Subscribers = new[] { new CfnBudget.SubscriberProperty { SubscriptionType = "EMAIL", Address = budgetEmail } },
+            };
+
+            new CfnBudget(this, "MonthlyBudget", new CfnBudgetProps
+            {
+                Budget = new CfnBudget.BudgetDataProperty
+                {
+                    BudgetName = $"GridSafety-{props.Stage}-monthly",
+                    BudgetType = "COST",
+                    TimeUnit = "MONTHLY",
+                    BudgetLimit = new CfnBudget.SpendProperty { Amount = props.MonthlyBudgetUsd, Unit = "USD" },
+                },
+                NotificationsWithSubscribers = new[]
+                {
+                    Alert("ACTUAL", 85),
+                    Alert("ACTUAL", 100),
+                    Alert("FORECASTED", 100), // usually warns days before the money is actually spent
+                },
+            });
         }
 
         // ───────────── Lambdas ─────────────

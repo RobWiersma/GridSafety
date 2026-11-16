@@ -38,6 +38,7 @@ jobs:
         run: |
           ARGS=()
           [ -n "${{ vars.OPS_EMAIL }}" ] && ARGS+=(-c "opsEmail=${{ vars.OPS_EMAIL }}")
+          [ -n "${{ vars.MONTHLY_BUDGET_USD }}" ] && ARGS+=(-c "monthlyBudgetUsd=${{ vars.MONTHLY_BUDGET_USD }}")
           bash scripts/deploy.sh "${{ inputs.stage || 'dev' }}" "${ARGS[@]}" --outputs-file cdk-outputs.json
       - name: Smoke test
         run: |
