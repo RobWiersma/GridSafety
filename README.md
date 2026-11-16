@@ -1,5 +1,7 @@
 # GridSafety
 
+[![CI](https://github.com/RobWiersma/GridSafety/actions/workflows/ci.yml/badge.svg)](https://github.com/RobWiersma/GridSafety/actions/workflows/ci.yml)
+
 **Drone power-line inspection platform on AWS.** Drones fly distribution and transmission circuits, stream telemetry over MQTT, and report defects (vegetation encroachment, damaged insulators, thermal hotspots…). GridSafety turns that stream into a live ops map, safety alerts, a triage queue with SLA escalation, and an inspection report for every mission.
 
 Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · DynamoDB · EventBridge (+ Scheduler) · SQS · SNS · S3 · Cognito · CloudFront · AWS CDK (C#) · React 19 + TypeScript + Leaflet**.
