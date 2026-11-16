@@ -12,6 +12,7 @@ export function MissionsView({ onToast, onShowOnMap }: { onToast(t: ToastMessage
   const me = useMe();
   const demo = useDemoFlight();
   const isSupervisor = Boolean(me.data?.isSupervisor);
+  const { guest } = useSession();
 
   const flyDemo = () =>
     demo.mutate(undefined, {
@@ -36,13 +37,13 @@ export function MissionsView({ onToast, onShowOnMap }: { onToast(t: ToastMessage
     <section className="panel panel-flush">
       <div className="panel-toolbar">
         <h2>Missions</h2>
-        <div className="toolbar-actions">
+        {!guest && <div className="toolbar-actions">
           <button className="btn btn-secondary" onClick={flyDemo} disabled={!isSupervisor || demo.isPending}
             title={isSupervisor ? 'Fly a simulated drone over a random line now (about 2–4 minutes)' : 'Only supervisors can launch demo flights'}>
             {isSupervisor ? '▶ ' : '🔒 '}{demo.isPending ? 'Launching…' : 'Demo flight'}
           </button>
           <button className="btn btn-primary" onClick={() => setPlanning(true)}>+ Plan mission</button>
-        </div>
+        </div>}
       </div>
 
       {missions.data && missions.data.length === 0 && <p className="empty-row muted">No missions yet. Plan one to get started.</p>}

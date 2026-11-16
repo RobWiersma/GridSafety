@@ -1,6 +1,20 @@
 # GridSafety
 
 [![CI](https://github.com/RobWiersma/GridSafety/actions/workflows/ci.yml/badge.svg)](https://github.com/RobWiersma/GridSafety/actions/workflows/ci.yml)
+[![Live demo](https://img.shields.io/badge/live_demo-gridsafety.bswiersma.com-f5b301?logo=googlechrome&logoColor=white)](https://gridsafety.bswiersma.com)
+![Last commit](https://img.shields.io/github/last-commit/RobWiersma/GridSafety)
+![Top language](https://img.shields.io/github/languages/top/RobWiersma/GridSafety)
+
+![.NET 10](https://img.shields.io/badge/.NET_10-512BD4?logo=dotnet&logoColor=white)
+![C#](https://img.shields.io/badge/C%23-239120?logo=csharp&logoColor=white)
+![AWS Lambda](https://img.shields.io/badge/AWS_Lambda-FF9900?logo=awslambda&logoColor=white)
+![AWS IoT Core](https://img.shields.io/badge/IoT_Core-232F3E?logo=amazonwebservices&logoColor=white)
+![DynamoDB](https://img.shields.io/badge/DynamoDB-4053D6?logo=amazondynamodb&logoColor=white)
+![AWS CDK](https://img.shields.io/badge/AWS_CDK-232F3E?logo=amazonwebservices&logoColor=white)
+![React 19](https://img.shields.io/badge/React_19-20232A?logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Leaflet](https://img.shields.io/badge/Leaflet-199900?logo=leaflet&logoColor=white)
+![OpenStreetMap](https://img.shields.io/badge/OpenStreetMap-7EBC6F?logo=openstreetmap&logoColor=white)
 
 **Drone power-line inspection platform on AWS.** Drones fly distribution and transmission circuits, stream telemetry over MQTT, and report defects (vegetation encroachment, damaged insulators, thermal hotspots…). GridSafety turns that stream into a live ops map, safety alerts, a triage queue with SLA escalation, and an inspection report for every mission.
 
@@ -36,6 +50,7 @@ Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · D
 | **On-demand demo flights** | A Supervisor presses **Demo flight** and a simulated drone flies one of the real lines for 2–4 minutes, through the same pipeline a real drone uses. Nothing runs on a schedule, so an idle deployment costs nothing. One demo flight at a time; a demo mission that stops reporting for 10 minutes is aborted automatically. |
 | **Mission reports** | When a mission completes or aborts, a self-contained HTML report is written to S3: the track as SVG, findings with a capture of each, alerts, and any structures not inspected. Users download it through a presigned URL. |
 | **Defect images** | Each finding gets a synthetic drone capture (SVG): the structure with the defect drawn in, the detector's bounding box and confidence, a GPS/time overlay, and a **SIMULATED** badge. Thermal hotspots render in an IR palette. Images are drawn from the finding's id, so they never change and nothing is stored; a real drone would upload photos to S3 instead. |
+| **Guest view** | Signed-out visitors see the live site read-only: the map, flights, findings with their images, and reports. They use `GET /api/public/*`, which has no sign-in but only maps reads; names and emails in audit trails become "Ops user" and no actions are offered. Every write still goes through the Cognito JWT authorizer. |
 | **Ops KPIs** | Active missions, drones flying, miles flown in the last 7 days, open findings by severity, overdue triage, and median hours to triage. |
 
 ## Architecture

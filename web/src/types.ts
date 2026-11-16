@@ -139,4 +139,5 @@ export interface Me {
   name: string;
   isSupervisor: boolean;
   groups: string[];
+  isGuest?: boolean;
 }

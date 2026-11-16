@@ -40,20 +40,30 @@ export function App() {
           {session.devMode && session.setDevRole ? (
             <label className="role-switch" title="Dev mode: switch role to see RBAC in action">
               <span className="pill pill-warn">dev</span>
-              <select value={session.devRole} onChange={(e) => session.setDevRole!(e.target.value as 'Inspector' | 'Supervisor')}>
+              <select value={session.devRole} onChange={(e) => session.setDevRole!(e.target.value as 'Inspector' | 'Supervisor' | 'Guest')}>
                 <option>Supervisor</option>
                 <option>Inspector</option>
+                <option>Guest</option>
               </select>
             </label>
+          ) : session.guest ? (
+            <span className="pill">Read-only</span>
           ) : (
             me.data?.isSupervisor && <span className="pill pill-accent">Supervisor</span>
           )}
           <span className="muted user-name">{session.displayName}</span>
-          <button className="btn btn-ghost" onClick={session.signOut}>Sign out</button>
+          {session.guest
+            ? session.signIn && <button className="btn btn-primary" onClick={session.signIn}>Sign in</button>
+            : <button className="btn btn-ghost" onClick={session.signOut}>Sign out</button>}
         </div>
       </header>
 
       <main className="content">
+        {session.guest && (
+          <div className="banner banner-info guest-banner">
+            You're viewing the live demo as a guest, so everything is read-only. Signed-in users plan missions, fly the demo drone and triage findings.
+          </div>
+        )}
         <StatsBar onOpenFindings={() => go('findings')} />
         {tab === 'ops' && <OpsView onOpenFinding={setFindingId} />}
         {tab === 'findings' && <FindingsView onOpen={setFindingId} />}

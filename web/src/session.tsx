@@ -3,13 +3,16 @@ import { AuthProvider, useAuth } from 'react-oidc-context';
 import type { AppConfig } from './config';
 import { usesCognito } from './config';
 
-export type DevRole = 'Inspector' | 'Supervisor';
+export type DevRole = 'Inspector' | 'Supervisor' | 'Guest';
 
 export interface Session {
   displayName: string;
   authHeaders(): Record<string, string>;
   signOut(): void;
   devMode: boolean;
+  /** Signed out: read-only view through /api/public. */
+  guest: boolean;
+  signIn?(): void;
   devRole?: DevRole;
   setDevRole?(role: DevRole): void;
 }
@@ -50,6 +53,7 @@ function CognitoSession({ config, redirectUri, children }: { config: AppConfig; 
     return {
       displayName: (user.profile.email as string | undefined) ?? 'Signed in',
       devMode: false,
+      guest: false,
       // ID token: API Gateway's JWT authorizer validates it, and it carries email + cognito:groups.
       authHeaders: () => ({ Authorization: `Bearer ${user.id_token}` }),
       signOut: () => {
@@ -62,10 +66,19 @@ function CognitoSession({ config, redirectUri, children }: { config: AppConfig; 
     };
   }, [auth, config, redirectUri]);
 
+  // Signed-out visitors browse read-only instead of hitting a sign-in wall.
+  const guest = useMemo<Session>(() => ({
+    displayName: 'Guest',
+    devMode: false,
+    guest: true,
+    authHeaders: () => ({}),
+    signIn: () => void auth.signinRedirect(),
+    signOut: () => undefined,
+  }), [auth]);
+
   if (auth.isLoading) return <div className="center-screen"><div className="spinner" aria-label="Loading" /></div>;
   if (auth.error) return <Landing error={auth.error.message} onSignIn={() => void auth.signinRedirect()} />;
-  if (!session) return <Landing onSignIn={() => void auth.signinRedirect()} />;
-  return <SessionContext.Provider value={session}>{children}</SessionContext.Provider>;
+  return <SessionContext.Provider value={session ?? guest}>{children}</SessionContext.Provider>;
 }
 
 const readLocal = (key: string, fallback: string) => {
@@ -80,8 +93,9 @@ function DevSession({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<DevRole>(() => (readLocal('gridsafety.devRole', 'Supervisor') as DevRole));
   const session = useMemo<Session>(
     () => ({
-      displayName: role === 'Supervisor' ? 'dana.supervisor (dev)' : 'alex.inspector (dev)',
+      displayName: role === 'Guest' ? 'Guest (dev)' : role === 'Supervisor' ? 'dana.supervisor (dev)' : 'alex.inspector (dev)',
       devMode: true,
+      guest: role === 'Guest',
       devRole: role,
       setDevRole: (r) => {
         setRole(r);
@@ -91,7 +105,7 @@ function DevSession({ children }: { children: ReactNode }) {
           /* ignore */
         }
       },
-      authHeaders: () => ({
+      authHeaders: (): Record<string, string> => role === 'Guest' ? {} : ({
         'X-Dev-User': role === 'Supervisor' ? 'dana.supervisor' : 'alex.inspector',
         'X-Dev-Role': role,
       }),

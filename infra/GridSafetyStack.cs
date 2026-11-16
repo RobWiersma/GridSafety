@@ -591,6 +591,15 @@ public sealed class GridSafetyStack : Stack
             Integration = integration,
             Authorizer = new HttpNoneAuthorizer(),
         });
+        // Signed-out visitors get a read-only view. GET only: any other method on /api/public/* falls through to
+        // the JWT-protected catch-all, and the API maps nothing but GETs there anyway.
+        httpApi.AddRoutes(new AddRoutesOptions
+        {
+            Path = "/api/public/{proxy+}",
+            Methods = new[] { HttpMethod.GET },
+            Integration = integration,
+            Authorizer = new HttpNoneAuthorizer(),
+        });
 
         new BucketDeployment(this, "DeploySite", new BucketDeploymentProps
         {

@@ -14,7 +14,7 @@ public sealed record FindingStatusRequest(FindingStatus Status, string? Note, st
 
 public sealed record MissionView(Mission Mission, string CircuitName, double Coverage, IReadOnlyList<MissionStatus> NextStatuses);
 public sealed record FindingView(Finding Finding, string CircuitName, IReadOnlyList<FindingStatus> NextStatuses, bool Overdue, string SeverityLabel);
-public sealed record MeView(string Id, string Name, bool IsSupervisor, IReadOnlyList<string> Groups);
+public sealed record MeView(string Id, string Name, bool IsSupervisor, IReadOnlyList<string> Groups, bool IsGuest = false);
 public sealed record UrlView(string Url, DateTimeOffset ExpiresAt);
 
 public static class Endpoints
@@ -23,6 +23,22 @@ public static class Endpoints
     {
         var api = routes.MapGroup("/api");
         api.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
+        // Guests: a read-only copy of the GET routes, no sign-in needed. API Gateway sends GET /api/public/* to the
+        // API without the JWT authorizer; only GETs are mapped here, so nothing can be changed, and GuestView
+        // strips who-did-what before it leaves. Must be mapped before the secured catch-all group.
+        var guest = api.MapGroup("/public").AddEndpointFilter(GuestView.Filter);
+        guest.MapGet("/me", () => TypedResults.Ok(new MeView("guest", "Guest", false, [], IsGuest: true)));
+        guest.MapGet("/circuits", (ICircuitCatalog c) => TypedResults.Ok(c.All));
+        guest.MapGet("/stats", Stats);
+        guest.MapGet("/drones", async (IGridRepository repo, CancellationToken ct) => TypedResults.Ok(await repo.ListDronesAsync(ct)));
+        guest.MapGet("/missions", ListMissions);
+        guest.MapGet("/missions/{id}", GetMission);
+        guest.MapGet("/missions/{id}/track", GetTrack);
+        guest.MapGet("/missions/{id}/report-url", GetReportUrl);
+        guest.MapGet("/findings", ListFindings);
+        guest.MapGet("/findings/{id}", GetFinding);
+        guest.MapGet("/findings/{id}/image", GetFindingImage);
 
         var secured = api.MapGroup("/").AddEndpointFilter(RequireUser);
         secured.MapGet("/me", (HttpContext ctx) => { var u = User(ctx); return TypedResults.Ok(new MeView(u.Id, u.DisplayName, u.IsSupervisor, u.Groups)); });

@@ -56,6 +56,50 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
     }
 
     [Fact]
+    public async Task Guests_can_read_but_cannot_change_anything()
+    {
+        var guest = factory.CreateClient(); // no identity at all
+        var me = await guest.GetFromJsonAsync<MeView>("/api/public/me", JsonOpts);
+        Assert.True(me!.IsGuest);
+        Assert.False(me.IsSupervisor);
+
+        foreach (var path in new[] { "/api/public/circuits", "/api/public/stats", "/api/public/drones", "/api/public/missions", "/api/public/findings" })
+            Assert.Equal(HttpStatusCode.OK, (await guest.GetAsync(path)).StatusCode);
+
+        // Writes don't exist under /public, and the real write routes still need a signed-in user.
+        var plan = new PlanMissionRequest("PITT-MART-115", "DRN-GUEST", "Pat");
+        Assert.True((await guest.PostAsJsonAsync("/api/public/missions", plan, JsonOpts)).StatusCode is HttpStatusCode.MethodNotAllowed or HttpStatusCode.NotFound);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await guest.PostAsJsonAsync("/api/missions", plan, JsonOpts)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await guest.PostAsJsonAsync("/api/demo-flights", new DemoFlightRequest(null), JsonOpts)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Guest_view_hides_who_did_what_and_offers_no_actions()
+    {
+        var sup = Client("pat.ops@example.com", supervisor: true);
+        var m = await PlanAsync(sup, "DRN-GUEST-2");
+        var findingId = await ReportFindingAsync(sup, m, 3);
+        (await sup.PostAsJsonAsync($"/api/findings/{findingId}/status",
+            new FindingStatusRequest(FindingStatus.Triaged, "Called pat.ops@example.com about it", null), JsonOpts)).EnsureSuccessStatusCode();
+
+        var guest = factory.CreateClient();
+        var mission = await guest.GetStringAsync($"/api/public/missions/{m.Mission.Id}");
+        var finding = await guest.GetStringAsync($"/api/public/findings/{findingId}");
+
+        foreach (var json in new[] { mission, finding })
+        {
+            Assert.DoesNotContain("pat.ops", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(GuestView.Redacted, json, StringComparison.Ordinal);
+            Assert.Contains("\"nextStatuses\":[]", json, StringComparison.Ordinal);
+        }
+        Assert.Contains("Called Ops user about it", finding, StringComparison.Ordinal); // note kept, email scrubbed
+        Assert.StartsWith("<svg", await guest.GetStringAsync($"/api/public/findings/{findingId}/image"), StringComparison.Ordinal);
+
+        // Signed-in users still see the real names.
+        Assert.Contains("pat.ops@example.com", await sup.GetStringAsync($"/api/missions/{m.Mission.Id}"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Me_reflects_cognito_groups()
     {
         Assert.False((await Client().GetFromJsonAsync<MeView>("/api/me", JsonOpts))!.IsSupervisor);

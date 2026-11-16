@@ -227,3 +227,4 @@ button { font: inherit; color: inherit; }
   .user-name { display: none; }
   .grid-2 { grid-template-columns: 1fr; }
 }
+.guest-banner { margin-bottom: 12px; }

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { StrictMode, useMemo, type ReactNode } from 'react';
+import { StrictMode, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import 'leaflet/dist/leaflet.css';
 import { App } from './App';
@@ -14,7 +14,15 @@ const queryClient = new QueryClient({
 
 function ApiProvider({ config, children }: { config: AppConfig; children: ReactNode }) {
   const session = useSession();
-  const fetcher = useMemo(() => createFetcher(config.apiBaseUrl, session.authHeaders), [config, session]);
+  // Guests read through the public, read-only API.
+  const base = session.guest ? `${config.apiBaseUrl}/public` : config.apiBaseUrl;
+  const fetcher = useMemo(() => createFetcher(base, session.authHeaders), [base, session]);
+  // Guest and signed-in responses differ (names, allowed actions), so never reuse one for the other.
+  const wasGuest = useRef(session.guest);
+  useEffect(() => {
+    if (wasGuest.current !== session.guest) queryClient.clear();
+    wasGuest.current = session.guest;
+  }, [session.guest]);
   return <FetcherContext.Provider value={fetcher}>{children}</FetcherContext.Provider>;
 }
 
