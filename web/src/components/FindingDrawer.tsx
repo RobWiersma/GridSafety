@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useContext, useEffect, useState } from 'react';
-import { FetcherContext, useCrews, useFindingImage, useFindingStatus } from '../api';
+import { FetcherContext, useCrews, useFindingAerial, useFindingImage, useFindingStatus } from '../api';
 import { ACTION_LABEL, FINDING_TYPE_LABEL, relativeTime, slaText } from '../lib/format';
 import type { FindingStatus, FindingView } from '../types';
 import { SeverityBadge } from './SeverityBadge';
@@ -19,6 +19,8 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
   const api = useContext(FetcherContext)!;
   const { data, isPending } = useQuery({ queryKey: ['finding', id], queryFn: () => api<FindingView>(`/findings/${id}`), refetchInterval: 5000 });
   const image = useFindingImage(id);
+  const aerial = useFindingAerial(id);
+  const [view, setView] = useState<'aerial' | 'closeup'>('aerial');
   const change = useFindingStatus();
   const crews = useCrews();
   const [note, setNote] = useState('');
@@ -76,12 +78,35 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
             </header>
 
             <div className="drawer-body">
-              {image.data && (
-                <figure className="capture">
-                  <img src={image.data} alt={`${FINDING_TYPE_LABEL[f.type]} at ${f.structureLabel} (simulated drone image)`} />
-                  <figcaption className="muted small">Synthetic image for the demo; a real drone would upload its photo.</figcaption>
-                </figure>
-              )}
+              <figure className="capture">
+                <div className="capture-tabs chips" role="tablist" aria-label="Capture view">
+                  <button role="tab" aria-selected={view === 'aerial'} className={`chip ${view === 'aerial' ? 'chip-active' : ''}`} onClick={() => setView('aerial')}>
+                    Aerial
+                  </button>
+                  <button role="tab" aria-selected={view === 'closeup'} className={`chip ${view === 'closeup' ? 'chip-active' : ''}`} onClick={() => setView('closeup')}>
+                    Close-up
+                  </button>
+                </div>
+                {view === 'aerial' && aerial.data?.url ? (
+                  <>
+                    <img src={aerial.data.url} alt={`Aerial view of ${f.structureLabel} with the ${FINDING_TYPE_LABEL[f.type].toLowerCase()} marked (simulated finding)`} />
+                    <figcaption className="muted small">
+                      Real aerial photo of this structure's location (USDA NAIP, public domain); the defect and detection are simulated.
+                    </figcaption>
+                  </>
+                ) : view === 'aerial' ? (
+                  <div className="capture-pending">
+                    {aerial.data?.status === 'unavailable'
+                      ? <span className="muted small">No aerial photo is available for this spot. <button className="link-button" onClick={() => setView('closeup')}>Show the close-up</button></span>
+                      : <><div className="spinner" /><span className="muted small">Fetching the aerial photo of this structure (first time only, up to 30 s)…</span></>}
+                  </div>
+                ) : image.data ? (
+                  <>
+                    <img src={image.data} alt={`${FINDING_TYPE_LABEL[f.type]} at ${f.structureLabel} (simulated drone image)`} />
+                    <figcaption className="muted small">Illustrated close-up for the demo; a real drone would upload its photo.</figcaption>
+                  </>
+                ) : <div className="capture-pending"><div className="spinner" /></div>}
+              </figure>
               <div className="facts">
                 <span className={`pill pill-${f.status.toLowerCase()}`}>{f.status}</span>
                 <span>{data.severityLabel}</span>

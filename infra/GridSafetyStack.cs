@@ -491,6 +491,24 @@ public sealed class GridSafetyStack : Stack
         apiFn.AddEnvironment("GridSafety__DemoFunctionName", demoFn.FunctionName);
         demoFn.GrantInvoke(apiFn);
 
+        // Aerial photos for finding captures: the API invokes this the first time a structure's photo is needed.
+        // It fetches public-domain NAIP imagery from USGS (15–30 s) and caches it in the table. Nothing is scheduled.
+        var aerialFn = NewFunction("AerialImagery", $"{fn}AerialImageryFunction::HandleAsync", "functions", 512, new()
+        {
+            ["TABLE_NAME"] = table.TableName,
+        }, timeoutSeconds: 120);
+        table.GrantReadWriteData(aerialFn);
+        aerialFn.ConfigureAsyncInvoke(new EventInvokeConfigOptions { RetryAttempts = 0 }); // a failure is recorded and retried later
+        apiFn.AddEnvironment("GridSafety__AerialFunctionName", aerialFn.FunctionName);
+        aerialFn.GrantInvoke(apiFn);
+        new Rule(this, "FindingAerialRule", new RuleProps
+        {
+            EventBus = bus,
+            Description = "Fetch the aerial photo of a new finding's structure while the drone is still flying",
+            EventPattern = new EventPattern { Source = new[] { EventSource }, DetailType = new[] { "FindingCreated" } },
+            Targets = new IRuleTarget[] { new LambdaFunction(aerialFn, new LambdaFunctionProps { RetryAttempts = 0 }) },
+        });
+
         // ───────────── HTTP API ─────────────
         var httpApi = new HttpApi(this, "HttpApi", new HttpApiProps
         {

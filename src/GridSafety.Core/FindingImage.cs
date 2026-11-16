@@ -58,6 +58,71 @@ public static class FindingImage
         return sb.ToString();
     }
 
+    /// <summary>
+    /// The same capture over real aerial imagery: a top-down (nadir) frame of the structure's actual location from
+    /// <see cref="AerialFrame"/>, with the detection box on the structure, the camera HUD, a scale bar, the imagery
+    /// credit and the SIMULATED badge (the photo is real; the defect is not).
+    /// </summary>
+    public static string AerialSvg(Finding f, byte[] jpeg)
+    {
+        ArgumentNullException.ThrowIfNull(f);
+        ArgumentNullException.ThrowIfNull(jpeg);
+        var rng = new Random(StableSeed(f.Id));
+        var thermal = f.Type == FindingType.ThermalHotspot;
+
+        // The frame is centred on the structure. Box what the detector would: the pole and crossarm footprint,
+        // or the canopy around it for vegetation. A little jitter, as real detections never sit dead centre.
+        var (wm, hm) = f.Type == FindingType.VegetationEncroachment ? (26 + f.Severity * 2.0, 18 + f.Severity * 1.5) : (13.0, 11.0);
+        var w = wm * AerialFrame.PixelsPerMeter;
+        var h = hm * AerialFrame.PixelsPerMeter;
+        var box = Clamp(new Box(Width / 2.0 - w / 2 + rng.Next(-6, 7), Height / 2.0 - h / 2 + rng.Next(-6, 7), w, h));
+
+        var sb = new StringBuilder();
+        sb.Append(Inv($"""<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 {Width} {Height}" width="{Width}" height="{Height}" role="img" aria-label="{E(Label(f.Type))} at {E(f.StructureLabel)}, aerial view (simulated finding)">"""));
+        if (thermal)
+        {
+            // False-colour "IR" look: luminance mapped onto the thermal palette, plus the hot spot on the structure.
+            sb.Append("""
+                <defs><filter id="ir" color-interpolation-filters="sRGB">
+                <feColorMatrix type="matrix" values=".33 .33 .33 0 0 .33 .33 .33 0 0 .33 .33 .33 0 0 0 0 0 1 0"/>
+                <feComponentTransfer><feFuncR type="table" tableValues=".12 .45 .75 .98"/><feFuncG type="table" tableValues=".06 .1 .3 .6"/><feFuncB type="table" tableValues=".2 .55 .5 .2"/></feComponentTransfer>
+                </filter><radialGradient id="hot"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#fde047"/><stop offset=".7" stop-color="#f97316" stop-opacity=".7"/><stop offset="1" stop-color="#f97316" stop-opacity="0"/></radialGradient></defs>
+                """);
+        }
+        var data = Convert.ToBase64String(jpeg);
+        sb.Append(Inv($"""<image width="{Width}" height="{Height}" preserveAspectRatio="xMidYMid slice" href="data:image/jpeg;base64,{data}" xlink:href="data:image/jpeg;base64,{data}"{(thermal ? " filter=\"url(#ir)\"" : "")}/>"""));
+        if (thermal)
+        {
+            var r = 10 + f.Severity * 3;
+            sb.Append(Inv($"""<circle cx="{box.X + box.W / 2:0}" cy="{box.Y + box.H / 2:0}" r="{r}" fill="url(#hot)"/>"""));
+            sb.Append(ThermalScale);
+        }
+        else
+        {
+            // Slight drone-camera grade: lift the haze NAIP mosaics have and darken the corners.
+            sb.Append("""<defs><radialGradient id="vig"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></radialGradient></defs>""");
+            sb.Append(Inv($"""<rect width="{Width}" height="{Height}" fill="url(#vig)"/>"""));
+        }
+        sb.Append(Detection(box, f));
+        sb.Append(ScaleBar());
+        sb.Append(Overlay(f, thermal, nadir: true));
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    private static string ScaleBar()
+    {
+        const double meters = 20;
+        var px = meters * AerialFrame.PixelsPerMeter;
+        return Inv($"""
+            <g font-family="ui-monospace,Consolas,monospace" font-size="11" fill="#fff">
+            <rect x="16" y="{Height - 52}" width="{px:0}" height="5" fill="#fff" stroke="#000" stroke-opacity=".6"/>
+            <text x="{16 + px + 6:0}" y="{Height - 46}" stroke="#000" stroke-width="3" stroke-opacity=".5" paint-order="stroke">{meters:0} m</text>
+            <text x="{Width - 12}" y="{Height - 38}" text-anchor="end" font-size="10" stroke="#000" stroke-width="3" stroke-opacity=".5" paint-order="stroke">{E(UsgsNaipSource.Attribution)}</text>
+            </g>
+            """);
+    }
+
     public static string Label(FindingType t) => t switch
     {
         FindingType.VegetationEncroachment => "Vegetation encroachment",
@@ -105,9 +170,9 @@ public static class FindingImage
             """);
     }
 
-    private static string Overlay(Finding f, bool thermal)
+    private static string Overlay(Finding f, bool thermal, bool nadir = false)
     {
-        var mode = thermal ? "IR" : "RGB";
+        var mode = (nadir ? "NADIR " : "") + (thermal ? "IR" : "RGB");
         var hud = Inv($"{f.StructureLabel} · {f.CreatedAt.UtcDateTime:yyyy-MM-dd HH:mm:ss}Z · {f.Location.Lat:0.00000}, {f.Location.Lon:0.00000} · {mode}");
         const string corner = "fill=\"none\" stroke=\"#fff\" stroke-opacity=\".8\" stroke-width=\"2\"";
         return Inv($"""

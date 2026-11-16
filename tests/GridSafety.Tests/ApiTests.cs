@@ -7,6 +7,8 @@ using GridSafety.Core;
 using GridSafety.Core.Simulation;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GridSafety.Tests;
 
@@ -15,8 +17,12 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
 {
     public sealed class Factory : WebApplicationFactory<Program>
     {
+        public FakeAerialSource Aerial { get; } = new();
+
         protected override void ConfigureWebHost(IWebHostBuilder builder) =>
-            builder.UseEnvironment("Development").UseSetting("GridSafety:DemoTickMs", "0"); // demo flights finish instantly
+            builder.UseEnvironment("Development")
+                .UseSetting("GridSafety:DemoTickMs", "0") // demo flights finish instantly
+                .ConfigureTestServices(s => s.AddSingleton<IAerialSource>(Aerial)); // never call USGS from tests
     }
 
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
@@ -450,6 +456,37 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
 
         // Only planned missions can be simulated.
         Assert.Equal(HttpStatusCode.Conflict, (await sup.PostAsync($"/api/missions/{m.Mission.Id}/simulate", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Opening_a_finding_fetches_its_aerial_photo_once_in_the_background()
+    {
+        var c = Client();
+        var m = await PlanAsync(c, "DRN-AERIAL");
+        var id = await ReportFindingAsync(c, m, 4);
+
+        // Thumbnails only read the cache.
+        Assert.Equal("unavailable", (await c.GetFromJsonAsync<AerialView>($"/api/findings/{id}/aerial?fetch=false", JsonOpts))!.Status);
+
+        var first = await c.GetFromJsonAsync<AerialView>($"/api/findings/{id}/aerial", JsonOpts);
+        Assert.Contains(first!.Status, new[] { "pending", "ready" });
+        AerialView? view = first;
+        for (var i = 0; i < 50 && view!.Status != "ready"; i++)
+        {
+            await Task.Delay(50);
+            view = await c.GetFromJsonAsync<AerialView>($"/api/findings/{id}/aerial", JsonOpts);
+        }
+        Assert.Equal("ready", view!.Status);
+        Assert.Contains("data:image/jpeg;base64,", view.Svg);
+
+        // Guests see it too; a second finding on the same structure reuses the cached photo.
+        var guest = await factory.CreateClient().GetFromJsonAsync<AerialView>($"/api/public/findings/{id}/aerial", JsonOpts);
+        Assert.Equal("ready", guest!.Status);
+        var calls = factory.Aerial.Calls;
+        var again = await ReportFindingAsync(c, m, 3);
+        Assert.Equal("ready", (await c.GetFromJsonAsync<AerialView>($"/api/findings/{again}/aerial", JsonOpts))!.Status);
+        Assert.Equal(calls, factory.Aerial.Calls);
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, (await c.GetAsync("/api/findings/nope/aerial")).StatusCode);
     }
 
     private static async Task WaitForLandingAsync(HttpClient c, string missionId)

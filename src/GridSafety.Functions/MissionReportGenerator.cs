@@ -12,10 +12,12 @@ using GridSafety.Core;
 namespace GridSafety.Functions;
 
 /// <summary>When a mission completes or aborts, render a self-contained HTML inspection report to S3.</summary>
-public sealed class MissionReportGenerator(IGridRepository repo, ICircuitCatalog circuits, IAmazonS3 s3, string bucket, TimeProvider clock)
+public sealed class MissionReportGenerator(
+    IGridRepository repo, ICircuitCatalog circuits, IAmazonS3 s3, string bucket, TimeProvider clock, IAerialStore? aerials = null)
 {
     public MissionReportGenerator() : this(
-        Repo.FromEnvironment(), StaticCircuitCatalog.Instance, new AmazonS3Client(), Env.Required("REPORTS_BUCKET"), TimeProvider.System)
+        Repo.FromEnvironment(), StaticCircuitCatalog.Instance, new AmazonS3Client(), Env.Required("REPORTS_BUCKET"), TimeProvider.System,
+        new DynamoAerialStore(new Amazon.DynamoDBv2.AmazonDynamoDBClient(), Env.Required("TABLE_NAME")))
     { }
 
     [Logging(LogEvent = false)]
@@ -27,13 +29,21 @@ public sealed class MissionReportGenerator(IGridRepository repo, ICircuitCatalog
         var track = await repo.GetTrackAsync(mission.Id);
         var findings = (await repo.ListFindingsAsync(1000)).Where(f => f.MissionId == mission.Id).OrderByDescending(f => f.Severity).ToList();
 
+        // Use the aerial photo where one is already cached; otherwise the illustrated close-up.
+        var photos = new Dictionary<string, byte[]>();
+        if (aerials is not null)
+        {
+            foreach (var id in findings.Select(f => f.StructureId).Distinct())
+                if (await aerials.GetAsync(id) is { Status: AerialStatus.Ready, Jpeg: { } jpeg }) photos[id] = jpeg;
+        }
+
         var key = $"reports/{mission.CreatedAt:yyyy/MM}/{mission.Id}.html";
         await s3.PutObjectAsync(new PutObjectRequest
         {
             BucketName = bucket,
             Key = key,
             ContentType = "text/html; charset=utf-8",
-            ContentBody = Render(mission, circuit, track, findings, clock.GetUtcNow()),
+            ContentBody = Render(mission, circuit, track, findings, clock.GetUtcNow(), photos),
         });
 
         for (var attempt = 1; ; attempt++)
@@ -47,7 +57,9 @@ public sealed class MissionReportGenerator(IGridRepository repo, ICircuitCatalog
         Logger.LogInformation("Report for {MissionId} written to s3://{Bucket}/{Key}", mission.Id, bucket, key);
     }
 
-    public static string Render(Mission m, Circuit c, IReadOnlyList<TelemetryPoint> track, IReadOnlyList<Finding> findings, DateTimeOffset generatedAt)
+    public static string Render(
+        Mission m, Circuit c, IReadOnlyList<TelemetryPoint> track, IReadOnlyList<Finding> findings, DateTimeOffset generatedAt,
+        IReadOnlyDictionary<string, byte[]>? aerialPhotos = null)
     {
         static string H(string? s) => WebUtility.HtmlEncode(s ?? "");
         var inv = CultureInfo.InvariantCulture;
@@ -94,10 +106,11 @@ public sealed class MissionReportGenerator(IGridRepository repo, ICircuitCatalog
             }
             sb.Append("</table>");
 
-            sb.Append("<h2>Captures</h2><p class=\"muted\">Synthetic images generated for this demo; a production drone would attach its own photos.</p><div class=\"shots\">");
+            sb.Append("<h2>Captures</h2><p class=\"muted\">Simulated captures for this demo: the defects are generated, the aerial photos are public-domain USDA NAIP imagery of each structure's real location. A production drone would attach its own photos.</p><div class=\"shots\">");
             foreach (var f in findings)
             {
-                var img = Convert.ToBase64String(Encoding.UTF8.GetBytes(FindingImage.Svg(f)));
+                var svg = aerialPhotos?.GetValueOrDefault(f.StructureId) is { } jpeg ? FindingImage.AerialSvg(f, jpeg) : FindingImage.Svg(f);
+                var img = Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
                 sb.Append(inv, $"<figure><img src=\"data:image/svg+xml;base64,{img}\" alt=\"{H(StreamPublisher.Humanize(f.Type))} at {H(f.StructureLabel)}\">" +
                                $"<figcaption><span class=\"sev s{f.Severity}\">{f.Severity}</span> {H(f.StructureLabel)} · {H(f.Description)}</figcaption></figure>");
             }

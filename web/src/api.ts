@@ -172,6 +172,24 @@ export const useMissionFindings = (missionId: string, live: boolean) => {
   });
 };
 
+/**
+ * The capture over real aerial imagery of the finding's structure, as a data: URL once ready. The first request
+ * starts a background fetch (15–30 s), so this polls while "pending". With fetch=false it only reads the cache.
+ */
+export const useFindingAerial = (findingId: string, fetch = true) => {
+  const api = useFetcher();
+  return useQuery({
+    queryKey: ['finding-aerial', findingId, fetch],
+    queryFn: async () => {
+      const v = await api<{ status: 'ready' | 'pending' | 'unavailable'; svg?: string }>(
+        `/findings/${findingId}/aerial${fetch ? '' : '?fetch=false'}`);
+      return { status: v.status, url: v.svg ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(v.svg)}` : undefined };
+    },
+    refetchInterval: (q) => (q.state.data?.status === 'pending' ? 4000 : false),
+    staleTime: (q) => (q.state.data?.status === 'ready' ? Infinity : 0),
+  });
+};
+
 /** Synthetic drone capture as a data: URL. It never changes for a finding, so it is fetched once. */
 export const useFindingImage = (findingId: string) => {
   const api = useFetcher();

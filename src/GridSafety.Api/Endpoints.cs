@@ -52,6 +52,7 @@ public static partial class Endpoints
         guest.MapGet("/findings", ListFindings);
         guest.MapGet("/findings/{id}", GetFinding);
         guest.MapGet("/findings/{id}/image", GetFindingImage);
+        guest.MapGet("/findings/{id}/aerial", GetFindingAerial);
         guest.MapGet("/crews", ListCrews);
         guest.MapGet("/resources", ListResources);
 
@@ -75,6 +76,7 @@ public static partial class Endpoints
         secured.MapGet("/findings", ListFindings);
         secured.MapGet("/findings/{id}", GetFinding);
         secured.MapGet("/findings/{id}/image", GetFindingImage);
+        secured.MapGet("/findings/{id}/aerial", GetFindingAerial);
         secured.MapPost("/findings/{id}/status", ChangeFindingStatus);
         secured.MapGet("/crews", ListCrews);
         MapResources(secured);

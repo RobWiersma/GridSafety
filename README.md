@@ -168,6 +168,12 @@ dotnet run --project tools/GridSafety.CircuitImport -- --input tools/GridSafety.
 
 Data © OpenStreetMap contributors, available under the ODbL. The map credits it.
 
+## Aerial photos (USDA NAIP)
+
+Each finding's capture is shown over a real aerial photo of its structure: a 160 × 100 m frame (about 60 cm per pixel) of [USDA NAIP](https://naip-usdaonline.hub.arcgis.com/) orthoimagery from the [USGS National Map](https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer), which is public domain. The detection box, camera overlay and defect are simulated, and the frame is badged SIMULATED and credits the imagery. An illustrated close-up is still available, since a top-down photo can't show an insulator.
+
+An export takes 15–30 s, so it never happens on a page view. A `FindingCreated` rule invokes the `AerialImagery` Lambda, which fetches the frame while the drone is still flying and caches it in DynamoDB, once per structure (`AERIAL#{structureId}`). Opening an older finding starts the same fetch and the drawer shows a spinner until it's ready. Only the structure's public coordinates are sent to USGS.
+
 ## Test
 
 ```bash

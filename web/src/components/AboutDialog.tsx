@@ -69,8 +69,9 @@ export function AboutDialog({ onClose }: { onClose(): void }) {
           </section>
 
           <section className="about-note">
-            <strong>This is a demo.</strong> The power lines on the map are real, from public OpenStreetMap data. The drones,
-            the problems they find, their photos and the crews are simulated. No utility's internal data is used.
+            <strong>This is a demo.</strong> The power lines on the map are real, from public OpenStreetMap data, and the aerial
+            photos of each structure are real public-domain USDA NAIP imagery. The drones, the problems they find and the crews
+            are simulated. No utility's internal data is used.
           </section>
 
           <section>

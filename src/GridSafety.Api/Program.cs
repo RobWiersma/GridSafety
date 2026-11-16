@@ -27,6 +27,7 @@ if ((config["GridSafety:Storage"] ?? "DynamoDb").Equals("InMemory", StringCompar
     builder.Services.AddSingleton<IGridRepository, InMemoryGridRepository>();
     builder.Services.AddSingleton<IVisitStore, InMemoryVisitStore>();
     builder.Services.AddSingleton<IResourceStore, InMemoryResourceStore>();
+    builder.Services.AddSingleton<IAerialStore, InMemoryAerialStore>();
 }
 else
 {
@@ -40,6 +41,8 @@ else
         new DynamoVisitStore(sp.GetRequiredService<IAmazonDynamoDB>(), config["GridSafety:TableName"]!));
     builder.Services.AddSingleton<IResourceStore>(sp =>
         new DynamoResourceStore(sp.GetRequiredService<IAmazonDynamoDB>(), config["GridSafety:TableName"]!));
+    builder.Services.AddSingleton<IAerialStore>(sp =>
+        new DynamoAerialStore(sp.GetRequiredService<IAmazonDynamoDB>(), config["GridSafety:TableName"]!));
     if (config.GetValue<bool>("GridSafety:CreateTableOnStartup"))
     {
         builder.Services.AddHostedService<LocalTableBootstrapper>();
@@ -60,6 +63,20 @@ else if (config.GetValue<bool>("GridSafety:AllowDevIngest"))
     builder.Services.AddSingleton<IDemoFlightLauncher, InProcessDemoFlightLauncher>();
 else
     builder.Services.AddSingleton<IDemoFlightLauncher>(DisabledDemoFlightLauncher.Instance);
+
+// Aerial photos of structures for finding captures (public-domain NAIP imagery, fetched once per structure and cached).
+// In AWS a Lambda fetches in the background; locally it runs in-process. "GridSafety:AerialImagery": "Off" disables it.
+builder.Services.AddHttpClient<IAerialSource, UsgsNaipSource>(c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(80);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("GridSafety-demo/1.0");
+});
+if (config["GridSafety:AerialFunctionName"] is { Length: > 0 } aerialFunction)
+    builder.Services.AddSingleton<IAerialLauncher>(_ => new LambdaAerialLauncher(new AmazonLambdaClient(), aerialFunction));
+else if (!string.Equals(config["GridSafety:AerialImagery"], "Off", StringComparison.OrdinalIgnoreCase) && config.GetValue<bool>("GridSafety:AllowDevIngest"))
+    builder.Services.AddSingleton<IAerialLauncher, InProcessAerialLauncher>();
+else
+    builder.Services.AddSingleton<IAerialLauncher>(DisabledAerialLauncher.Instance);
 
 // Created on first use: only the report endpoint needs S3.
 builder.Services.AddSingleton(new S3Presigner(() => new AmazonS3Client()));

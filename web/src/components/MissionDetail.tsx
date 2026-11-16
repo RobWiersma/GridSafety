@@ -1,7 +1,7 @@
 import L from 'leaflet';
 import { useMemo } from 'react';
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from 'react-leaflet';
-import { useCircuits, useFindingImage, useMission, useMissionFindings, useOpenReport, useTrack } from '../api';
+import { useCircuits, useFindingAerial, useFindingImage, useMission, useMissionFindings, useOpenReport, useTrack } from '../api';
 import { FINDING_TYPE_LABEL, MISSION_STATUS_LABEL, miles, pct, relativeTime, severityHex, voltageHex } from '../lib/format';
 import type { Circuit, DroneAlert, FindingView, Mission, TelemetryPoint } from '../types';
 import { WEAK_SIGNAL_DBM } from './SignalBars';
@@ -188,9 +188,11 @@ function Tile({ label, value, sub, danger }: { label: string; value: string; sub
 function CaptureCard({ view, onOpen }: { view: FindingView; onOpen(): void }) {
   const f = view.finding;
   const image = useFindingImage(f.id);
+  const aerial = useFindingAerial(f.id, false); // cached photos only: a page of thumbnails never starts fetches
+  const src = aerial.data?.url ?? image.data;
   return (
     <button className="capture-card" onClick={onOpen} aria-label={`Open ${FINDING_TYPE_LABEL[f.type]} at ${f.structureLabel}`}>
-      {image.data ? <img src={image.data} alt="" /> : <div className="capture-placeholder" />}
+      {src ? <img src={src} alt="" /> : <div className="capture-placeholder" />}
       <div className="capture-body">
         <div className="capture-title"><SeverityBadge severity={f.severity} /> <strong>{FINDING_TYPE_LABEL[f.type]}</strong></div>
         <div className="small">{f.structureLabel} · {Math.round(f.confidence * 100)}% confidence · <span className={`pill pill-${f.status.toLowerCase()}`}>{f.status}</span></div>
