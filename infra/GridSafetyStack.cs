@@ -4,6 +4,7 @@ using System.Linq;
 using Amazon.CDK;
 using Amazon.CDK.AWS.Apigatewayv2;
 using Amazon.CDK.AWS.Budgets;
+using Amazon.CDK.AWS.CertificateManager;
 using Amazon.CDK.AWS.CloudFront;
 using Amazon.CDK.AWS.CloudFront.Origins;
 using Amazon.CDK.AWS.CloudWatch;
@@ -46,6 +47,14 @@ public sealed class GridSafetyStackProps : StackProps
 
     /// <summary>Monthly AWS Budget in USD that emails <see cref="OpsEmail"/>; 0 disables it.</summary>
     public double MonthlyBudgetUsd { get; init; } = 5;
+
+    /// <summary>
+    /// Custom domain for the site, e.g. gridsafety.example.com. Needs <see cref="CertificateArn"/>: an ACM
+    /// certificate for that name in us-east-1 (CloudFront only uses certificates from there). DNS is managed
+    /// outside AWS, so point a CNAME at the <c>CloudFrontDomain</c> output.
+    /// </summary>
+    public string? DomainName { get; init; }
+    public string? CertificateArn { get; init; }
 }
 
 /// <summary>
@@ -511,9 +520,14 @@ public sealed class GridSafetyStack : Stack
                 }
                 """),
         });
+        var customDomain = props.DomainName is { Length: > 0 } dn ? dn : null;
+        if (customDomain is not null && props.CertificateArn is not { Length: > 0 })
+            throw new System.ArgumentException("domainName needs certificateArn: an ACM certificate for it in us-east-1.");
         var distribution = new Distribution(this, "Cdn", new DistributionProps
         {
             Comment = $"GridSafety {props.Stage}",
+            DomainNames = customDomain is null ? null : new[] { customDomain },
+            Certificate = customDomain is null ? null : Certificate.FromCertificateArn(this, "SiteCertificate", props.CertificateArn!),
             DefaultRootObject = "index.html",
             DefaultBehavior = new BehaviorOptions
             {
@@ -538,7 +552,8 @@ public sealed class GridSafetyStack : Stack
                 },
             },
         });
-        var siteUrl = $"https://{distribution.DistributionDomainName}";
+        var cdnUrl = $"https://{distribution.DistributionDomainName}";
+        var siteUrl = customDomain is null ? cdnUrl : $"https://{customDomain}";
 
         var client = userPool.AddClient("WebClient", new UserPoolClientOptions
         {
@@ -549,8 +564,9 @@ public sealed class GridSafetyStack : Stack
             {
                 Flows = new OAuthFlows { AuthorizationCodeGrant = true },
                 Scopes = new[] { OAuthScope.OPENID, OAuthScope.EMAIL, OAuthScope.PROFILE },
-                CallbackUrls = new[] { $"{siteUrl}/", "http://localhost:5173/" },
-                LogoutUrls = new[] { $"{siteUrl}/", "http://localhost:5173/" },
+                // Both the custom domain and the CloudFront name keep working for sign-in.
+                CallbackUrls = new[] { $"{siteUrl}/", $"{cdnUrl}/", "http://localhost:5173/" }.Distinct().ToArray(),
+                LogoutUrls = new[] { $"{siteUrl}/", $"{cdnUrl}/", "http://localhost:5173/" }.Distinct().ToArray(),
             },
             IdTokenValidity = Duration.Hours(1),
             AccessTokenValidity = Duration.Hours(1),
@@ -675,6 +691,7 @@ public sealed class GridSafetyStack : Stack
 
         // ───────────── Outputs ─────────────
         new CfnOutput(this, "SiteUrl", new CfnOutputProps { Value = siteUrl });
+        new CfnOutput(this, "CloudFrontDomain", new CfnOutputProps { Value = distribution.DistributionDomainName, Description = "CNAME target for a custom domain" });
         new CfnOutput(this, "ApiUrl", new CfnOutputProps { Value = $"{siteUrl}/api" });
         new CfnOutput(this, "UserPoolId", new CfnOutputProps { Value = userPool.UserPoolId });
         new CfnOutput(this, "UserPoolClientId", new CfnOutputProps { Value = client.UserPoolClientId });

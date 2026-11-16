@@ -15,6 +15,8 @@ public static class Program
             OpsEmail = (string?)app.Node.TryGetContext("opsEmail"),
             MonthlyBudgetUsd = double.TryParse(app.Node.TryGetContext("monthlyBudgetUsd")?.ToString(), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var budget) ? budget : 5,
+            DomainName = (string?)app.Node.TryGetContext("domainName"),
+            CertificateArn = (string?)app.Node.TryGetContext("certificateArn"),
             Description = $"GridSafety drone power-line inspection platform ({stage})",
             Env = new Amazon.CDK.Environment
             {
