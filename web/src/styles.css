@@ -228,3 +228,37 @@ button { font: inherit; color: inherit; }
   .grid-2 { grid-template-columns: 1fr; }
 }
 .guest-banner { margin-bottom: 12px; }
+
+/* ───────────── Mission overview ───────────── */
+.mission-detail { display: flex; flex-direction: column; gap: 14px; }
+.back-link { align-self: flex-start; padding-left: 0; }
+.mission-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.panel .mission-title h2 { margin: 0; font-size: 20px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.mission-title p { margin: 2px 0 0; }
+.stats-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.mission-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; }
+.mission-grid-even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.map-mission { height: 420px; }
+.map-legend-row { display: flex; gap: 14px; flex-wrap: wrap; padding: 8px 14px; }
+.map-legend-row span { display: inline-flex; align-items: center; gap: 5px; }
+.map-legend-row .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.map-legend-row .dot.ring { border: 2px solid #ef4444; width: 10px; height: 10px; }
+.map-legend-row .line { width: 16px; height: 3px; display: inline-block; border-radius: 2px; }
+.profile { margin: 0 0 6px; }
+.profile svg { width: 100%; height: 70px; display: block; background: var(--surface-2); border-radius: 6px; }
+.capture-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.capture-card { all: unset; cursor: pointer; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  background: var(--surface-2); transition: border-color .15s, transform .15s; }
+.capture-card:hover, .capture-card:focus-visible { border-color: var(--accent); transform: translateY(-1px); }
+.capture-card img, .capture-placeholder { width: 100%; aspect-ratio: 16 / 10; display: block; object-fit: cover; background: var(--surface); }
+.capture-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 3px; }
+.capture-title { display: flex; align-items: center; gap: 6px; }
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.timeline li { display: flex; gap: 10px; align-items: flex-start; }
+.timeline li > .pill { min-width: 72px; text-align: center; }
+.mission-link { all: unset; cursor: pointer; color: var(--accent); }
+.mission-link:hover { text-decoration: underline; }
+@media (max-width: 1000px) {
+  .stats-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mission-grid, .mission-grid-even { grid-template-columns: minmax(0, 1fr); }
+}

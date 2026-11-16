@@ -5,7 +5,7 @@ import { useSession } from '../session';
 import type { MissionView } from '../types';
 import type { ToastMessage } from './Toast';
 
-export function MissionsView({ onToast, onShowOnMap }: { onToast(t: ToastMessage): void; onShowOnMap(): void }) {
+export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(t: ToastMessage): void; onShowOnMap(): void; onOpenMission(id: string): void }) {
   const missions = useMissions();
   const status = useMissionStatus();
   const openReport = useOpenReport();
@@ -58,7 +58,7 @@ export function MissionsView({ onToast, onShowOnMap }: { onToast(t: ToastMessage
             <tbody>
               {missions.data.map((m) => (
                 <tr key={m.mission.id}>
-                  <td><span className="mono">{m.mission.id}</span><div className="muted small">{relativeTime(m.mission.createdAt)}</div></td>
+                  <td><button className="mission-link mono" onClick={() => onOpenMission(m.mission.id)}>{m.mission.id}</button><div className="muted small">{relativeTime(m.mission.createdAt)}</div></td>
                   <td>{m.circuitName}</td>
                   <td>{m.mission.droneId}<div className="muted small">{m.mission.pilot}</div></td>
                   <td><span className={`pill pill-${m.mission.status.toLowerCase()}`}>{MISSION_STATUS_LABEL[m.mission.status]}</span></td>
@@ -72,6 +72,7 @@ export function MissionsView({ onToast, onShowOnMap }: { onToast(t: ToastMessage
                     ? <span className="text-danger strong">{m.mission.recentAlerts.length}</span>
                     : m.mission.recentAlerts.length}</td>
                   <td className="row-actions">
+                    <button className="btn btn-ghost" onClick={() => onOpenMission(m.mission.id)}>Overview</button>
                     {m.mission.status === 'InFlight' && <button className="btn btn-ghost" onClick={onShowOnMap}>Map</button>}
                     {m.mission.reportKey && (
                       <button className="btn btn-secondary" onClick={() => openReport(m.mission.id).catch((e: Error) => onToast({ kind: 'error', text: e.message }))}>

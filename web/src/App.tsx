@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMe } from './api';
 import { FindingDrawer } from './components/FindingDrawer';
 import { FindingsView } from './components/FindingsView';
+import { MissionDetail } from './components/MissionDetail';
 import { MissionsView } from './components/MissionsView';
 import { OpsView } from './components/OpsView';
 import { StatsBar } from './components/StatsBar';
@@ -10,16 +11,34 @@ import { Logo, useSession } from './session';
 
 type Tab = 'ops' | 'findings' | 'missions';
 
+/** #ops, #findings, #missions, or #mission/<id> for one mission's overview (linkable, works with back/forward). */
+function parseHash(): { tab: Tab; mission: string | null } {
+  const h = location.hash.slice(1);
+  if (h.startsWith('mission/')) return { tab: 'missions', mission: decodeURIComponent(h.slice('mission/'.length)) };
+  return { tab: h === 'findings' || h === 'missions' ? h : 'ops', mission: null };
+}
+
 export function App() {
   const session = useSession();
   const me = useMe();
-  const [tab, setTab] = useState<Tab>(() => (location.hash.slice(1) as Tab) || 'ops');
+  const [route, setRoute] = useState(parseHash);
+  const { tab, mission: missionId } = route;
+  useEffect(() => {
+    const onHash = () => setRoute(parseHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   const [findingId, setFindingId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
   const go = (t: Tab) => {
-    setTab(t);
+    setRoute({ tab: t, mission: null });
     history.replaceState(null, '', `#${t}`);
+  };
+  const openMission = (id: string) => {
+    setRoute({ tab: 'missions', mission: id });
+    history.pushState(null, '', `#mission/${encodeURIComponent(id)}`);
+    window.scrollTo(0, 0);
   };
 
   return (
@@ -67,7 +86,10 @@ export function App() {
         <StatsBar onOpenFindings={() => go('findings')} />
         {tab === 'ops' && <OpsView onOpenFinding={setFindingId} />}
         {tab === 'findings' && <FindingsView onOpen={setFindingId} />}
-        {tab === 'missions' && <MissionsView onToast={setToast} onShowOnMap={() => go('ops')} />}
+        {tab === 'missions' && !missionId && <MissionsView onToast={setToast} onShowOnMap={() => go('ops')} onOpenMission={openMission} />}
+        {tab === 'missions' && missionId && (
+          <MissionDetail missionId={missionId} onBack={() => go('missions')} onOpenFinding={setFindingId} onToast={setToast} />
+        )}
       </main>
 
       {findingId && (

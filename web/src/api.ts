@@ -104,6 +104,35 @@ export const useFindings = (filter: string) => {
   });
 };
 
+/** One mission, polled while it is in the air. */
+export const useMission = (id: string) => {
+  const api = useFetcher();
+  return useQuery({
+    queryKey: ['mission', id],
+    queryFn: () => api<MissionView>(`/missions/${id}`),
+    refetchInterval: (q) => (q.state.data?.mission.status === 'InFlight' ? 3000 : false),
+  });
+};
+
+export const useMissionFindings = (missionId: string, live: boolean) => {
+  const api = useFetcher();
+  return useQuery({
+    queryKey: ['findings', `mission:${missionId}`],
+    queryFn: () => api<FindingView[]>(`/findings?status=all&missionId=${encodeURIComponent(missionId)}`),
+    refetchInterval: live ? 3000 : false,
+  });
+};
+
+/** Synthetic drone capture as a data: URL. It never changes for a finding, so it is fetched once. */
+export const useFindingImage = (findingId: string) => {
+  const api = useFetcher();
+  return useQuery({
+    queryKey: ['finding-image', findingId],
+    queryFn: async () => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(await api<string>(`/findings/${findingId}/image`))}`,
+    staleTime: Infinity,
+  });
+};
+
 function useInvalidate() {
   const qc = useQueryClient();
   return () =>

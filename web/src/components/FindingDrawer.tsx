@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useContext, useEffect, useState } from 'react';
-import { FetcherContext, useFindingStatus } from '../api';
+import { FetcherContext, useFindingImage, useFindingStatus } from '../api';
 import { ACTION_LABEL, FINDING_TYPE_LABEL, relativeTime, slaText } from '../lib/format';
 import type { FindingStatus, FindingView } from '../types';
 import { SeverityBadge } from './SeverityBadge';
@@ -18,12 +18,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString(undefined, { month: 's
 export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
   const api = useContext(FetcherContext)!;
   const { data, isPending } = useQuery({ queryKey: ['finding', id], queryFn: () => api<FindingView>(`/findings/${id}`), refetchInterval: 5000 });
-  // The image never changes for a finding, so fetch it once. It comes back as SVG text (the fetcher only parses JSON).
-  const image = useQuery({
-    queryKey: ['finding-image', id],
-    queryFn: async () => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(await api<string>(`/findings/${id}/image`))}`,
-    staleTime: Infinity,
-  });
+  const image = useFindingImage(id);
   const change = useFindingStatus();
   const [note, setNote] = useState('');
   const [assignee, setAssignee] = useState('');

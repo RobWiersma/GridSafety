@@ -28,6 +28,12 @@ Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · D
 |---|---|
 | ![Finding drawer showing a synthetic drone image of crossarm damage, triage SLA and actions](docs/screenshots/finding-detail.png) | ![Findings queue sorted by severity](docs/screenshots/findings.png) |
 
+<details><summary>Mission overview: map, flight profile, captures, alerts and history</summary>
+
+![Mission overview for a completed demo flight: coverage and flight tiles, map with inspected towers and findings, altitude/battery/speed profile, a gallery of eight findings with drone captures, the alert timeline and status history](docs/screenshots/mission-overview.png)
+
+</details>
+
 <details><summary>Missions and the synthetic defect images</summary>
 
 ![Missions view with the Demo flight button](docs/screenshots/missions.png)
@@ -48,6 +54,7 @@ Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · D
 | **Triage SLA** | Severity 5 must be triaged within 4 h, severity 4 within 24 h and severity 3 within 72 h. A one-time EventBridge Scheduler timer is set per finding. If the finding is still untriaged when the timer fires, it is escalated to the ops SNS topic. Triaging cancels the timer. |
 | **Paging** | Critical drone alerts and severity 4–5 findings pass through an SQS buffer, then an idempotent notifier, then SNS (email/SMS/PagerDuty). |
 | **On-demand demo flights** | A Supervisor presses **Demo flight** and a simulated drone flies one of the real lines for 2–4 minutes, through the same pipeline a real drone uses. Nothing runs on a schedule, so an idle deployment costs nothing. One demo flight at a time; a demo mission that stops reporting for 10 minutes is aborted automatically. |
+| **Mission overview** | One page per flight (`#mission/<id>`, linkable): coverage, distance, flight time, findings and alerts; a map of the line with inspected and missed towers, the flight path, findings and alert spots; altitude, battery and speed over the flight against their limits; every finding's capture; the alert timeline, status history and towers still to inspect. Live while the drone is up, and available to guests. |
 | **Mission reports** | When a mission completes or aborts, a self-contained HTML report is written to S3: the track as SVG, findings with a capture of each, alerts, and any structures not inspected. Users download it through a presigned URL. |
 | **Defect images** | Each finding gets a synthetic drone capture (SVG): the structure with the defect drawn in, the detector's bounding box and confidence, a GPS/time overlay, and a **SIMULATED** badge. Thermal hotspots render in an IR palette. Images are drawn from the finding's id, so they never change and nothing is stored; a real drone would upload photos to S3 instead. |
 | **Guest view** | Signed-out visitors see the live site read-only: the map, flights, findings with their images, and reports. They use `GET /api/public/*`, which has no sign-in but only maps reads; names and emails in audit trails become "Ops user" and no actions are offered. Every write still goes through the Cognito JWT authorizer. |
