@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMe } from './api';
+import { AboutDialog } from './components/AboutDialog';
 import { FindingDrawer } from './components/FindingDrawer';
 import { CrewsPanel } from './components/CrewsPanel';
 import { FindingsView } from './components/FindingsView';
@@ -31,6 +32,7 @@ export function App() {
   }, []);
   const [findingId, setFindingId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   const go = (t: Tab) => {
     setRoute({ tab: t, mission: null });
@@ -57,6 +59,7 @@ export function App() {
           ))}
         </nav>
         <div className="topbar-right">
+          <button className="btn btn-ghost" onClick={() => setAboutOpen(true)}>About</button>
           {session.devMode && session.setDevRole ? (
             <label className="role-switch" title="Dev mode: switch role to see RBAC in action">
               <span className="pill pill-warn">dev</span>
@@ -101,6 +104,7 @@ export function App() {
       {findingId && (
         <FindingDrawer id={findingId} isSupervisor={Boolean(me.data?.isSupervisor)} onClose={() => setFindingId(null)} onToast={setToast} />
       )}
+      {aboutOpen && <AboutDialog onClose={() => setAboutOpen(false)} />}
       <Toast message={toast} onDone={() => setToast(null)} />
     </div>
   );

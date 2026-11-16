@@ -4,6 +4,7 @@ import { FINDING_TYPE_LABEL, miles, pct, relativeTime } from '../lib/format';
 import type { DroneAlert, MissionView } from '../types';
 import { OpsMap } from './OpsMap';
 import { SeverityBadge } from './SeverityBadge';
+import { SidePanel } from './SidePanel';
 
 export function OpsView({ onOpenFinding }: { onOpenFinding(id: string): void }) {
   const circuits = useCircuits();
@@ -47,16 +48,17 @@ export function OpsView({ onOpenFinding }: { onOpenFinding(id: string): void }) 
       </div>
 
       <aside className="ops-side">
-        <section className="panel">
-          <h2>Active missions</h2>
+        <SidePanel id="active" title="Active missions" count={active.length}>
           {active.length === 0 && <p className="muted small">No drones in the air. Plan a mission and start the simulator.</p>}
           {active.map((m) => <MissionCard key={m.mission.id} m={m} selected={focus?.mission.id === m.mission.id} onSelect={() => setFocusId(m.mission.id)} />)}
-          {recent.length > 0 && <h3 className="subhead">Recently completed</h3>}
-          {recent.map((m) => <MissionCard key={m.mission.id} m={m} selected={focus?.mission.id === m.mission.id} onSelect={() => setFocusId(m.mission.id)} />)}
-        </section>
+        </SidePanel>
 
-        <section className="panel">
-          <h2>Flight alerts</h2>
+        <SidePanel id="recent" title="Recently completed" count={recent.length}>
+          {recent.length === 0 && <p className="muted small">No finished missions yet.</p>}
+          {recent.map((m) => <MissionCard key={m.mission.id} m={m} selected={focus?.mission.id === m.mission.id} onSelect={() => setFocusId(m.mission.id)} />)}
+        </SidePanel>
+
+        <SidePanel id="alerts" title="Flight alerts" count={alerts.length}>
           {alerts.length === 0 && <p className="muted small">All clear.</p>}
           <ul className="alert-list">
             {alerts.map((a, i) => (
@@ -69,10 +71,9 @@ export function OpsView({ onOpenFinding }: { onOpenFinding(id: string): void }) 
               </li>
             ))}
           </ul>
-        </section>
+        </SidePanel>
 
-        <section className="panel">
-          <h2>Needs triage</h2>
+        <SidePanel id="triage" title="Needs triage" count={urgent.length}>
           {urgent.length === 0 && <p className="muted small">No high-severity findings waiting.</p>}
           {urgent.map((f) => (
             <button key={f.finding.id} className="finding-row" onClick={() => onOpenFinding(f.finding.id)}>
@@ -84,7 +85,7 @@ export function OpsView({ onOpenFinding }: { onOpenFinding(id: string): void }) 
               {f.overdue && <span className="pill pill-danger">overdue</span>}
             </button>
           ))}
-        </section>
+        </SidePanel>
       </aside>
     </div>
   );
