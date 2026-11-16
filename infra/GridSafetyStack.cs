@@ -601,12 +601,29 @@ public sealed class GridSafetyStack : Stack
             Authorizer = new HttpNoneAuthorizer(),
         });
 
-        new BucketDeployment(this, "DeploySite", new BucketDeploymentProps
+        // Web app caching: Vite fingerprints everything under assets/ (index-<hash>.js), so those files can be
+        // cached for a year. index.html, config.json and the icons keep their names, so browsers must revalidate
+        // them on every load; otherwise a cached index.html keeps pointing at last deploy's bundle.
+        var webDist = Path.Combine(repoRoot, "web", "dist");
+        var assets = new BucketDeployment(this, "DeploySiteAssets", new BucketDeploymentProps
         {
             DestinationBucket = site,
+            Sources = new[] { Source.Asset(webDist) },
+            Exclude = new[] { "*" },
+            Include = new[] { "assets/*" },
+            CacheControl = new[] { CacheControl.FromString("public, max-age=31536000, immutable") },
+            Prune = false, // keep the previous bundle so tabs opened before a deploy can still lazy-load it
+            MemoryLimit = 512,
+        });
+
+        var pages = new BucketDeployment(this, "DeploySite", new BucketDeploymentProps
+        {
+            DestinationBucket = site,
+            Exclude = new[] { "assets/*" }, // also keeps the sync's delete step away from the bundles
+            CacheControl = new[] { CacheControl.FromString("no-cache") },
             Sources = new[]
             {
-                Source.Asset(Path.Combine(repoRoot, "web", "dist")),
+                Source.Asset(webDist),
                 Source.JsonData("config.json", new Dictionary<string, object>
                 {
                     ["apiBaseUrl"] = "/api",
@@ -620,6 +637,7 @@ public sealed class GridSafetyStack : Stack
             DistributionPaths = new[] { "/*" },
             MemoryLimit = 512,
         });
+        pages.Node.AddDependency(assets); // never publish an index.html before the bundle it references
 
         // ───────────── Observability ─────────────
         var alarmAction = new SnsAction(alarmTopic);
