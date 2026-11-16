@@ -5,6 +5,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 STAGE="${1:-dev}"; shift || true
 
-scripts/build.sh
+bash scripts/build.sh
 cd infra
 npx --yes aws-cdk@2 deploy "GridSafety-${STAGE}" -c stage="${STAGE}" --require-approval never "$@"
