@@ -15,23 +15,29 @@ namespace GridSafety.CircuitImport
             "https://overpass.private.coffee/api/interpreter",
         ];
 
-        /// <summary>Power lines plus their nodes, and settlement names used to label unnamed lines.</summary>
-        public static string Query(double[] b)
+        /// <summary>
+        /// Power lines plus their nodes, and settlement names used to label unnamed lines. With <paramref name="area"/>
+        /// (an administrative boundary such as "Contra Costa County") lines are selected by that boundary instead of the box.
+        /// </summary>
+        public static string Query(double[] b, string? area = null)
         {
             var box = string.Create(CultureInfo.InvariantCulture, $"{b[0]},{b[1]},{b[2]},{b[3]}");
-            return $"[out:json][timeout:90];(way[\"power\"~\"^(line|minor_line)$\"]({box});node[\"place\"~\"^(city|town|village)$\"]({box}););out body;>;out body qt;";
+            if (area is null)
+                return $"[out:json][timeout:90];(way[\"power\"~\"^(line|minor_line)$\"]({box});node[\"place\"~\"^(city|town|village)$\"]({box}););out body;>;out body qt;";
+            var name = area.Replace("\"", "", StringComparison.Ordinal);
+            return $"[out:json][timeout:180];area[\"name\"=\"{name}\"][\"boundary\"=\"administrative\"]->.a;(way[\"power\"~\"^(line|minor_line)$\"](area.a);node[\"place\"~\"^(city|town|village)$\"](area.a););out body;>;out body qt;";
         }
 
-        public static async Task<string> FetchAsync(double[] bbox)
+        public static async Task<string> FetchAsync(double[] bbox, string? area = null)
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(200) };
             http.DefaultRequestHeaders.UserAgent.ParseAdd("GridSafety-CircuitImport/1.0");
             foreach (var url in Endpoints)
             {
                 try
                 {
                     Console.WriteLine($"Querying {url} …");
-                    using var res = await http.PostAsync(url, new FormUrlEncodedContent([new("data", Query(bbox))]));
+                    using var res = await http.PostAsync(url, new FormUrlEncodedContent([new("data", Query(bbox, area))]));
                     res.EnsureSuccessStatusCode();
                     return await res.Content.ReadAsStringAsync();
                 }
@@ -60,7 +66,7 @@ namespace GridSafety.CircuitImport
             {
                 foreach (var key in tags.Select(t => t.Key).Where(IsOwnershipTag).ToList()) tags.Remove(key);
             }
-            return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            return root.ToJsonString(); // compact: county snapshots are large
         }
     }
 
@@ -89,8 +95,11 @@ namespace GridSafety.CircuitImport
     /// 4. clip to the area, 5. drop vertices closer than <see cref="MinSpacingM"/> (duplicate gantry nodes),
     /// 6. name them from OSM tags, or after the nearest town when the line has no name.
     /// </summary>
-    internal static class CircuitBuilder
+    internal static partial class CircuitBuilder
     {
+        [System.Text.RegularExpressions.GeneratedRegex(@"\s*\d+\s*kV\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+        private static partial System.Text.RegularExpressions.Regex KvSuffix();
+
         public const double MinSpacingM = 20;
         public const int DefaultMinStructures = 3;
 
@@ -137,7 +146,8 @@ namespace GridSafety.CircuitImport
                 {
                     var words = Words(name).Where(w => char.IsLetter(w[0])).Take(2).ToList();
                     id = string.Join('-', words.Select(w => w[..Math.Min(4, w.Length)].ToUpperInvariant())) + $"-{kvCode}";
-                    display = kv > 0 ? $"{name} {kv} kV" : $"{name} (voltage not tagged)";
+                    var bare = KvSuffix().Replace(name, "").Trim(); // "Olinda - Tracy 500KV" → "Olinda - Tracy"
+                    display = kv > 0 ? $"{bare} {kv} kV" : $"{bare} (voltage not tagged)";
                     prefix = string.Concat(words.Select(w => char.ToUpperInvariant(w[0])));
                 }
                 else

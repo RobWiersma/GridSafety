@@ -26,6 +26,13 @@ export const severityHex = (sev: number) =>
 /** 0 kV means OpenStreetMap has no voltage for the line. */
 export const voltageHex = (kv: number) => (kv >= 200 ? '#a855f7' : kv >= 100 ? '#0ea5e9' : kv > 0 ? '#14b8a6' : '#94a3b8');
 
+/**
+ * Map detail by zoom, so the county-wide map stays responsive: zoomed out only the 230/500 kV backbone,
+ * 115 kV from zoom 11, everything (60/69 kV, distribution, untagged) from zoom 13, towers from zoom 14.
+ */
+export const minKvForZoom = (zoom: number) => (zoom < 11 ? 200 : zoom < 13 ? 100 : 0);
+export const TOWER_ZOOM = 14;
+
 /** Circuits grouped by voltage, highest first; unknown voltage last. Names sorted within each group. */
 export function circuitsByVoltage<T extends { voltageKv: number; name: string }>(circuits: T[]): { kv: number; label: string; circuits: T[] }[] {
   const groups = new Map<number, T[]>();

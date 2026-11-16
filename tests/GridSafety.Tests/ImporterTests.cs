@@ -197,7 +197,7 @@ public class CircuitImporterTests
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "GridSafety.slnx"))) dir = dir.Parent;
-        var snapshot = Path.Combine(dir!.FullName, "tools", "GridSafety.CircuitImport", "data", "martinez-pleasant-hill-overpass.json");
+        var snapshot = Path.Combine(dir!.FullName, "tools", "GridSafety.CircuitImport", "data", "contra-costa-overpass.json");
 
         var keys = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(snapshot))!["elements"]!.AsArray()
             .SelectMany(e => e?["tags"]?.AsObject().Select(t => t.Key) ?? []);

@@ -7,6 +7,7 @@ public sealed record Structure(string Id, string Label, GeoPoint Location);
 /// <summary>A distribution or transmission circuit: an ordered chain of poles/towers.</summary>
 public sealed record Circuit(string Id, string Name, int VoltageKv, double CorridorMeters, IReadOnlyList<Structure> Structures)
 {
+    [System.Text.Json.Serialization.JsonIgnore] // derived from Structures; keeps the county-wide API payload small
     public IReadOnlyList<GeoPoint> Path => Structures.Select(s => s.Location).ToList();
 
     public double LengthMeters => Structures.Zip(Structures.Skip(1), (a, b) => Geo.DistanceMeters(a.Location, b.Location)).Sum();

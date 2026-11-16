@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FindingView } from '../types';
-import { circuitsByVoltage, miles, relativeTime, severityHex, slaText } from './format';
+import { TOWER_ZOOM, circuitsByVoltage, minKvForZoom, miles, relativeTime, severityHex, slaText } from './format';
 
 const now = new Date('2026-11-15T12:00:00Z');
 
@@ -53,5 +53,15 @@ describe('circuitsByVoltage', () => {
     const groups = circuitsByVoltage([c('B line', 60), c('Mystery', 0), c('Tidewater', 230), c('A line', 60)]);
     expect(groups.map((g) => g.label)).toEqual(['230 kV', '60 kV', 'Voltage not tagged']);
     expect(groups[1].circuits.map((x) => x.name)).toEqual(['A line', 'B line']);
+  });
+});
+
+describe('map detail by zoom', () => {
+  it('shows only the backbone zoomed out and everything zoomed in', () => {
+    expect(minKvForZoom(9)).toBe(200);
+    expect(minKvForZoom(11)).toBe(100);
+    expect(minKvForZoom(12)).toBe(100);
+    expect(minKvForZoom(13)).toBe(0);
+    expect(TOWER_ZOOM).toBeGreaterThan(13);
   });
 });

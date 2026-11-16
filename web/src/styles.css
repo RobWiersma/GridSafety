@@ -113,6 +113,8 @@ button { font: inherit; color: inherit; }
 .map-legend { position: absolute; left: 10px; bottom: 22px; z-index: 500; display: flex; gap: 12px; background: color-mix(in srgb, var(--surface) 90%, transparent);
   padding: 6px 10px; border-radius: 8px; font-size: 12px; box-shadow: var(--shadow); backdrop-filter: blur(4px); }
 .map-legend span { display: flex; align-items: center; gap: 5px; }
+.map-legend { flex-wrap: wrap; max-width: calc(100% - 20px); }
+.map-legend .legend-hint { color: var(--muted, #64748b); font-style: italic; }
 .map-legend i { width: 16px; height: 4px; border-radius: 2px; display: inline-block; }
 .map-legend .legend-track { background: repeating-linear-gradient(90deg, #f43f5e 0 5px, transparent 5px 8px); }
 .ops-side { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; min-height: 0; }

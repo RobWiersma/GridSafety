@@ -42,7 +42,7 @@ public class CircuitCatalogTests
             Assert.True(c.LengthMeters >= 400, $"{c.Id} is a substation stub");
             Assert.Equal(c.Structures.Count, c.Structures.Select(s => s.Id).Distinct().Count());
             var spans = c.Structures.Zip(c.Structures.Skip(1), (a, b) => Geo.DistanceMeters(a.Location, b.Location)).ToList();
-            Assert.All(spans, s => Assert.InRange(s, 20, 1000)); // real tower spacing (230 kV spans reach ~800 m)
+            Assert.All(spans, s => Assert.InRange(s, 20, 2000)); // real tower spacing (500 kV spans over the Delta reach ~1.5 km)
         }
     }
 
@@ -213,7 +213,7 @@ public class OsmDatasetTests
         {
             Assert.NotEmpty(c.OsmWayIds);
             Assert.All(c.Structures, s => Assert.True(s.OsmNodeId > 0));
-            Assert.True(c.VoltageKv is 0 or (>= 50 and <= 500), $"{c.Id}: {c.VoltageKv} kV"); // 0 = not tagged in OSM
+            Assert.True(c.VoltageKv is 0 or (>= 4 and <= 500), $"{c.Id}: {c.VoltageKv} kV"); // 0 = not tagged; 12 kV = tagged distribution feeders
         });
     }
 

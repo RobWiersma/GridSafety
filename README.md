@@ -6,7 +6,7 @@
 
 Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · DynamoDB · EventBridge (+ Scheduler) · SQS · SNS · S3 · Cognito · CloudFront · AWS CDK (C#) · React 19 + TypeScript + Leaflet**.
 
-> **Real map data:** the transmission lines and towers are real, public [OpenStreetMap](https://www.openstreetmap.org/copyright) data around Martinez and Pleasant Hill, CA (21 lines at 60/115/230 kV, such as *Pittsburg - Martinez 115 kV*), imported by `tools/GridSafety.CircuitImport`. Drones, missions and defects are simulated. No non-public utility data is used.
+> **Real map data:** the transmission lines and towers are real, public [OpenStreetMap](https://www.openstreetmap.org/copyright) data for Contra Costa County, CA (181 lines from 12 to 500 kV, such as *Pittsburg - Martinez 115 kV* and *Table Mountain - Tesla 500 kV*), imported by `tools/GridSafety.CircuitImport`. Drones, missions and defects are simulated. No non-public utility data is used.
 
 ---
 
@@ -64,7 +64,7 @@ flowchart LR
 | `tools/GridSafety.Simulator` | A drone that flies a circuit, with scripted incidents, posting to the local API or publishing to IoT Core |
 | `web/` | React ops console: live map, findings queue, missions |
 | `infra/` | AWS CDK app in C# (~100 resources) |
-| `tests/GridSafety.Tests` | xUnit tests covering domain, ingest, events, SLA, paging, reports, OSM import and HTTP/RBAC (74 tests) |
+| `tests/GridSafety.Tests` | xUnit tests covering domain, ingest, events, SLA, paging, reports, OSM import and HTTP/RBAC (76 tests) |
 
 ## Run it locally (no AWS account needed)
 
@@ -104,20 +104,22 @@ dotnet run --project src/GridSafety.Api --launch-profile "GridSafety.Api (Dynamo
 dotnet run --project tools/GridSafety.CircuitImport
 ```
 
-It queries the Overpass API for `power=line|minor_line` and town names inside a bounding box (default: Martinez + Pleasant Hill; change it with `--bbox s,w,n,e`), then:
+It queries the Overpass API for `power=line|minor_line` and town names inside a county boundary (default: `--area "Contra Costa County"`), clipped to a bounding box (`--bbox s,w,n,e`). `--area none` imports just the bounding box, e.g. `--area none --bbox 37.92,-122.19,38.05,-122.03` for Martinez + Pleasant Hill. Operator and owner tags are stripped from the response before anything is saved. Then it:
 
 1. **fills in missing voltages**: about a third of the segments have no `voltage` tag. An untagged line takes the voltage of the lines it continues, but only when they all agree, and distribution (`minor_line`) is never guessed. Anything still unknown is kept and shown as *voltage not tagged*;
 2. groups segments by voltage and stitches them end to end, but **only through two-way splices**, so lines meeting at a substation stay separate circuits;
 3. clips each chain to the area, drops vertices less than 20 m apart (duplicate gantry nodes), and drops pieces under 400 m, which are almost always substation hookups (`--min-length 0` keeps them);
-4. names circuits from the OSM `name`/`ref` tags. Unnamed lines are named after the nearest town (*Vine Hill 60 kV line A*, id `VH-60-A`). It also sets the inspection corridor by voltage (60 / 75 / 100 m for 60 / 115 / 230 kV);
+4. names circuits from the OSM `name`/`ref` tags (a voltage already in the name, like *500KV*, is normalized). Unnamed lines are named after the nearest town (*Vine Hill 60 kV line A*, id `VH-60-A`). It also sets the inspection corridor by voltage (60 / 75 / 100 m for 60 / 115 / 230+ kV);
 5. keeps the OSM way and node ids on every circuit and structure, so each tower traces back to its source.
 
-The current dataset has **21 circuits, about 80 km of line**: 230 kV *Tidewater-Sobrante*, 115 kV *Clayton-Meadow Lane* through Pleasant Hill, *Pittsburg - Martinez*, *Oleum - Martinez*, and the 60 kV network around Martinez and Vine Hill. Use `--max <n>` to keep only the longest lines.
+The current dataset has **181 circuits, about 1,019 km of line and 4,848 structures** (about 1.1 MB): 5 at 500 kV (the *Table Mountain*, *Olinda* and *Vaca Dixon - Tesla* backbone), 68 at 230 kV, 52 at 115 kV, 21 at 60/69 kV, 3 tagged 12 kV feeders, and 32 with no voltage tag. Use `--max <n>` to keep only the longest lines.
+
+The operations map stays responsive at county scale by drawing on a canvas and filtering by zoom: zoomed out it shows only the 230/500 kV backbone, 115 kV appears from zoom 11, everything else from zoom 13, and tower dots from zoom 14. Only lines inside the view are drawn, and the circuit a drone is flying is always shown with its towers.
 
 Public Overpass servers are often busy, so a snapshot of the response is committed. Rebuild from it offline with:
 
 ```bash
-dotnet run --project tools/GridSafety.CircuitImport -- --input tools/GridSafety.CircuitImport/data/martinez-pleasant-hill-overpass.json
+dotnet run --project tools/GridSafety.CircuitImport -- --input tools/GridSafety.CircuitImport/data/contra-costa-overpass.json
 ```
 
 Data © OpenStreetMap contributors, available under the ODbL. The map credits it.
@@ -181,4 +183,4 @@ I've spent the last couple of years supporting grid operations software (ADMS on
 | Infrastructure as code | `infra/GridSafetyStack.cs` (CDK in C#) |
 | Secure CI/CD | GitHub Actions with OIDC, no long-lived keys |
 | RBAC / identity | Cognito groups → JWT authorizer → API-enforced Supervisor rights |
-| Automation and testing | Simulator with scripted incidents; 74 .NET tests + frontend tests |
+| Automation and testing | Simulator with scripted incidents; 76 .NET tests + frontend tests |

@@ -1,7 +1,7 @@
 import L from 'leaflet';
-import { useEffect, useMemo } from 'react';
-import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet';
-import { FINDING_TYPE_LABEL, severityHex, voltageHex } from '../lib/format';
+import { useEffect, useMemo, useState } from 'react';
+import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { FINDING_TYPE_LABEL, TOWER_ZOOM, minKvForZoom, severityHex, voltageHex } from '../lib/format';
 import type { Circuit, DroneState, FindingView, TelemetryPoint } from '../types';
 
 interface Props {
@@ -32,7 +32,8 @@ export function OpsMap({ circuits, drones, findings, track, focus, onOpenFinding
   if (!bounds) return <div className="map map-empty">Loading map…</div>;
 
   return (
-    <MapContainer className="map" bounds={bounds} boundsOptions={{ padding: [30, 30] }} scrollWheelZoom>
+    // preferCanvas: hundreds of lines and thousands of towers draw on one canvas instead of as SVG nodes
+    <MapContainer className="map" bounds={bounds} boundsOptions={{ padding: [30, 30] }} scrollWheelZoom preferCanvas>
       <FitBounds bounds={bounds} />
       <TileLayer
         className="map-tiles"
@@ -40,20 +41,7 @@ export function OpsMap({ circuits, drones, findings, track, focus, onOpenFinding
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      {circuits.map((c) => (
-        <Polyline key={c.id} positions={c.structures.map((s) => [s.location.lat, s.location.lon] as L.LatLngTuple)}
-          pathOptions={{ color: voltageHex(c.voltageKv), weight: focus?.id === c.id ? 6 : 4, opacity: focus && focus.id !== c.id ? 0.35 : 0.9 }}>
-          <Tooltip sticky>{c.name} · {c.structures.length} structures · {(c.lengthMeters / 1000).toFixed(1)} km</Tooltip>
-        </Polyline>
-      ))}
-      {circuits.flatMap((c) =>
-        c.structures.map((s) => (
-          <CircleMarker key={s.id} center={[s.location.lat, s.location.lon]} radius={3}
-            pathOptions={{ color: '#1e293b', weight: 1, fillColor: '#f8fafc', fillOpacity: 1 }}>
-            <Tooltip>{s.label}</Tooltip>
-          </CircleMarker>
-        )),
-      )}
+      <CircuitLayer circuits={circuits} focus={focus} />
 
       {track.length > 1 && (
         <Polyline positions={track.map((p) => [p.lat, p.lon] as L.LatLngTuple)} pathOptions={{ color: '#f43f5e', weight: 2.5, dashArray: '6 4' }} />
@@ -79,6 +67,55 @@ export function OpsMap({ circuits, drones, findings, track, focus, onOpenFinding
         </Marker>
       ))}
     </MapContainer>
+  );
+}
+
+/**
+ * Lines and towers, filtered so the county-wide map stays responsive: only voltages that matter at the
+ * current zoom (see minKvForZoom), only circuits inside the (padded) view, towers only when zoomed in.
+ * The circuit being inspected is always drawn with its towers.
+ */
+function CircuitLayer({ circuits, focus }: { circuits: Circuit[]; focus?: Circuit | null }) {
+  const map = useMap();
+  // Leaflet can't report bounds until the container has a size, so read the view once the map is ready.
+  const [view, setView] = useState<{ zoom: number; bounds: L.LatLngBounds } | null>(null);
+  const update = () => { if (map.getSize().x > 0) setView({ zoom: map.getZoom(), bounds: map.getBounds().pad(0.25) }); };
+  useEffect(() => { map.whenReady(update); }, [map]); // eslint-disable-line react-hooks/exhaustive-deps
+  useMapEvents({ moveend: update, resize: update });
+
+  const shapes = useMemo(
+    () => circuits.map((c) => {
+      const positions = c.structures.map((s) => [s.location.lat, s.location.lon] as L.LatLngTuple);
+      return { circuit: c, positions, bounds: L.latLngBounds(positions) };
+    }),
+    [circuits],
+  );
+
+  if (!view) return null;
+  const minKv = minKvForZoom(view.zoom);
+  const showTowers = view.zoom >= TOWER_ZOOM;
+  const visible = shapes.filter(({ circuit: c, bounds }) =>
+    c.id === focus?.id || (c.voltageKv >= minKv && view.bounds.intersects(bounds)));
+
+  return (
+    <>
+      {visible.map(({ circuit: c, positions }) => (
+        <Polyline key={c.id} positions={positions}
+          pathOptions={{ color: voltageHex(c.voltageKv), weight: focus?.id === c.id ? 6 : 4, opacity: focus && focus.id !== c.id ? 0.35 : 0.9 }}>
+          <Tooltip sticky>{c.name} · {c.structures.length} structures · {(c.lengthMeters / 1000).toFixed(1)} km</Tooltip>
+        </Polyline>
+      ))}
+      {visible
+        .filter(({ circuit: c }) => showTowers || c.id === focus?.id)
+        .flatMap(({ circuit: c }) => c.structures)
+        .filter((s) => view.bounds.contains([s.location.lat, s.location.lon]))
+        .map((s) => (
+          <CircleMarker key={s.id} center={[s.location.lat, s.location.lon]} radius={3}
+            pathOptions={{ color: '#1e293b', weight: 1, fillColor: '#f8fafc', fillOpacity: 1 }}>
+            <Tooltip>{s.label}</Tooltip>
+          </CircleMarker>
+        ))}
+    </>
   );
 }
 

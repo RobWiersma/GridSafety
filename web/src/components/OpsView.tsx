@@ -37,11 +37,12 @@ export function OpsView({ onOpenFinding }: { onOpenFinding(id: string): void }) 
           onOpenFinding={onOpenFinding}
         />
         <div className="map-legend">
-          <span><i style={{ background: '#14b8a6' }} />60 kV</span>
+          <span><i style={{ background: '#14b8a6' }} />60 kV &amp; below</span>
           <span><i style={{ background: '#0ea5e9' }} />115 kV</span>
-          <span><i style={{ background: '#a855f7' }} />230 kV</span>
+          <span><i style={{ background: '#a855f7' }} />230/500 kV</span>
           <span><i style={{ background: '#94a3b8' }} />Not tagged</span>
           <span><i className="legend-track" />Flight path</span>
+          <span className="legend-hint">Zoom in for 115/60 kV lines and towers</span>
         </div>
       </div>
 

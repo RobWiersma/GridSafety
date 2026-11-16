@@ -1,8 +1,8 @@
 // GridSafety circuit importer: pulls real power lines + towers from OpenStreetMap (Overpass API)
 // and writes the circuit dataset the platform embeds (src/GridSafety.Core/Data/circuits.json).
 //
-//   dotnet run --project tools/GridSafety.CircuitImport                       # Martinez + Pleasant Hill, CA (default)
-//   dotnet run --project tools/GridSafety.CircuitImport -- --bbox 37.92,-122.19,38.05,-122.03 --max 10
+//   dotnet run --project tools/GridSafety.CircuitImport                       # Contra Costa County, CA (default)
+//   dotnet run --project tools/GridSafety.CircuitImport -- --area none --bbox 37.92,-122.19,38.05,-122.03   # just Martinez + Pleasant Hill
 //   dotnet run --project tools/GridSafety.CircuitImport -- --input saved-overpass.json   # offline / reproducible
 
 using System.Globalization;
@@ -18,7 +18,10 @@ if (argList.Contains("--help"))
 {
     Console.WriteLine("""
         Options:
-          --bbox s,w,n,e   Area to import (default: Martinez + Pleasant Hill, CA 37.92,-122.19,38.05,-122.03)
+          --area <name>    Import lines inside an administrative boundary, e.g. "Contra Costa County" (default).
+                           Lines crossing the boundary are clipped to --bbox.
+          --bbox s,w,n,e   Clip box, or the whole area to import with --area none
+                           (default: Contra Costa County, CA 37.71,-122.44,38.10,-121.53)
           --max <n>        Keep only the n longest circuits (default 0 = all)
           --min <n>        Drop lines with fewer structures inside the area (default 3)
           --min-length <m> Drop lines shorter than m meters, e.g. substation hookups (default 400; 0 keeps all)
@@ -29,8 +32,9 @@ if (argList.Contains("--help"))
     return 0;
 }
 
-var bbox = (Val("--bbox") ?? "37.92,-122.19,38.05,-122.03").Split(',').Select(s => double.Parse(s, CultureInfo.InvariantCulture)).ToArray();
+var bbox = (Val("--bbox") ?? "37.71,-122.44,38.10,-121.53").Split(',').Select(s => double.Parse(s, CultureInfo.InvariantCulture)).ToArray();
 if (bbox.Length != 4) throw new ArgumentException("--bbox needs s,w,n,e");
+var area = Val("--area") is { } a ? (a.Equals("none", StringComparison.OrdinalIgnoreCase) ? null : a) : "Contra Costa County";
 var max = int.Parse(Val("--max") ?? "0", CultureInfo.InvariantCulture);
 var minStructures = int.Parse(Val("--min") ?? CircuitBuilder.DefaultMinStructures.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 var minLengthM = double.Parse(Val("--min-length") ?? CircuitBuilder.DefaultMinLengthM.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
@@ -44,7 +48,7 @@ if (Val("--input") is { } input)
 }
 else
 {
-    raw = await Overpass.FetchAsync(bbox);
+    raw = await Overpass.FetchAsync(bbox, area);
 }
 
 raw = OsmScrub.RemoveOwnershipTags(raw);
@@ -56,7 +60,9 @@ var circuits = CircuitBuilder.Build(response, bbox, max, minStructures, minLengt
 
 var file = new CircuitDataFile
 {
-    Source = "OpenStreetMap via Overpass API: way[power~\"^(line|minor_line)$\"], node[place~\"^(city|town|village)$\"]",
+    Source = area is null
+        ? "OpenStreetMap via Overpass API: power=line|minor_line and place=city|town|village in the bounding box"
+        : $"OpenStreetMap via Overpass API: power=line|minor_line and place=city|town|village in {area}, clipped to the bounding box",
     License = "ODbL 1.0 (https://opendatacommons.org/licenses/odbl/)",
     Attribution = "© OpenStreetMap contributors",
     GeneratedAt = DateTimeOffset.UtcNow,
