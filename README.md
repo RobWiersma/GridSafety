@@ -1,4 +1,6 @@
-<img src="web/public/favicon.svg" alt="GridSafety logo: a drone over a power line" width="96" align="right" />
+<p align="center">
+  <img src="web/public/favicon.svg" alt="GridSafety logo: a drone over a power line" width="128" />
+</p>
 
 # GridSafety
 
