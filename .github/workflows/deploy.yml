@@ -59,7 +59,7 @@ jobs:
           bash scripts/deploy.sh "${{ inputs.stage || 'dev' }}" "${ARGS[@]}" --outputs-file cdk-outputs.json
       - name: Smoke test
         run: |
-          SITE=$(jq -r '.[] | .SiteUrl' cdk-outputs.json)
+          SITE=$(jq -r '.[] | .SiteUrl' infra/cdk-outputs.json)
           curl --fail --retry 5 --retry-delay 10 "$SITE/api/health"
           curl --fail "$SITE/" | grep -q '<div id="root">'
           curl --fail "$SITE/api/public/stats" > /dev/null
