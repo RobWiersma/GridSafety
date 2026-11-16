@@ -1,6 +1,6 @@
-<p align="center">
-  <img src="web/public/favicon.svg" alt="GridSafety logo: a drone over a power line" width="128" />
-</p>
+<div align="center">
+
+<img src="web/public/favicon.svg" alt="GridSafety logo: a drone over a power line" width="128" />
 
 # GridSafety
 
@@ -19,6 +19,8 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Leaflet](https://img.shields.io/badge/Leaflet-199900?logo=leaflet&logoColor=white)
 ![OpenStreetMap](https://img.shields.io/badge/OpenStreetMap-7EBC6F?logo=openstreetmap&logoColor=white)
+
+</div>
 
 **Drone power-line inspection platform on AWS.** Drones fly distribution and transmission circuits, stream telemetry over MQTT, and report defects (vegetation encroachment, damaged insulators, thermal hotspots…). GridSafety turns that stream into a live ops map, safety alerts, a triage queue with SLA escalation, and an inspection report for every mission.
 
