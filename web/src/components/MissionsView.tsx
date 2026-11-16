@@ -1,9 +1,19 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ApiError, useCircuits, useDemoFlight, useMe, useMissions, useMissionStatus, useOpenReport, usePlanMission } from '../api';
 import { MISSION_STATUS_LABEL, circuitsByVoltage, miles, pct, relativeTime } from '../lib/format';
 import { useSession } from '../session';
 import type { MissionView } from '../types';
+import { FilterBar, matchesSearch, SearchFilter, SelectFilter, ToggleFilter } from './FilterBar';
 import type { ToastMessage } from './Toast';
+
+const STATUS_CHIPS = [
+  ['all', 'All'], ['active', 'Active'], ['Planned', 'Planned'], ['InFlight', 'In flight'], ['Completed', 'Completed'], ['Aborted', 'Aborted'],
+] as const;
+type StatusChip = (typeof STATUS_CHIPS)[number][0];
+const KIND_OPTIONS = [['any', 'Demo and planned'], ['demo', 'Demo flights'], ['planned', 'Planned missions']] as const;
+const WHEN_OPTIONS = [['any', 'Any time'], ['1', 'Last 24 hours'], ['7', 'Last 7 days'], ['30', 'Last 30 days']] as const;
+type Kind = (typeof KIND_OPTIONS)[number][0];
+type When = (typeof WHEN_OPTIONS)[number][0];
 
 export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(t: ToastMessage): void; onShowOnMap(): void; onOpenMission(id: string): void }) {
   const missions = useMissions();
@@ -22,6 +32,33 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
       },
       onError: (e) => onToast({ kind: 'error', text: e.message }),
     });
+  const [statusChip, setStatusChip] = useState<StatusChip>('all');
+  const [query, setQuery] = useState('');
+  const [kind, setKind] = useState<Kind>('any');
+  const [when, setWhen] = useState<When>('any');
+  const [circuit, setCircuit] = useState('any');
+  const [withFindings, setWithFindings] = useState(false);
+  const [withAlerts, setWithAlerts] = useState(false);
+
+  const all = missions.data ?? [];
+  const circuitOptions = useMemo(
+    () => [['any', 'All circuits'] as const, ...[...new Set(all.map((m) => m.circuitName))].sort().map((c) => [c, c] as const)],
+    [all],
+  );
+  const since = when === 'any' ? 0 : Date.now() - Number(when) * 86_400_000;
+  const shown = all.filter(({ mission: m, circuitName }) =>
+    (statusChip === 'all' || (statusChip === 'active' ? m.status === 'Planned' || m.status === 'InFlight' : m.status === statusChip)) &&
+    (kind === 'any' || (kind === 'demo') === Boolean(m.name)) &&
+    (when === 'any' || Date.parse(m.createdAt) >= since) &&
+    (circuit === 'any' || circuitName === circuit) &&
+    (!withFindings || m.findingCount > 0) &&
+    (!withAlerts || m.recentAlerts.length > 0) &&
+    matchesSearch(query, m.id, m.name, circuitName, m.pilot, m.droneId));
+  const active = statusChip !== 'all' || query !== '' || kind !== 'any' || when !== 'any' || circuit !== 'any' || withFindings || withAlerts;
+  const clear = () => {
+    setStatusChip('all'); setQuery(''); setKind('any'); setWhen('any'); setCircuit('any'); setWithFindings(false); setWithAlerts(false);
+  };
+
   const [planning, setPlanning] = useState(false);
   const [planned, setPlanned] = useState<MissionView | null>(null);
 
@@ -46,8 +83,31 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
         </div>}
       </div>
 
+      {all.length > 0 && (
+        <>
+          <div className="panel-toolbar filter-chips">
+            <div className="chips" role="tablist" aria-label="Mission status">
+              {STATUS_CHIPS.map(([key, label]) => (
+                <button key={key} role="tab" aria-selected={statusChip === key} className={`chip ${statusChip === key ? 'chip-active' : ''}`} onClick={() => setStatusChip(key)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <FilterBar shown={shown.length} total={all.length} noun="missions" active={active} onClear={clear}>
+            <SearchFilter value={query} onChange={setQuery} placeholder="Search flight, mission id, circuit, pilot, drone…" />
+            <SelectFilter label="Mission type" value={kind} onChange={setKind} options={KIND_OPTIONS} />
+            <SelectFilter label="Started" value={when} onChange={setWhen} options={WHEN_OPTIONS} />
+            <SelectFilter label="Circuit" value={circuit} onChange={setCircuit} options={circuitOptions} />
+            <ToggleFilter label="Has findings" checked={withFindings} onChange={setWithFindings} />
+            <ToggleFilter label="Has alerts" checked={withAlerts} onChange={setWithAlerts} />
+          </FilterBar>
+        </>
+      )}
+
       {missions.data && missions.data.length === 0 && <p className="empty-row muted">No missions yet. Plan one to get started.</p>}
-      {missions.data && missions.data.length > 0 && (
+      {all.length > 0 && shown.length === 0 && <p className="empty-row muted">No missions match these filters.</p>}
+      {shown.length > 0 && (
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -56,7 +116,7 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
               </tr>
             </thead>
             <tbody>
-              {missions.data.map((m) => (
+              {shown.map((m) => (
                 <tr key={m.mission.id}>
                   <td><button className="mission-link mono" onClick={() => onOpenMission(m.mission.id)}>{m.mission.id}</button><div className="muted small">{relativeTime(m.mission.createdAt)}</div></td>
                   <td>{m.circuitName}</td>

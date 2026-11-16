@@ -56,10 +56,11 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
+        <a className="brand" href="#ops" aria-label="GridSafety home: Operations"
+          onClick={(e) => { e.preventDefault(); go('ops'); window.scrollTo(0, 0); }}>
           <Logo />
           <span>GridSafety</span>
-        </div>
+        </a>
         <nav className="tabs" aria-label="Sections">
           {tabs.map(([key, label]) => (
             <button key={key} className={`tab ${tab === key ? 'tab-active' : ''}`} onClick={() => go(key)} aria-current={tab === key}>
