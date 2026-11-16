@@ -66,6 +66,8 @@ public sealed class MissionReportGenerator(IGridRepository repo, ICircuitCatalog
               .sev{display:inline-block;min-width:22px;text-align:center;border-radius:4px;color:#fff;font-weight:700}
               .s5{background:#b91c1c}.s4{background:#ea580c}.s3{background:#ca8a04}.s2{background:#2563eb}.s1{background:#64748b}
               svg{width:100%;height:auto;border:1px solid #ddd;border-radius:8px;background:#fafafa}
+              .shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin:12px 0 24px}
+              figure{margin:0}figure img{width:100%;height:auto;border-radius:8px;display:block}figcaption{font-size:13px;margin-top:4px}
             </style></head><body>
             <h1>Inspection report: {{H(c.Name)}}</h1>
             <div class="muted">Mission {{H(m.Id)}} · Drone {{H(m.DroneId)}} · PIC {{H(m.Pilot)}} · {{m.Status}} · Generated {{generatedAt:u}}</div>
@@ -91,6 +93,15 @@ public sealed class MissionReportGenerator(IGridRepository repo, ICircuitCatalog
                                $"<td>{H(StreamPublisher.Humanize(f.Type))}</td><td>{f.Confidence:P0}</td><td>{f.Status}</td><td>{H(f.Description)}</td></tr>");
             }
             sb.Append("</table>");
+
+            sb.Append("<h2>Captures</h2><p class=\"muted\">Synthetic images generated for this demo; a production drone would attach its own photos.</p><div class=\"shots\">");
+            foreach (var f in findings)
+            {
+                var img = Convert.ToBase64String(Encoding.UTF8.GetBytes(FindingImage.Svg(f)));
+                sb.Append(inv, $"<figure><img src=\"data:image/svg+xml;base64,{img}\" alt=\"{H(StreamPublisher.Humanize(f.Type))} at {H(f.StructureLabel)}\">" +
+                               $"<figcaption><span class=\"sev s{f.Severity}\">{f.Severity}</span> {H(f.StructureLabel)} · {H(f.Description)}</figcaption></figure>");
+            }
+            sb.Append("</div>");
         }
 
         if (m.RecentAlerts.Count > 0)

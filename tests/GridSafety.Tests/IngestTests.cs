@@ -249,6 +249,8 @@ public class ReportTests
 
         Assert.StartsWith("<!doctype html>", html);
         Assert.Contains("<svg", html);
+        Assert.Contains("<h2>Captures</h2>", html);
+        Assert.Contains("<img src=\"data:image/svg+xml;base64,", html);
         Assert.Contains(c.Name, html);
         Assert.DoesNotContain("<script>", html);
         Assert.Contains("&lt;script&gt;", html);

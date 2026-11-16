@@ -18,6 +18,12 @@ const fmt = (iso: string) => new Date(iso).toLocaleString(undefined, { month: 's
 export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
   const api = useContext(FetcherContext)!;
   const { data, isPending } = useQuery({ queryKey: ['finding', id], queryFn: () => api<FindingView>(`/findings/${id}`), refetchInterval: 5000 });
+  // The image never changes for a finding, so fetch it once. It comes back as SVG text (the fetcher only parses JSON).
+  const image = useQuery({
+    queryKey: ['finding-image', id],
+    queryFn: async () => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(await api<string>(`/findings/${id}/image`))}`,
+    staleTime: Infinity,
+  });
   const change = useFindingStatus();
   const [note, setNote] = useState('');
   const [assignee, setAssignee] = useState('');
@@ -68,6 +74,12 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
             </header>
 
             <div className="drawer-body">
+              {image.data && (
+                <figure className="capture">
+                  <img src={image.data} alt={`${FINDING_TYPE_LABEL[f.type]} at ${f.structureLabel} (simulated drone image)`} />
+                  <figcaption className="muted small">Synthetic image for the demo; a real drone would upload its photo.</figcaption>
+                </figure>
+              )}
               <div className="facts">
                 <span className={`pill pill-${f.status.toLowerCase()}`}>{f.status}</span>
                 <span>{data.severityLabel}</span>

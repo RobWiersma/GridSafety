@@ -41,6 +41,7 @@ public static class Endpoints
 
         secured.MapGet("/findings", ListFindings);
         secured.MapGet("/findings/{id}", GetFinding);
+        secured.MapGet("/findings/{id}/image", GetFindingImage);
         secured.MapPost("/findings/{id}/status", ChangeFindingStatus);
 
         if (devIngest)
@@ -218,6 +219,10 @@ public static class Endpoints
 
     private static async Task<Results<Ok<FindingView>, NotFound>> GetFinding(string id, IGridRepository repo, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct) =>
         await repo.GetFindingAsync(id, ct) is { } f ? TypedResults.Ok(ToView(f, circuits, clock.GetUtcNow())) : TypedResults.NotFound();
+
+    /// <summary>Synthetic drone capture of the finding (SVG). A real deployment would serve the uploaded photo from S3.</summary>
+    private static async Task<Results<ContentHttpResult, NotFound>> GetFindingImage(string id, IGridRepository repo, CancellationToken ct) =>
+        await repo.GetFindingAsync(id, ct) is { } f ? TypedResults.Content(FindingImage.Svg(f), "image/svg+xml") : TypedResults.NotFound();
 
     private static async Task<Results<Ok<FindingView>, NotFound, ValidationProblem, Conflict<string>, ProblemHttpResult>> ChangeFindingStatus(
         string id, FindingStatusRequest req, HttpContext ctx, IGridRepository repo, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
