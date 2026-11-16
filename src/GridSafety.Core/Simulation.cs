@@ -44,11 +44,14 @@ public sealed class RetryingDroneLink(IDroneLink inner, IReadOnlyList<TimeSpan> 
         || (ex.InnerException is { } inner && IsTransient(inner));
 }
 
-/// <summary>Pre-computed flight: follows the line with GPS jitter, drains battery, and (optionally) has incidents.</summary>
+/// <summary>Pre-computed flight: follows the line with GPS jitter, drains battery, simulates link RSSI, and (optionally) has incidents.</summary>
 public sealed record FlightPlan(IReadOnlyList<TelemetryPoint> Points, Structure SevereAt)
 {
     public const double SpeedMps = 14;
     public const double SecondsPerTick = 2;
+
+    /// <summary>How far the drone flies from the ground station before the crew moves it up the line.</summary>
+    public const double RadioLegMeters = 2500;
 
     public static FlightPlan Build(Circuit c, Random rng, bool scriptedIncidents, DateTimeOffset start)
     {
@@ -67,6 +70,10 @@ public sealed record FlightPlan(IReadOnlyList<TelemetryPoint> Points, Structure 
         var severeAt = c.Structures[rng.Next(c.Structures.Count / 3, Math.Max(c.Structures.Count / 3 + 1, c.Structures.Count * 2 / 3))];
         var breachStart = scriptedIncidents ? rng.Next(samples.Count / 4, Math.Max(samples.Count / 4 + 1, samples.Count / 2)) : -1;
         var climbAt = scriptedIncidents && rng.NextDouble() < 0.6 ? rng.Next(samples.Count / 2, Math.Max(samples.Count / 2 + 1, samples.Count * 3 / 4)) : -1;
+        // Radio interference (a substation, a ridge) knocks the link down for a few ticks.
+        var fadeAt = scriptedIncidents && rng.NextDouble() < 0.5 ? rng.Next(samples.Count / 3, Math.Max(samples.Count / 3 + 1, samples.Count * 5 / 6)) : -1;
+        // The ground crew leapfrogs its radio station along the line, so signal strength saw-tooths per leg.
+        var station = samples[0];
 
         var points = new List<TelemetryPoint>(samples.Count);
         for (var i = 0; i < samples.Count; i++)
@@ -80,11 +87,21 @@ public sealed record FlightPlan(IReadOnlyList<TelemetryPoint> Points, Structure 
             var pos = Geo.Offset(samples[i], rng.NextDouble() * 12 - 6 + drift * sideN, rng.NextDouble() * 12 - 6 + drift * sideE);
             var altitude = climbAt >= 0 && i >= climbAt && i < climbAt + 3 ? 126 + rng.NextDouble() * 4 : 58 + rng.NextDouble() * 10;
             var battery = 100 - 78.0 * i / Math.Max(1, samples.Count - 1);
+            var fade = fadeAt >= 0 && i >= fadeAt && i < fadeAt + 6 ? 14 + 8 * Math.Sin(Math.PI * (i - fadeAt) / 6) : 0;
+            if (Geo.DistanceMeters(station, samples[i]) > RadioLegMeters) station = samples[i];
+            var rssi = Rssi(Geo.DistanceMeters(station, pos), altitude) - fade + rng.NextDouble() * 5 - 2.5;
             points.Add(new TelemetryPoint(start.AddSeconds(i * SecondsPerTick), pos.Lat, pos.Lon,
-                Math.Round(altitude, 1), Math.Round(battery, 1), SpeedMps + rng.NextDouble() * 2 - 1));
+                Math.Round(altitude, 1), Math.Round(battery, 1), SpeedMps + rng.NextDouble() * 2 - 1, Math.Round(rssi, 1)));
         }
         return new FlightPlan(points, severeAt);
     }
+
+    /// <summary>
+    /// Log-distance path loss from the ground station: about -57 dBm at 100 m, -74 at 1 km,
+    /// -86 at 5 km. Flying higher clears trees and terrain, so it helps a little.
+    /// </summary>
+    public static double Rssi(double distanceMeters, double altitudeM) =>
+        Math.Min(-30, -40 - 17 * Math.Log10(Math.Max(distanceMeters, 10) / 10) + (altitudeM - 60) * 0.1);
 
     /// <summary>Unit vector (north, east) pointing left of the direction of travel at sample <paramref name="i"/>.</summary>
     private static (double North, double East) Perpendicular(List<GeoPoint> samples, int i)

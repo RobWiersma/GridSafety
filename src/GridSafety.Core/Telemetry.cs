@@ -1,11 +1,12 @@
 namespace GridSafety.Core;
 
-public sealed record TelemetryPoint(DateTimeOffset Timestamp, double Lat, double Lon, double AltitudeM, double BatteryPct, double SpeedMps)
+/// <param name="RssiDbm">Control-link signal strength at the drone, in dBm (closer to 0 is stronger). Null for drones that don't report it.</param>
+public sealed record TelemetryPoint(DateTimeOffset Timestamp, double Lat, double Lon, double AltitudeM, double BatteryPct, double SpeedMps, double? RssiDbm = null)
 {
     public GeoPoint Position => new(Lat, Lon);
 }
 
-public enum AlertKind { LowBattery, CriticalBattery, CorridorBreach, AltitudeCeiling }
+public enum AlertKind { LowBattery, CriticalBattery, CorridorBreach, AltitudeCeiling, WeakSignal, LinkCritical }
 
 public enum AlertLevel { Warning, Critical }
 
@@ -24,6 +25,7 @@ public sealed class DroneState
     public double AltitudeM { get; set; }
     public double BatteryPct { get; set; }
     public double SpeedMps { get; set; }
+    public double? RssiDbm { get; set; }
     public DateTimeOffset LastSeen { get; set; }
     public List<AlertKind> ActiveAlerts { get; set; } = [];
 }
@@ -37,6 +39,10 @@ public static class FlightRules
     /// <summary>FAA Part 107 ceiling: 400 ft AGL ≈ 122 m. We alert slightly below it.</summary>
     public const double AltitudeCeilingM = 120;
 
+    /// <summary>Control-link thresholds. Below about -95 dBm a typical 2.4 GHz link starts dropping packets.</summary>
+    public const double WeakSignalDbm = -85;
+    public const double LinkCriticalDbm = -95;
+
     public static IReadOnlyList<DroneAlert> Evaluate(TelemetryPoint p, Circuit circuit)
     {
         var alerts = new List<DroneAlert>();
@@ -45,6 +51,14 @@ public static class FlightRules
             alerts.Add(new(AlertKind.CriticalBattery, AlertLevel.Critical, $"Battery at {p.BatteryPct:0}%: return to launch now", p.Timestamp, p.Position));
         else if (p.BatteryPct <= LowBatteryPct)
             alerts.Add(new(AlertKind.LowBattery, AlertLevel.Warning, $"Battery at {p.BatteryPct:0}%: plan return", p.Timestamp, p.Position));
+
+        if (p.RssiDbm is { } rssi)
+        {
+            if (rssi <= LinkCriticalDbm)
+                alerts.Add(new(AlertKind.LinkCritical, AlertLevel.Critical, $"Control link at {rssi:0} dBm: link loss imminent, return to launch", p.Timestamp, p.Position));
+            else if (rssi <= WeakSignalDbm)
+                alerts.Add(new(AlertKind.WeakSignal, AlertLevel.Warning, $"Weak control link: {rssi:0} dBm", p.Timestamp, p.Position));
+        }
 
         var offLine = Geo.DistanceToPolylineMeters(p.Position, circuit.Path);
         if (offLine > circuit.CorridorMeters)
@@ -60,6 +74,7 @@ public static class FlightRules
     /// <summary>Only alerts that just started fire notifications; a sustained condition doesn't re-page.</summary>
     public static IReadOnlyList<DroneAlert> NewlyRaised(IReadOnlyCollection<AlertKind> previouslyActive, IReadOnlyList<DroneAlert> current) =>
         current.Where(a => !previouslyActive.Contains(a.Kind)
-                           && !(a.Kind == AlertKind.LowBattery && previouslyActive.Contains(AlertKind.CriticalBattery)))
+                           && !(a.Kind == AlertKind.LowBattery && previouslyActive.Contains(AlertKind.CriticalBattery))
+                           && !(a.Kind == AlertKind.WeakSignal && previouslyActive.Contains(AlertKind.LinkCritical)))
                .ToList();
 }

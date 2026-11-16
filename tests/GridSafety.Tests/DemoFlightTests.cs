@@ -66,6 +66,60 @@ public class DemoFlightTests
     }
 
     [Fact]
+    public void Every_point_reports_a_plausible_rssi()
+    {
+        var plan = FlightPlan.Build(TestCircuits.Line, new Random(5), scriptedIncidents: true, Now);
+        Assert.All(plan.Points, p => Assert.InRange(p.RssiDbm!.Value, -120, -30));
+    }
+
+    [Fact]
+    public void Signal_weakens_with_distance_and_improves_with_altitude()
+    {
+        Assert.True(FlightPlan.Rssi(100, 60) > FlightPlan.Rssi(1000, 60));
+        Assert.True(FlightPlan.Rssi(1000, 60) > FlightPlan.Rssi(3000, 60));
+        Assert.True(FlightPlan.Rssi(1000, 100) > FlightPlan.Rssi(1000, 60));
+        Assert.InRange(FlightPlan.Rssi(1000, 60), -76, -72);
+    }
+
+    [Fact]
+    public void Clean_flights_on_every_real_circuit_keep_a_healthy_link()
+    {
+        // Only scripted interference should drop the link; distance alone never should, however long the line.
+        foreach (var c in StaticCircuitCatalog.Instance.All)
+        {
+            var plan = FlightPlan.Build(c, new Random(11), scriptedIncidents: false, Now);
+            Assert.DoesNotContain(plan.Points, p => p.RssiDbm <= FlightRules.WeakSignalDbm);
+        }
+    }
+
+    [Fact]
+    public void Interference_fade_raises_a_link_alert_on_some_flights()
+    {
+        var alerted = Enumerable.Range(0, 20).Count(seed =>
+            FlightPlan.Build(TestCircuits.Line, new Random(seed), scriptedIncidents: true, Now).Points
+                .Any(p => FlightRules.Evaluate(p, TestCircuits.Line).Any(a => a.Kind is AlertKind.WeakSignal or AlertKind.LinkCritical)));
+        Assert.InRange(alerted, 1, 19);
+    }
+
+    [Fact]
+    public void Link_alerts_escalate_without_double_paging()
+    {
+        var c = TestCircuits.Line;
+        TelemetryPoint At(double rssi) => new(Now, c.Path[0].Lat, c.Path[0].Lon, 60, 90, 14, rssi);
+
+        Assert.Empty(FlightRules.Evaluate(At(-70), c));
+        Assert.Equal([AlertKind.WeakSignal], FlightRules.Evaluate(At(-88), c).Select(a => a.Kind));
+        var critical = FlightRules.Evaluate(At(-99), c);
+        Assert.Equal([AlertKind.LinkCritical], critical.Select(a => a.Kind));
+        Assert.Equal(AlertLevel.Critical, critical[0].Level);
+
+        // Recovering from critical to merely weak doesn't page again.
+        Assert.Empty(FlightRules.NewlyRaised([AlertKind.LinkCritical], FlightRules.Evaluate(At(-88), c)));
+        // Drones that don't report RSSI never raise link alerts.
+        Assert.Empty(FlightRules.Evaluate(At(-70) with { RssiDbm = null }, c));
+    }
+
+    [Fact]
     public void Demo_mission_is_stale_only_when_unfinished_and_silent_for_ten_minutes()
     {
         var m = Mission.Plan(TestCircuits.Line, DemoFlight.DroneId, DemoFlight.Pilot, "sup", Now);

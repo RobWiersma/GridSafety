@@ -88,7 +88,7 @@ export function App() {
           </div>
         )}
         <StatsBar onOpenFindings={() => go('findings')} />
-        {tab === 'ops' && <OpsView onOpenFinding={setFindingId} />}
+        {tab === 'ops' && <OpsView onOpenFinding={setFindingId} onOpenMission={openMission} />}
         {tab === 'findings' && (
           <>
             <FindingsView onOpen={setFindingId} />

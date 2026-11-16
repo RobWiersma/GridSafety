@@ -140,7 +140,7 @@ button { font: inherit; color: inherit; }
 .progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #f97316); transition: width .6s; }
 .progress-sm { width: 90px; height: 5px; margin-bottom: 2px; }
 .alert-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.alert-list li { display: flex; gap: 8px; font-size: 13px; }
+.alert-list li { font-size: 13px; }
 .alert-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: none; }
 .alert-critical .alert-dot { background: var(--danger); }
 .alert-warning .alert-dot { background: var(--warn); }
@@ -307,3 +307,17 @@ button { font: inherit; color: inherit; }
 .about-note { font-size: 13.5px; padding: 10px 12px; border-radius: 10px; border-left: 3px solid var(--accent); background: var(--surface-2); }
 @media (max-width: 560px) { .about-steps { grid-template-columns: 1fr; } }
 .about-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+
+/* Control-link signal bars */
+.signal { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.signal svg { flex: none; }
+
+/* Clickable alert and triage rows on the ops sidebar */
+.alert-row { display: flex; gap: 8px; width: 100%; background: none; border: 0; padding: 6px 4px; margin: -6px -4px; border-radius: 6px; color: inherit; font: inherit; text-align: left; cursor: pointer; box-sizing: content-box; }
+.alert-row:hover { background: var(--surface-2); }
+.alert-row:hover .link { text-decoration: underline; }
+.alert-row:focus-visible, .finding-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.alert-meta { display: block; }
+.triage-row { display: flex; align-items: center; gap: 4px; }
+.triage-row .finding-row { flex: 1; min-width: 0; }
+.btn-xs { padding: 3px 8px; font-size: 12px; white-space: nowrap; }

@@ -27,7 +27,7 @@ export type FindingType =
   | 'ThermalHotspot'
   | 'MissingHardware'
   | 'ConductorDamage';
-export type AlertKind = 'LowBattery' | 'CriticalBattery' | 'CorridorBreach' | 'AltitudeCeiling';
+export type AlertKind = 'LowBattery' | 'CriticalBattery' | 'CorridorBreach' | 'AltitudeCeiling' | 'WeakSignal' | 'LinkCritical';
 
 export interface StatusChange<T> {
   from: T;
@@ -58,6 +58,7 @@ export interface Mission {
   endedAt?: string;
   lastPosition?: GeoPoint;
   batteryPct?: number;
+  rssiDbm?: number;
   distanceFlownMeters: number;
   structuresInspected: string[];
   findingCount: number;
@@ -129,6 +130,7 @@ export interface DroneState {
   altitudeM: number;
   batteryPct: number;
   speedMps: number;
+  rssiDbm?: number;
   lastSeen: string;
   activeAlerts: AlertKind[];
 }
@@ -140,6 +142,8 @@ export interface TelemetryPoint {
   altitudeM: number;
   batteryPct: number;
   speedMps: number;
+  /** Control-link signal strength in dBm; absent for drones that don't report it. */
+  rssiDbm?: number;
 }
 
 export interface OpsStats {

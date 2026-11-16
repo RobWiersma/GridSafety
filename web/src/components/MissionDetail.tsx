@@ -4,6 +4,7 @@ import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from 'react-
 import { useCircuits, useFindingImage, useMission, useMissionFindings, useOpenReport, useTrack } from '../api';
 import { FINDING_TYPE_LABEL, MISSION_STATUS_LABEL, miles, pct, relativeTime, severityHex, voltageHex } from '../lib/format';
 import type { Circuit, DroneAlert, FindingView, Mission, TelemetryPoint } from '../types';
+import { WEAK_SIGNAL_DBM } from './SignalBars';
 import { SeverityBadge } from './SeverityBadge';
 import type { ToastMessage } from './Toast';
 
@@ -54,6 +55,7 @@ export function MissionDetail({ missionId, onBack, onOpenFinding, onToast }: Pro
   const critical = m.recentAlerts.filter((a) => a.level === 'Critical').length;
   const maxAlt = points.length ? Math.max(...points.map((p) => p.altitudeM)) : null;
   const minBattery = points.length ? Math.min(...points.map((p) => p.batteryPct)) : m.batteryPct ?? null;
+  const signal = points.filter((p) => p.rssiDbm != null);
 
   return (
     <div className="mission-detail">
@@ -107,6 +109,10 @@ export function MissionDetail({ missionId, onBack, onOpenFinding, onToast }: Pro
               <Profile label="Altitude" unit="m" points={points} pick={(p) => p.altitudeM} color="#38bdf8" limit={120} limitLabel="120 m ceiling" />
               <Profile label="Battery" unit="%" points={points} pick={(p) => p.batteryPct} color="#22c55e" limit={30} limitLabel="30% low" min={0} max={100} />
               <Profile label="Speed" unit="m/s" points={points} pick={(p) => p.speedMps} color="#f59e0b" />
+              {signal.length > 1 && (
+                <Profile label="Control link (RSSI)" unit="dBm" points={signal} pick={(p) => p.rssiDbm!} color="#a78bfa"
+                  limit={WEAK_SIGNAL_DBM} limitLabel={`${WEAK_SIGNAL_DBM} dBm weak`} max={-30} />
+              )}
             </>
           ) : <p className="muted">No telemetry yet.</p>}
         </section>
@@ -243,7 +249,7 @@ function Profile({ label, unit, points, pick, color, limit, limitLabel, min, max
     <figure className="profile">
       <figcaption className="small">
         <strong>{label}</strong>
-        <span className="muted"> now {last.toFixed(unit === 'm/s' ? 1 : 0)} {unit} · range {Math.min(...values).toFixed(0)}–{Math.max(...values).toFixed(0)} {unit}</span>
+        <span className="muted"> now {last.toFixed(unit === 'm/s' ? 1 : 0)} {unit} · range {Math.min(...values).toFixed(0)} to {Math.max(...values).toFixed(0)} {unit}</span>
       </figcaption>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${label} over the flight`}>
         {limit != null && (

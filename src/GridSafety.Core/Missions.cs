@@ -27,6 +27,8 @@ public sealed class Mission
     public DateTimeOffset? EndedAt { get; set; }
     public GeoPoint? LastPosition { get; set; }
     public double? BatteryPct { get; set; }
+    /// <summary>Latest control-link signal strength, in dBm.</summary>
+    public double? RssiDbm { get; set; }
     public double DistanceFlownMeters { get; set; }
     public List<string> StructuresInspected { get; init; } = [];
     public int FindingCount { get; set; }

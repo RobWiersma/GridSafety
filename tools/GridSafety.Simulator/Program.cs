@@ -57,7 +57,7 @@ Console.WriteLine($"✈  {opts.Drone} patrolling {circuit.Name} ({circuit.Struct
 
 await DemoFlight.FlyAsync(circuit, opts.Drone, missionId, link, TimeSpan.FromMilliseconds(400 / opts.Speed), rng, TimeProvider.System,
     scriptedIncidents: !opts.NoIncidents,
-    onPoint: (i, n, p) => Console.Write($"\r   {i + 1,4}/{n}  {p.Lat:0.00000},{p.Lon:0.00000}  alt {p.AltitudeM,5:0} m  batt {p.BatteryPct,3:0}%   "),
+    onPoint: (i, n, p) => Console.Write($"\r   {i + 1,4}/{n}  {p.Lat:0.00000},{p.Lon:0.00000}  alt {p.AltitudeM,5:0} m  batt {p.BatteryPct,3:0}%  rssi {p.RssiDbm,4:0} dBm   "),
     onFinding: (s, f) => Console.WriteLine($"\n   ⚠ sev {f.Severity} {f.Type} at {s.Label}"));
 
 Console.WriteLine($"\n🛬 Landed. Mission {missionId} complete.");

@@ -79,6 +79,7 @@ public sealed class DroneIngestService(IGridRepository repo, ICircuitCatalog cir
             drone.AltitudeM = last.AltitudeM;
             drone.BatteryPct = last.BatteryPct;
             drone.SpeedMps = last.SpeedMps;
+            drone.RssiDbm = last.RssiDbm;
             drone.LastSeen = last.Timestamp;
             drone.ActiveAlerts = active;
             await repo.SaveDroneAsync(drone, ct);
@@ -100,6 +101,7 @@ public sealed class DroneIngestService(IGridRepository repo, ICircuitCatalog cir
                 }
             }
             m.BatteryPct = last.BatteryPct;
+            m.RssiDbm = last.RssiDbm ?? m.RssiDbm;
             foreach (var a in raised) m.RecordAlert(a);
             m.UpdatedAt = clock.GetUtcNow();
         }, ct);

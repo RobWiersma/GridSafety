@@ -5,8 +5,9 @@ import type { DroneAlert, MissionView } from '../types';
 import { OpsMap } from './OpsMap';
 import { SeverityBadge } from './SeverityBadge';
 import { SidePanel } from './SidePanel';
+import { SignalBars } from './SignalBars';
 
-export function OpsView({ onOpenFinding }: { onOpenFinding(id: string): void }) {
+export function OpsView({ onOpenFinding, onOpenMission }: { onOpenFinding(id: string): void; onOpenMission(id: string): void }) {
   const circuits = useCircuits();
   const drones = useDrones();
   const missions = useMissions();
@@ -19,8 +20,10 @@ export function OpsView({ onOpenFinding }: { onOpenFinding(id: string): void }) 
   const track = useTrack(focus?.mission.id ?? null, focus?.mission.status === 'InFlight');
 
   const alerts = useMemo(() => {
-    const list: (DroneAlert & { droneId: string })[] = [];
-    for (const m of (missions.data ?? []).slice(0, 10)) list.push(...m.mission.recentAlerts.map((a) => ({ ...a, droneId: m.mission.droneId })));
+    const list: (DroneAlert & { droneId: string; missionId: string; circuitName: string })[] = [];
+    for (const m of (missions.data ?? []).slice(0, 10)) {
+      list.push(...m.mission.recentAlerts.map((a) => ({ ...a, droneId: m.mission.droneId, missionId: m.mission.id, circuitName: m.circuitName })));
+    }
     return list.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8);
   }, [missions.data]);
 
@@ -63,11 +66,13 @@ export function OpsView({ onOpenFinding }: { onOpenFinding(id: string): void }) 
           <ul className="alert-list">
             {alerts.map((a, i) => (
               <li key={i} className={a.level === 'Critical' ? 'alert-critical' : 'alert-warning'}>
-                <span className="alert-dot" />
-                <div>
-                  <strong>{a.droneId}</strong> {a.message}
-                  <div className="muted small">{relativeTime(a.at)}</div>
-                </div>
+                <button className="alert-row" onClick={() => onOpenMission(a.missionId)} title={`Open the flight overview for ${a.circuitName}`}>
+                  <span className="alert-dot" />
+                  <span className="grow">
+                    <strong>{a.droneId}</strong> {a.message}
+                    <span className="muted small alert-meta">{relativeTime(a.at)} · <span className="link">Flight overview →</span></span>
+                  </span>
+                </button>
               </li>
             ))}
           </ul>
@@ -76,14 +81,19 @@ export function OpsView({ onOpenFinding }: { onOpenFinding(id: string): void }) 
         <SidePanel id="triage" title="Needs triage" count={urgent.length}>
           {urgent.length === 0 && <p className="muted small">No high-severity findings waiting.</p>}
           {urgent.map((f) => (
-            <button key={f.finding.id} className="finding-row" onClick={() => onOpenFinding(f.finding.id)}>
-              <SeverityBadge severity={f.finding.severity} />
-              <span className="grow">
-                {FINDING_TYPE_LABEL[f.finding.type]}
-                <span className="muted small"> · {f.finding.structureLabel}</span>
-              </span>
-              {f.overdue && <span className="pill pill-danger">overdue</span>}
-            </button>
+            <div key={f.finding.id} className="triage-row">
+              <button className="finding-row" onClick={() => onOpenFinding(f.finding.id)} title="Open the finding">
+                <SeverityBadge severity={f.finding.severity} />
+                <span className="grow">
+                  {FINDING_TYPE_LABEL[f.finding.type]}
+                  <span className="muted small"> · {f.finding.structureLabel}</span>
+                </span>
+                {f.overdue && <span className="pill pill-danger">overdue</span>}
+              </button>
+              <button className="btn btn-ghost btn-xs" onClick={() => onOpenMission(f.finding.missionId)} title="Open the flight that found it">
+                Flight →
+              </button>
+            </div>
           ))}
         </SidePanel>
       </aside>
@@ -109,6 +119,7 @@ function MissionCard({ m, selected, onSelect }: { m: MissionView; selected: bool
         <span>{miles(mi.distanceFlownMeters)} mi</span>
         <span className={battery <= 15 ? 'text-danger' : battery <= 30 ? 'text-warn' : ''}>🔋 {Math.round(battery)}%</span>
         <span>⚠ {mi.findingCount}</span>
+        {mi.status === 'InFlight' && <SignalBars rssi={mi.rssiDbm} />}
       </div>
     </button>
   );

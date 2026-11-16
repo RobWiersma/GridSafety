@@ -62,7 +62,7 @@ export function OpsMap({ circuits, drones, findings, track, focus, onOpenFinding
       {drones.map((d) => (
         <Marker key={d.droneId} position={[d.position.lat, d.position.lon]} icon={droneIcon(d)} zIndexOffset={1000}>
           <Tooltip direction="top" offset={[0, -14]} permanent={d.status === 'Flying'}>
-            {d.droneId} · {Math.round(d.batteryPct)}% · {Math.round(d.altitudeM)} m
+            {d.droneId} · {Math.round(d.batteryPct)}% · {Math.round(d.altitudeM)} m{d.rssiDbm != null && ` · ${Math.round(d.rssiDbm)} dBm`}
           </Tooltip>
         </Marker>
       ))}
