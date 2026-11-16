@@ -69,6 +69,10 @@ public sealed class GridSafetyStackProps : StackProps
 public sealed class GridSafetyStack : Stack
 {
     private const string EventSource = "gridsafety";
+
+    /// <summary>Steady-state requests per second for the whole HTTP API; extra requests get 429.</summary>
+    public const double ApiRateLimitPerSecond = 10;
+    public const double ApiBurstLimit = 20;
     private const string Namespace = "GridSafety";
 
     // .NET 10 managed runtime on Graviton.
@@ -484,6 +488,11 @@ public sealed class GridSafetyStack : Stack
             ApiName = $"gridsafety-{props.Stage}",
             Description = "GridSafety ops API",
         });
+        // Abuse guard: cap the whole API (via CloudFront or the raw execute-api URL) so a flood of
+        // requests gets 429s from API Gateway instead of invoking Lambda and running up the bill.
+        // Plenty for a handful of ops users; throttling is free, unlike WAF.
+        var apiStage = (CfnStage)httpApi.DefaultStage!.Node.DefaultChild!;
+        apiStage.DefaultRouteSettings = new CfnStage.RouteSettingsProperty { ThrottlingRateLimit = ApiRateLimitPerSecond, ThrottlingBurstLimit = ApiBurstLimit };
         var integration = new HttpLambdaIntegration("ApiIntegration", apiFn);
 
         // ───────────── CDN / SPA hosting ─────────────

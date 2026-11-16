@@ -9,3 +9,4 @@ web/dist/
 .idea/
 .env*
 !.env.example
+cdk-outputs.json

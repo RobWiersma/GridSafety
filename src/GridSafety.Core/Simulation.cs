@@ -12,6 +12,38 @@ public interface IDroneLink
     Task SendAsync(DroneMessage message, CancellationToken ct = default);
 }
 
+/// <summary>
+/// Retries a send when the network fails (DNS not ready, connection reset), waiting between attempts.
+/// A brand-new account's IoT Core endpoint can take a minute or two to resolve after it is first
+/// described, so the very first demo flight would otherwise crash on takeoff.
+/// </summary>
+public sealed class RetryingDroneLink(IDroneLink inner, IReadOnlyList<TimeSpan> delays, TimeProvider clock, Action<Exception, int>? onRetry = null) : IDroneLink
+{
+    /// <summary>About 45 s in total: enough for new DNS to propagate, well inside the Lambda timeout.</summary>
+    public static readonly IReadOnlyList<TimeSpan> DefaultDelays = [.. new[] { 1, 2, 4, 8, 15, 15 }.Select(s => TimeSpan.FromSeconds(s))];
+
+    public async Task SendAsync(DroneMessage message, CancellationToken ct = default)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await inner.SendAsync(message, ct).ConfigureAwait(false);
+                return;
+            }
+            catch (Exception ex) when (attempt < delays.Count && IsTransient(ex) && !ct.IsCancellationRequested)
+            {
+                onRetry?.Invoke(ex, attempt + 1);
+                await Task.Delay(delays[attempt], clock, ct).ConfigureAwait(false);
+            }
+        }
+    }
+
+    public static bool IsTransient(Exception ex) =>
+        ex is HttpRequestException or System.Net.Sockets.SocketException or IOException or TimeoutException
+        || (ex.InnerException is { } inner && IsTransient(inner));
+}
+
 /// <summary>Pre-computed flight: follows the line with GPS jitter, drains battery, and (optionally) has incidents.</summary>
 public sealed record FlightPlan(IReadOnlyList<TelemetryPoint> Points, Structure SevereAt)
 {

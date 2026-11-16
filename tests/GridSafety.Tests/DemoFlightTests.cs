@@ -76,4 +76,50 @@ public class DemoFlightTests
         m.MoveTo(MissionStatus.Aborted, Now);
         Assert.False(DemoFlight.IsStale(m, Now.AddHours(1)));
     }
+
+    /// <summary>Fails the first <paramref name="failures"/> sends with <paramref name="error"/>, then records.</summary>
+    private sealed class FlakyLink(int failures, Func<Exception> error) : IDroneLink
+    {
+        public int Attempts { get; private set; }
+        public List<DroneMessage> Sent { get; } = [];
+
+        public Task SendAsync(DroneMessage message, CancellationToken ct = default)
+        {
+            if (++Attempts <= failures) throw error();
+            Sent.Add(message);
+            return Task.CompletedTask;
+        }
+    }
+
+    private static readonly TimeSpan[] NoWait = [TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero];
+    private static readonly DroneMessage Ping = new() { Kind = MessageKinds.Landed, DroneId = DemoFlight.DroneId, MissionId = "m1" };
+
+    [Fact]
+    public async Task Retry_rides_out_an_endpoint_that_is_not_reachable_yet()
+    {
+        // What a new account's IoT endpoint looked like: socket errors wrapped in HttpRequestException.
+        var flaky = new FlakyLink(2, () => new HttpRequestException("Unknown socket error", new System.Net.Sockets.SocketException()));
+        var retries = new List<int>();
+
+        await new RetryingDroneLink(flaky, NoWait, TimeProvider.System, (_, n) => retries.Add(n)).SendAsync(Ping);
+
+        Assert.Single(flaky.Sent);
+        Assert.Equal([1, 2], retries);
+    }
+
+    [Fact]
+    public async Task Retry_gives_up_after_the_last_delay()
+    {
+        var flaky = new FlakyLink(10, () => new HttpRequestException("down"));
+        await Assert.ThrowsAsync<HttpRequestException>(() => new RetryingDroneLink(flaky, NoWait, TimeProvider.System).SendAsync(Ping));
+        Assert.Equal(NoWait.Length + 1, flaky.Attempts);
+    }
+
+    [Fact]
+    public async Task Retry_does_not_repeat_errors_that_are_not_network_failures()
+    {
+        var flaky = new FlakyLink(1, () => new InvalidOperationException("bad message"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new RetryingDroneLink(flaky, NoWait, TimeProvider.System).SendAsync(Ping));
+        Assert.Equal(1, flaky.Attempts);
+    }
 }
