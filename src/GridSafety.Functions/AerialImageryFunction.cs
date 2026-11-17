@@ -46,7 +46,9 @@ public sealed class AerialImageryFunction(IGridRepository repo, IAerialSource so
         {
             req = doc.Deserialize<AerialRequest>(Json.Options) ?? throw new InvalidOperationException("Empty aerial request");
         }
-        return $"{req.StructureId}: {await AerialPolicy.FetchAsync(req, source, store, clock, ct)}";
+        var status = await AerialPolicy.FetchAsync(req, source, store, clock, ct,
+            onError: (attempt, ex) => Logger.LogWarning("USGS fetch for {Structure} failed (attempt {Attempt}): {Error}", req.StructureId, attempt, ex.Message));
+        return $"{req.StructureId}: {status}";
     }
 
     private static HttpClient CreateClient()

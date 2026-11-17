@@ -45,7 +45,8 @@ public sealed class InProcessAerialLauncher(
         {
             try
             {
-                var status = await AerialPolicy.FetchAsync(request, source, store, clock, lifetime.ApplicationStopping);
+                var status = await AerialPolicy.FetchAsync(request, source, store, clock, lifetime.ApplicationStopping,
+                    onError: (attempt, ex) => log.LogWarning("USGS fetch for {Structure} failed (attempt {Attempt}): {Error}", request.StructureId, attempt, ex.Message));
                 log.LogInformation("Aerial photo for {Structure}: {Status}", request.StructureId, status);
             }
             catch (OperationCanceledException) when (lifetime.ApplicationStopping.IsCancellationRequested) { }

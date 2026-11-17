@@ -11,11 +11,13 @@ public sealed class FakeAerialSource : IAerialSource
     public static readonly byte[] Jpeg = [0xFF, 0xD8, 0xFF, 0xE0, .. new byte[2000], 0xFF, 0xD9];
     public int Calls;
     public bool Fail;
+    /// <summary>Fail this many calls first (like a USGS 502), then succeed.</summary>
+    public int FailFirst;
 
     public Task<byte[]?> FetchAsync(GeoPoint center, CancellationToken ct = default)
     {
-        Interlocked.Increment(ref Calls);
-        return Fail ? throw new HttpRequestException("boom") : Task.FromResult<byte[]?>(Jpeg);
+        var n = Interlocked.Increment(ref Calls);
+        return Fail || n <= FailFirst ? throw new HttpRequestException("502 Bad Gateway") : Task.FromResult<byte[]?>(Jpeg);
     }
 }
 
@@ -90,13 +92,28 @@ public class AerialImageryTests
     }
 
     [Fact]
-    public async Task A_failed_fetch_is_recorded_not_thrown()
+    public async Task A_failed_fetch_is_retried_then_recorded_not_thrown()
     {
         var store = new InMemoryAerialStore();
         var source = new FakeAerialSource { Fail = true };
-        var status = await AerialPolicy.FetchAsync(new AerialRequest("S2", new GeoPoint(37.9, -122)), source, store, TimeProvider.System);
+        var errors = 0;
+        var status = await AerialPolicy.FetchAsync(new AerialRequest("S2", new GeoPoint(37.9, -122)), source, store, TimeProvider.System,
+            onError: (_, _) => errors++, retryDelays: [TimeSpan.Zero, TimeSpan.Zero]);
         Assert.Equal(AerialStatus.Failed, status);
+        Assert.Equal(3, source.Calls);
+        Assert.Equal(3, errors);
         Assert.Equal(AerialStatus.Failed, (await store.GetAsync("S2")).Status);
+    }
+
+    [Fact]
+    public async Task A_brief_USGS_error_is_retried_and_the_photo_still_arrives()
+    {
+        var store = new InMemoryAerialStore();
+        var source = new FakeAerialSource { FailFirst = 1 };
+        var status = await AerialPolicy.FetchAsync(new AerialRequest("S3", new GeoPoint(37.9, -122)), source, store, TimeProvider.System,
+            retryDelays: [TimeSpan.Zero, TimeSpan.Zero]);
+        Assert.Equal(AerialStatus.Ready, status);
+        Assert.Equal(2, source.Calls);
     }
 
     [Fact]

@@ -98,7 +98,7 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
                   <div className="capture-pending">
                     {aerial.data?.status === 'unavailable'
                       ? <span className="muted small">No aerial photo is available for this spot. <button className="link-button" onClick={() => setView('closeup')}>Show the close-up</button></span>
-                      : <><div className="spinner" /><span className="muted small">Fetching the aerial photo of this structure (first time only, up to 30 s)…</span></>}
+                      : <><div className="spinner" /><span className="muted small">Fetching the aerial photo of this structure (first time only, usually under a minute)…</span></>}
                   </div>
                 ) : image.data ? (
                   <>

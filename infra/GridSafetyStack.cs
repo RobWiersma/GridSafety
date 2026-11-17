@@ -496,7 +496,7 @@ public sealed class GridSafetyStack : Stack
         var aerialFn = NewFunction("AerialImagery", $"{fn}AerialImageryFunction::HandleAsync", "functions", 512, new()
         {
             ["TABLE_NAME"] = table.TableName,
-        }, timeoutSeconds: 120);
+        }, timeoutSeconds: 300); // up to 3 attempts of 80 s each: the USGS export service is slow and sometimes errors
         table.GrantReadWriteData(aerialFn);
         aerialFn.ConfigureAsyncInvoke(new EventInvokeConfigOptions { RetryAttempts = 0 }); // a failure is recorded and retried later
         apiFn.AddEnvironment("GridSafety__AerialFunctionName", aerialFn.FunctionName);

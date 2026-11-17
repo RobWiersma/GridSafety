@@ -83,11 +83,14 @@ public interface IAerialStore
 
 public static class AerialPolicy
 {
-    /// <summary>A claim older than this is treated as a fetch that died.</summary>
-    public static readonly TimeSpan PendingFor = TimeSpan.FromMinutes(3);
+    /// <summary>A claim older than this is treated as a fetch that died (longer than the Lambda's 5-minute timeout).</summary>
+    public static readonly TimeSpan PendingFor = TimeSpan.FromMinutes(6);
 
-    /// <summary>How long to wait before trying a failed spot again.</summary>
-    public static readonly TimeSpan RetryFailedAfter = TimeSpan.FromHours(1);
+    /// <summary>How long to wait before trying a failed spot again. USGS errors are usually brief.</summary>
+    public static readonly TimeSpan RetryFailedAfter = TimeSpan.FromMinutes(15);
+
+    /// <summary>Pauses between attempts when USGS errors or times out (its export service sometimes returns 502/504).</summary>
+    public static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(10)];
 
     /// <summary>What a reader should make of a stored record right now (stale claims and failures read as Missing).</summary>
     public static AerialStatus Effective(AerialImage img, DateTimeOffset now) => img.Status switch
@@ -97,16 +100,34 @@ public static class AerialPolicy
         var s => s,
     };
 
-    /// <summary>Fetch and store one frame. Never throws for a bad fetch: it records a failure instead.</summary>
-    public static async Task<AerialStatus> FetchAsync(AerialRequest req, IAerialSource source, IAerialStore store, TimeProvider clock, CancellationToken ct = default)
+    /// <summary>
+    /// Fetch and store one frame, retrying errors and timeouts (<see cref="RetryDelays"/>). Never throws for a bad fetch:
+    /// it records a failure instead, and reports each error to <paramref name="onError"/> for the logs.
+    /// </summary>
+    public static async Task<AerialStatus> FetchAsync(
+        AerialRequest req, IAerialSource source, IAerialStore store, TimeProvider clock, CancellationToken ct = default,
+        Action<int, Exception>? onError = null, IReadOnlyList<TimeSpan>? retryDelays = null)
     {
         ArgumentNullException.ThrowIfNull(req);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(clock);
-        byte[]? jpeg;
-        try { jpeg = await source.FetchAsync(req.Location, ct); }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested) { jpeg = null; }
+        var delays = retryDelays ?? RetryDelays;
+        byte[]? jpeg = null;
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                jpeg = await source.FetchAsync(req.Location, ct);
+                break; // a JPEG, or null for "no imagery here", which retrying won't change
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+            {
+                onError?.Invoke(attempt + 1, ex);
+                if (attempt >= delays.Count) break;
+                await Task.Delay(delays[attempt], clock, ct);
+            }
+        }
 
         if (jpeg is null)
         {
