@@ -110,8 +110,8 @@ public class AerialImageryTests
         var fn = new AerialImageryFunction(repo, source, store, TimeProvider.System);
         var evt = JsonDocument.Parse($$$"""{"detail-type":"FindingCreated","detail":{"detailType":"FindingCreated","entityType":"Finding","entityId":"{{{finding.Id}}}","summary":"x"}}""");
 
-        await fn.HandleAsync(evt, CancellationToken.None);
-        await fn.HandleAsync(evt, CancellationToken.None);
+        await fn.ProcessAsync(evt, CancellationToken.None);
+        await fn.ProcessAsync(evt, CancellationToken.None);
 
         Assert.Equal(1, source.Calls);
         Assert.Equal(AerialStatus.Ready, (await store.GetAsync(finding.StructureId)).Status);

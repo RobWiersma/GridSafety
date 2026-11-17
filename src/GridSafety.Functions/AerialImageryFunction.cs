@@ -26,12 +26,12 @@ public sealed class AerialImageryFunction(IGridRepository repo, IAerialSource so
     {
         ArgumentNullException.ThrowIfNull(context);
         using var cts = new CancellationTokenSource(context.RemainingTime - TimeSpan.FromSeconds(5));
-        var status = await HandleAsync(await JsonDocument.ParseAsync(input), cts.Token);
+        var status = await ProcessAsync(await JsonDocument.ParseAsync(input), cts.Token);
         Logger.LogInformation("Aerial photo: {Status}", status);
     }
 
     /// <summary>An <see cref="AerialRequest"/> from the API (already claimed), or a FindingCreated event from the bus.</summary>
-    public async Task<string> HandleAsync(JsonDocument doc, CancellationToken ct)
+    public async Task<string> ProcessAsync(JsonDocument doc, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(doc);
         AerialRequest req;
