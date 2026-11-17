@@ -14,7 +14,7 @@ public static partial class Endpoints
     /// through the same pipeline as a real flight. The mission goes In flight on the first telemetry, as usual.
     /// </summary>
     private static async Task<Results<Accepted<MissionView>, NotFound, Conflict<string>, ProblemHttpResult>> SimulateMission(
-        string id, HttpContext ctx, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, IDemoFlightLauncher launcher,
+        string id, HttpContext ctx, IGridRepository repo, IResourceStore resources, ISimulationSettingsStore simulation, ICircuitCatalog circuits, IDemoFlightLauncher launcher,
         TimeProvider clock, CancellationToken ct)
     {
         if (!User(ctx).IsSupervisor)
@@ -48,7 +48,8 @@ public static partial class Endpoints
 
         try
         {
-            await launcher.LaunchAsync(new DemoFlightLaunch(mission.Id, circuit.Id, mission.DroneId), ct);
+            var sim = await simulation.GetAsync(ct);
+            await launcher.LaunchAsync(new DemoFlightLaunch(mission.Id, circuit.Id, mission.DroneId, sim.FindingsPerFlight), ct);
         }
         catch
         {
@@ -57,5 +58,31 @@ public static partial class Endpoints
             throw;
         }
         return TypedResults.Accepted($"/api/missions/{mission.Id}", ToView(mission, circuits));
+    }
+
+    private static void MapSimulationSettings(RouteGroupBuilder secured)
+    {
+        secured.MapGet("/simulation-settings", async (ISimulationSettingsStore store, CancellationToken ct) => TypedResults.Ok(await store.GetAsync(ct)));
+        secured.MapPut("/simulation-settings", PutSimulationSettings);
+    }
+
+    private static async Task<IResult> PutSimulationSettings(
+        SimulationSettings body, HttpContext ctx, ISimulationSettingsStore store, TimeProvider clock, CancellationToken ct)
+    {
+        var user = User(ctx);
+        if (!user.IsSupervisor)
+            return TypedResults.Problem("Only supervisors can change simulation settings.", statusCode: StatusCodes.Status403Forbidden);
+        if (SimulationSettings.Validate(body) is { Count: > 0 } errors) return TypedResults.ValidationProblem(errors);
+        body.UpdatedBy = user.DisplayName;
+        body.UpdatedAt = clock.GetUtcNow();
+        try
+        {
+            await store.SaveAsync(body, ct);
+        }
+        catch (ConcurrencyException)
+        {
+            return TypedResults.Conflict("Someone else changed the simulation settings. Reload to see their changes.");
+        }
+        return TypedResults.Ok(body);
     }
 }

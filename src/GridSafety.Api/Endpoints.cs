@@ -81,6 +81,7 @@ public static partial class Endpoints
         secured.MapGet("/crews", ListCrews);
         MapResources(secured);
         MapAlertSettings(secured);
+        MapSimulationSettings(secured);
         secured.MapGet("/visitors", GetVisitorStats);
 
         if (devIngest)
@@ -156,7 +157,7 @@ public static partial class Endpoints
     /// One demo flight at a time; a demo mission that stopped reporting for 10 minutes is aborted and replaced.
     /// </summary>
     private static async Task<Results<Accepted<MissionView>, ValidationProblem, Conflict<string>, ProblemHttpResult>> StartDemoFlight(
-        DemoFlightRequest? req, HttpContext ctx, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, IDemoFlightLauncher launcher,
+        DemoFlightRequest? req, HttpContext ctx, IGridRepository repo, IResourceStore resources, ISimulationSettingsStore simulation, ICircuitCatalog circuits, IDemoFlightLauncher launcher,
         TimeProvider clock, CancellationToken ct)
     {
         var user = User(ctx);
@@ -200,7 +201,8 @@ public static partial class Endpoints
         await repo.SaveMissionAsync(mission, ct);
         try
         {
-            await launcher.LaunchAsync(new DemoFlightLaunch(mission.Id, circuit.Id, mission.DroneId), ct);
+            var sim = await simulation.GetAsync(ct);
+            await launcher.LaunchAsync(new DemoFlightLaunch(mission.Id, circuit.Id, mission.DroneId, sim.FindingsPerFlight), ct);
         }
         catch
         {

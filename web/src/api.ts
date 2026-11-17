@@ -3,7 +3,7 @@ import { createContext, useContext } from 'react';
 import { useSession } from './session';
 import type {
   AlertKind, AlertSettings, AlertSettingsView,
-  Circuit, Crew, CrewView, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint,
+  Circuit, Crew, CrewView, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint, SimulationSettings,
 } from './types';
 
 export class ApiError extends Error {
@@ -59,6 +59,7 @@ const keys = {
   crews: ['crews'],
   resources: ['resources'],
   alertSettings: ['alert-settings'],
+  simulationSettings: ['simulation-settings'],
 };
 
 export const useMe = () => {
@@ -163,6 +164,22 @@ export function useSaveAlertSettings() {
   return useMutation({
     mutationFn: (settings: AlertSettings) => api<AlertSettingsView>('/alert-settings', { method: 'PUT', body: JSON.stringify(settings) }),
     onSuccess: (view) => qc.setQueryData(keys.alertSettings, view),
+  });
+}
+
+/** How many findings simulated flights report. */
+export const useSimulationSettings = () => {
+  const api = useFetcher();
+  return useQuery({ queryKey: keys.simulationSettings, queryFn: () => api<SimulationSettings>('/simulation-settings') });
+};
+
+/** Supervisor-only: replace the simulation settings. Fails with 409 if someone else saved since `version` was read. */
+export function useSaveSimulationSettings() {
+  const api = useFetcher();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: SimulationSettings) => api<SimulationSettings>('/simulation-settings', { method: 'PUT', body: JSON.stringify(settings) }),
+    onSuccess: (saved) => qc.setQueryData(keys.simulationSettings, saved),
   });
 }
 

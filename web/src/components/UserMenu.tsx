@@ -43,8 +43,8 @@ export function UserMenu({ name, isSupervisor, onVisitors, onAlerts, onSignOut }
             </button>
           )}
           <button role="menuitem" onClick={pick(onAlerts)}>
-            Email alerts
-            <span className="muted small">{isSupervisor ? 'Who gets emailed, and for what' : 'Who gets emailed (view only)'}</span>
+            Settings
+            <span className="muted small">{isSupervisor ? 'Simulated flights and email alerts' : 'Simulated flights and email alerts (view only)'}</span>
           </button>
           <button role="menuitem" onClick={pick(onSignOut)}>Sign out</button>
         </div>

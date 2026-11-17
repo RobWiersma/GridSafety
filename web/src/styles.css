@@ -459,3 +459,9 @@ button { font: inherit; color: inherit; }
 .alerts-recipients .mono { overflow-wrap: anywhere; }
 .alerts-add { display: flex; gap: 8px; }
 .alerts-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+/* Settings page: simulated flights + email alerts */
+.settings-page { display: flex; flex-direction: column; gap: 14px; }
+.alerts-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sim-count { align-items: center !important; flex-wrap: wrap; }
+.sim-count .input { width: 76px; padding: 5px 8px; }

@@ -239,6 +239,14 @@ export interface Me {
 export type AlertType = 'CriticalFinding' | 'OverdueTriage' | 'FlightAlert' | 'MissionComplete';
 
 /** Which events send email and to whom. Supervisors edit it; `version` guards against overwriting someone else's save. */
+export interface SimulationSettings {
+  version: number;
+  /** Exactly this many findings per simulated flight, or absent for random. */
+  findingsPerFlight?: number;
+  updatedBy?: string;
+  updatedAt?: string;
+}
+
 export interface AlertSettings {
   version: number;
   criticalFindings: boolean;

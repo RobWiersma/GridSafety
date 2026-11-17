@@ -129,11 +129,15 @@ public static class FindingGenerator
         (FindingType.ConductorDamage, ["Broken strands near splice", "Conductor clashing marks mid-span", "Bird-caging at dead-end"]),
     ];
 
-    public static FindingReport? Maybe(Structure s, Random rng, bool forceSevere)
+    /// <summary>Chance that a structure has something wrong with it when the count isn't fixed.</summary>
+    public const double DefectRate = 0.22;
+
+    /// <param name="always">Report a finding for this structure (the flight was told how many to find).</param>
+    public static FindingReport? Maybe(Structure s, Random rng, bool forceSevere, bool always = false)
     {
         ArgumentNullException.ThrowIfNull(s);
         ArgumentNullException.ThrowIfNull(rng);
-        if (!forceSevere && rng.NextDouble() > 0.22) return null;
+        if (!forceSevere && !always && rng.NextDouble() > DefectRate) return null;
         var (type, notes) = Catalog[rng.Next(Catalog.Length)];
         var roll = rng.NextDouble();
         var severity = forceSevere ? (rng.NextDouble() < 0.5 ? 5 : 4)
@@ -143,7 +147,8 @@ public static class FindingGenerator
 }
 
 /// <summary>Start a demo flight: which mission to fly. Sent from the API to the DemoFlight Lambda.</summary>
-public sealed record DemoFlightLaunch(string MissionId, string CircuitId, string DroneId);
+/// <param name="FindingCount">Exactly this many findings (see <see cref="SimulationSettings"/>), or null for random.</param>
+public sealed record DemoFlightLaunch(string MissionId, string CircuitId, string DroneId, int? FindingCount = null);
 
 /// <summary>
 /// Flies a whole simulated mission through an <see cref="IDroneLink"/>: telemetry every tick, a finding
@@ -170,7 +175,7 @@ public static class DemoFlight
 
     public static async Task FlyAsync(
         Circuit circuit, string droneId, string missionId, IDroneLink link, TimeSpan tick, Random rng, TimeProvider clock,
-        bool scriptedIncidents = true, Func<bool>? keepFlying = null,
+        bool scriptedIncidents = true, Func<bool>? keepFlying = null, int? findingCount = null,
         Action<int, int, TelemetryPoint>? onPoint = null, Action<Structure, FindingReport>? onFinding = null,
         CancellationToken ct = default)
     {
@@ -180,6 +185,7 @@ public static class DemoFlight
 
         var plan = FlightPlan.Build(circuit, rng, scriptedIncidents, clock.GetUtcNow());
         var reported = new HashSet<string>();
+        (HashSet<string> Ids, string? SevereId)? defective = findingCount is { } n ? PickDefective(circuit, plan, n, rng) : null;
         for (var i = 0; i < plan.Points.Count; i++)
         {
             if (keepFlying is not null && !keepFlying()) break; // e.g. Lambda about to time out: land early
@@ -190,7 +196,10 @@ public static class DemoFlight
             foreach (var s in circuit.Structures.Where(s => !reported.Contains(s.Id) && Geo.DistanceMeters(s.Location, p.Position) < 30))
             {
                 reported.Add(s.Id);
-                if (FindingGenerator.Maybe(s, rng, forceSevere: s == plan.SevereAt) is { } finding)
+                var finding = defective is null
+                    ? FindingGenerator.Maybe(s, rng, forceSevere: s == plan.SevereAt)
+                    : defective.Value.Ids.Contains(s.Id) ? FindingGenerator.Maybe(s, rng, forceSevere: s.Id == defective.Value.SevereId, always: true) : null;
+                if (finding is not null)
                 {
                     await link.SendAsync(new DroneMessage { Kind = MessageKinds.Finding, DroneId = droneId, MissionId = missionId, Finding = finding }, ct);
                     onFinding?.Invoke(s, finding);
@@ -201,5 +210,27 @@ public static class DemoFlight
         }
 
         await link.SendAsync(new DroneMessage { Kind = MessageKinds.Landed, DroneId = droneId, MissionId = missionId }, ct);
+    }
+
+    /// <summary>
+    /// Chooses which structures report a finding when the count is fixed: <paramref name="count"/> of the structures the
+    /// flight passes (fewer if the line is short). When there is at least one, one of them is severe: the scripted
+    /// severe structure if the drone passes it, otherwise another picked one.
+    /// </summary>
+    public static (HashSet<string> Ids, string? SevereId) PickDefective(Circuit circuit, FlightPlan plan, int count, Random rng)
+    {
+        ArgumentNullException.ThrowIfNull(circuit);
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(rng);
+        var passed = circuit.Structures.Where(s => plan.Points.Any(p => Geo.DistanceMeters(s.Location, p.Position) < 30)).ToList();
+        var picked = new HashSet<string>();
+        if (count <= 0 || passed.Count == 0) return (picked, null);
+        if (passed.Contains(plan.SevereAt)) picked.Add(plan.SevereAt.Id);
+        foreach (var s in passed.OrderBy(_ => rng.Next()))
+        {
+            if (picked.Count >= count) break;
+            picked.Add(s.Id);
+        }
+        return (picked, picked.Contains(plan.SevereAt.Id) ? plan.SevereAt.Id : picked.First());
     }
 }

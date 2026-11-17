@@ -48,7 +48,7 @@ public sealed class DemoFlightFunction
         var retrying = new RetryingDroneLink(link, RetryingDroneLink.DefaultDelays, TimeProvider.System,
             (ex, attempt) => Logger.LogWarning("IoT publish failed, retry {Attempt}: {Error}", attempt, ex.Message));
         await DemoFlight.FlyAsync(circuit, launch.DroneId, launch.MissionId, retrying, tick, new Random(), TimeProvider.System,
-            keepFlying: () => context.RemainingTime > LandingReserve);
+            keepFlying: () => context.RemainingTime > LandingReserve, findingCount: launch.FindingCount);
         Logger.LogInformation("Demo flight {MissionId} landed after {Messages} messages", launch.MissionId, link.Sent);
     }
 }

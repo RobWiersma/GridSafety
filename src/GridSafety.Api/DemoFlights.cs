@@ -52,7 +52,8 @@ public sealed class InProcessDemoFlightLauncher(
         {
             try
             {
-                await DemoFlight.FlyAsync(circuit, launch.DroneId, launch.MissionId, new IngestLink(ingest), tick, new Random(), clock, ct: stopping);
+                await DemoFlight.FlyAsync(circuit, launch.DroneId, launch.MissionId, new IngestLink(ingest), tick, new Random(), clock,
+                    findingCount: launch.FindingCount, ct: stopping);
             }
             catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
 #pragma warning disable CA1031 // A background flight must never take the API down; log and let the mission go stale.

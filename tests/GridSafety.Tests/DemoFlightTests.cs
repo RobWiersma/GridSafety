@@ -34,6 +34,33 @@ public class DemoFlightTests
         Assert.True(Geo.DistanceMeters(lastFix, TestCircuits.Line.Path[^1]) < 20, "drone should reach the end of the line");
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(3)]
+    public async Task A_fixed_finding_count_reports_exactly_that_many(int count)
+    {
+        foreach (var seed in new[] { 1, 2, 3 })
+        {
+            var link = new RecordingLink();
+            await DemoFlight.FlyAsync(TestCircuits.Line, "DRN-T", "m1", link, TimeSpan.Zero, new Random(seed), TimeProvider.System, findingCount: count);
+            var findings = link.Sent.Where(m => m.Kind == MessageKinds.Finding).ToList();
+            Assert.Equal(count, findings.Count);
+            Assert.Equal(count, findings.Select(f => f.Finding!.StructureId).Distinct().Count());
+            if (count > 0) Assert.Contains(findings, f => f.Finding!.Severity >= 4); // the scripted severe defect is always one of them
+        }
+    }
+
+    [Fact]
+    public async Task A_finding_count_above_the_structures_on_the_line_reports_every_structure_flown_past()
+    {
+        var link = new RecordingLink();
+        await DemoFlight.FlyAsync(TestCircuits.Line, "DRN-T", "m1", link, TimeSpan.Zero, new Random(5), TimeProvider.System, findingCount: 500);
+        var flown = link.Sent.Where(m => m.Kind == MessageKinds.Telemetry).Select(m => m.Points![0].Position).ToList();
+        var passed = TestCircuits.Line.Structures.Count(s => flown.Any(p => Geo.DistanceMeters(s.Location, p) < 30));
+        Assert.Equal(passed, link.Sent.Count(m => m.Kind == MessageKinds.Finding));
+    }
+
     [Fact]
     public async Task Lands_early_when_told_to_stop()
     {

@@ -489,6 +489,34 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         Assert.Equal(System.Net.HttpStatusCode.NotFound, (await c.GetAsync("/api/findings/nope/aerial")).StatusCode);
     }
 
+    [Fact]
+    public async Task Supervisors_set_how_many_findings_simulated_flights_report()
+    {
+        var inspector = Client("alex");
+        var sup = Client("dana", supervisor: true);
+        var defaults = await inspector.GetFromJsonAsync<SimulationSettings>("/api/simulation-settings", JsonOpts);
+        Assert.Null(defaults!.FindingsPerFlight);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await inspector.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { FindingsPerFlight = 2 }, JsonOpts)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await sup.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { FindingsPerFlight = 99 }, JsonOpts)).StatusCode);
+        var saved = await sup.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { FindingsPerFlight = 2 }, JsonOpts);
+        saved.EnsureSuccessStatusCode();
+        var version = (await saved.Content.ReadFromJsonAsync<SimulationSettings>(JsonOpts))!.Version;
+        try
+        {
+            var m = await PlanAsync(sup, "DRN-COUNT");
+            Assert.Equal(HttpStatusCode.Accepted, (await sup.PostAsync($"/api/missions/{m.Mission.Id}/simulate", null)).StatusCode);
+            await WaitForLandingAsync(sup, m.Mission.Id);
+            var findings = await sup.GetFromJsonAsync<List<FindingView>>($"/api/findings?status=all&missionId={m.Mission.Id}", JsonOpts);
+            Assert.Equal(2, findings!.Count);
+        }
+        finally
+        {
+            // Back to random so other tests' flights aren't affected.
+            (await sup.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { Version = version, FindingsPerFlight = null }, JsonOpts)).EnsureSuccessStatusCode();
+        }
+    }
+
     private static async Task WaitForLandingAsync(HttpClient c, string missionId)
     {
         for (var i = 0; i < 100; i++)
