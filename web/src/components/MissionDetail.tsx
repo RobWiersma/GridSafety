@@ -187,12 +187,14 @@ function Tile({ label, value, sub, danger }: { label: string; value: string; sub
 
 function CaptureCard({ view, onOpen }: { view: FindingView; onOpen(): void }) {
   const f = view.finding;
+  // The aerial photo is the default; the illustration is only for spots with no photo. Each structure's photo is
+  // fetched once and then stored, and most are already prefetched when the finding is created.
+  const aerial = useFindingAerial(f.id);
   const image = useFindingImage(f.id);
-  const aerial = useFindingAerial(f.id, false); // cached photos only: a page of thumbnails never starts fetches
-  const src = aerial.data?.url ?? image.data;
+  const src = aerial.data?.status === 'unavailable' ? image.data : aerial.data?.url;
   return (
     <button className="capture-card" onClick={onOpen} aria-label={`Open ${FINDING_TYPE_LABEL[f.type]} at ${f.structureLabel}`}>
-      {src ? <img src={src} alt="" /> : <div className="capture-placeholder" />}
+      {src ? <img src={src} alt="" /> : <div className="capture-placeholder" title="Loading the aerial photo" />}
       <div className="capture-body">
         <div className="capture-title"><SeverityBadge severity={f.severity} /> <strong>{FINDING_TYPE_LABEL[f.type]}</strong></div>
         <div className="small">{f.structureLabel} · {Math.round(f.confidence * 100)}% confidence · <span className={`pill pill-${f.status.toLowerCase()}`}>{f.status}</span></div>

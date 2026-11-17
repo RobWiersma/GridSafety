@@ -3,6 +3,7 @@ import { useContext, useEffect, useState } from 'react';
 import { FetcherContext, useCrews, useFindingAerial, useFindingImage, useFindingStatus } from '../api';
 import { ACTION_LABEL, FINDING_TYPE_LABEL, relativeTime, slaText } from '../lib/format';
 import type { FindingStatus, FindingView } from '../types';
+import { PhotoZoom } from './PhotoZoom';
 import { SeverityBadge } from './SeverityBadge';
 import type { ToastMessage } from './Toast';
 
@@ -21,6 +22,7 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
   const image = useFindingImage(id);
   const aerial = useFindingAerial(id);
   const [view, setView] = useState<'aerial' | 'closeup'>('aerial');
+  const [zoom, setZoom] = useState<{ src: string; alt: string } | null>(null);
   const change = useFindingStatus();
   const crews = useCrews();
   const [note, setNote] = useState('');
@@ -89,7 +91,7 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
                 </div>
                 {view === 'aerial' && aerial.data?.url ? (
                   <>
-                    <img src={aerial.data.url} alt={`Aerial view of ${f.structureLabel} with the ${FINDING_TYPE_LABEL[f.type].toLowerCase()} marked (simulated finding)`} />
+                    <ZoomableImage src={aerial.data.url} alt={`Aerial view of ${f.structureLabel} with the ${FINDING_TYPE_LABEL[f.type].toLowerCase()} marked (simulated finding)`} onZoom={setZoom} />
                     <figcaption className="muted small">
                       Real aerial photo of this structure's location (USDA NAIP, public domain); the defect and detection are simulated.
                     </figcaption>
@@ -102,11 +104,12 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
                   </div>
                 ) : image.data ? (
                   <>
-                    <img src={image.data} alt={`${FINDING_TYPE_LABEL[f.type]} at ${f.structureLabel} (simulated drone image)`} />
+                    <ZoomableImage src={image.data} alt={`${FINDING_TYPE_LABEL[f.type]} at ${f.structureLabel} (simulated drone image)`} onZoom={setZoom} />
                     <figcaption className="muted small">Illustrated close-up for the demo; a real drone would upload its photo.</figcaption>
                   </>
                 ) : <div className="capture-pending"><div className="spinner" /></div>}
               </figure>
+              {zoom && <PhotoZoom src={zoom.src} alt={zoom.alt} onClose={() => setZoom(null)} />}
               <div className="facts">
                 <span className={`pill pill-${f.status.toLowerCase()}`}>{f.status}</span>
                 <span>{data.severityLabel}</span>
@@ -192,5 +195,15 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
         )}
       </aside>
     </>
+  );
+}
+
+/** The drawer's capture: click (or Enter) opens the zoom viewer. */
+function ZoomableImage({ src, alt, onZoom }: { src: string; alt: string; onZoom: (p: { src: string; alt: string }) => void }) {
+  return (
+    <button type="button" className="zoomable" onClick={() => onZoom({ src, alt })} aria-label={`Zoom in: ${alt}`} title="Click to zoom">
+      <img src={src} alt={alt} />
+      <span className="zoomable-hint" aria-hidden="true">⤢ Zoom</span>
+    </button>
   );
 }

@@ -428,3 +428,19 @@ button { font: inherit; color: inherit; }
 .capture-tabs { margin-bottom: 8px; }
 .capture-pending { aspect-ratio: 16 / 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 16px;
   border: 1px dashed var(--border); border-radius: 8px; background: var(--surface-2); }
+
+/* Zoomable capture in the finding drawer, and the full-screen photo viewer */
+.zoomable { position: relative; display: block; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; border-radius: 8px; overflow: hidden; }
+.zoomable img { display: block; width: 100%; }
+.zoomable-hint { position: absolute; right: 8px; bottom: 8px; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; background: rgb(0 0 0 / 55%); opacity: .85; transition: opacity .15s; }
+.zoomable:hover .zoomable-hint, .zoomable:focus-visible .zoomable-hint { opacity: 1; }
+.photo-zoom { border: 0; padding: 0; width: min(1200px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); background: var(--surface); color: var(--text); border-radius: 14px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; overflow: hidden; }
+.photo-zoom:not([open]) { display: none; }
+.photo-zoom::backdrop { background: rgb(0 0 0 / 75%); }
+.photo-zoom-bar { display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.photo-zoom-bar .small { margin-right: auto; padding-left: 6px; font-variant-numeric: tabular-nums; }
+.photo-zoom-stage { position: relative; overflow: hidden; touch-action: none; cursor: zoom-in; background: #111; aspect-ratio: 8 / 5; max-height: calc(100dvh - 120px); }
+.photo-zoom-stage.is-zoomed { cursor: grab; }
+.photo-zoom-stage.is-zoomed:active { cursor: grabbing; }
+.photo-zoom-stage img { width: 100%; height: 100%; object-fit: contain; display: block; transform-origin: center; user-select: none; -webkit-user-drag: none; }
+.photo-zoom-hint { margin: 0; padding: 6px 12px 10px; }
