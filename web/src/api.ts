@@ -3,7 +3,7 @@ import { createContext, useContext } from 'react';
 import { useSession } from './session';
 import type {
   AlertKind, AlertSettings, AlertSettingsView,
-  Circuit, Crew, CrewView, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint, SimulationSettings,
+  AssigneeOption, Circuit, Crew, CrewView, FieldJobs, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint, SimulationSettings,
 } from './types';
 
 export class ApiError extends Error {
@@ -119,6 +119,18 @@ export const useVisitorStats = (days: number) => {
 export const useCrews = () => {
   const api = useFetcher();
   return useQuery({ queryKey: keys.crews, queryFn: () => api<CrewView[]>('/crews'), refetchInterval: 15_000 });
+};
+
+/** Trucks out on simulated field jobs (and ones just back), with the server's clock. */
+export const useFieldJobs = () => {
+  const api = useFetcher();
+  return useQuery({ queryKey: ['field-jobs'], queryFn: () => api<FieldJobs>('/field-jobs'), refetchInterval: 5_000 });
+};
+
+/** Who a finding's work order can go to: qualified, on-duty technicians nearest first, then whole crews. */
+export const useAssignees = (findingId: string, enabled = true) => {
+  const api = useFetcher();
+  return useQuery({ queryKey: ['assignees', findingId], queryFn: () => api<AssigneeOption[]>(`/findings/${findingId}/assignees`), enabled, refetchInterval: 30_000 });
 };
 
 /** Drones, flight crews and ground crews, with live state and usage. */
@@ -243,6 +255,8 @@ function useInvalidate() {
       qc.invalidateQueries({ queryKey: keys.stats }),
       qc.invalidateQueries({ queryKey: keys.crews }),
       qc.invalidateQueries({ queryKey: keys.resources }),
+      qc.invalidateQueries({ queryKey: ['field-jobs'] }),
+      qc.invalidateQueries({ queryKey: ['assignees'] }),
     ]);
 }
 

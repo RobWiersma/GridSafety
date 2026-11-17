@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { useAcknowledgeAlerts, useCircuits, useDrones, useFindings, useMissions, useTrack } from '../api';
+import { useAcknowledgeAlerts, useCircuits, useDrones, useFieldJobs, useFindings, useMissions, useResources, useTrack } from '../api';
+import { dispatchName, phaseAt, positionAt, roadAhead, statusText, useServerClock } from '../lib/field';
 import { FINDING_TYPE_LABEL, miles, pct, relativeTime } from '../lib/format';
 import type { DroneAlert, MissionView } from '../types';
-import { OpsMap } from './OpsMap';
+import { OpsMap, type DepotPin, type TruckPin } from './OpsMap';
 import { SeverityBadge } from './SeverityBadge';
 import { SeverityFilter, useSeverityFilter } from './SeverityFilter';
 import { SidePanel } from './SidePanel';
@@ -36,6 +37,51 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
 
   const flightNames = useMemo(() => Object.fromEntries((missions.data ?? []).filter((m) => m.mission.name).map((m) => [m.mission.id, m.mission.name!])), [missions.data]);
 
+  // Where the ground crews depart from: each technician's own depot, or their crew's.
+  const resources = useResources();
+  const [showDepots, setShowDepots] = useState(() => {
+    try { return localStorage.getItem('gs.ops.depots') !== 'off'; } catch { return true; }
+  });
+  const toggleDepots = () => {
+    setShowDepots((on) => {
+      try { localStorage.setItem('gs.ops.depots', on ? 'off' : 'on'); } catch { /* storage blocked */ }
+      return !on;
+    });
+  };
+  const depotPins = useMemo<DepotPin[]>(() => {
+    const r = resources.data;
+    if (!r) return [];
+    return r.depots.map((depot) => ({
+      depot,
+      people: r.groundCrews.flatMap(({ crew }) => crew.members
+        .filter((m) => (m.depotId ?? crew.depotId) === depot.id)
+        .map((m) => ({ name: m.name, role: m.role, crewName: crew.name, offDuty: crew.status === 'OffDuty' }))),
+    }));
+  }, [resources.data]);
+
+  // Field crews out on jobs: positions come from the job's timestamps, so trucks move every second between polls.
+  const field = useFieldJobs();
+  const fieldNow = useServerClock(field.data?.now);
+  const trucks: TruckPin[] = (field.data?.jobs ?? []).map((j) => {
+    const phase = phaseAt(j.dispatch, fieldNow);
+    return {
+      findingId: j.findingId,
+      label: dispatchName(j.dispatch),
+      structureLabel: j.structureLabel,
+      dispatch: j.dispatch,
+      phase,
+      position: positionAt(j.dispatch, fieldNow),
+      ahead: roadAhead(j.dispatch, fieldNow),
+      status: statusText(j.dispatch, fieldNow),
+    };
+  });
+  const out = trucks.filter((tr) => tr.phase !== 'Back' && tr.phase !== 'MovedOn');
+  // One row per person: their current job, with what's lined up after it.
+  const people = [...new Set(out.map((tr) => tr.dispatch.assignee))].map((who) => {
+    const jobs = out.filter((tr) => tr.dispatch.assignee === who);
+    return { who, now: jobs.find((tr) => tr.phase !== 'Queued') ?? jobs[0], next: jobs.filter((tr) => tr.phase === 'Queued') };
+  });
+
   // The severity chips filter both the map and the triage panel, so the two always agree.
   const severity = useSeverityFilter();
   const allOpen = findings.data ?? [];
@@ -58,6 +104,8 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
           drones={drones.data ?? []}
           findings={visible}
           flightNames={flightNames}
+          depots={showDepots ? depotPins : []}
+          trucks={trucks}
           track={track.data ?? []}
           focus={focus ? circuits.data?.find((c) => c.id === focus.mission.circuitId) : null}
           onOpenFinding={onOpenFinding}
@@ -69,6 +117,11 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
           <span><i style={{ background: '#a855f7' }} />230/500 kV</span>
           <span><i style={{ background: '#94a3b8' }} />Not tagged</span>
           <span><i className="legend-track" />Flight path</span>
+          <span><i className="legend-truck" />Field crew</span>
+          <button className={`legend-toggle ${showDepots ? 'legend-toggle-on' : ''}`} aria-pressed={showDepots} onClick={toggleDepots}
+            title="Show or hide the yards ground crews depart from">
+            <i className="legend-depot" />Crew depots
+          </button>
           <span className="legend-hint">Zoom in for 115/60 kV lines and towers</span>
         </div>
       </div>
@@ -82,6 +135,22 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
         <SidePanel id="recent" title="Recently completed" count={recent.length}>
           {recent.length === 0 && <p className="muted small">No finished missions yet.</p>}
           {recent.map((m) => <MissionCard key={m.mission.id} m={m} selected={focus?.mission.id === m.mission.id} onSelect={() => setFocusId(m.mission.id)} />)}
+        </SidePanel>
+
+        <SidePanel id="field" title="In the field" count={people.length}>
+          {people.length === 0 && <p className="muted small">No crews out. Assign a work order to send the nearest qualified technician.</p>}
+          {people.map(({ who, now: tr, next }) => (
+            <button key={who} className="finding-row field-row" onClick={() => onOpenFinding(tr.findingId)} title="Open the work order">
+              <span className={`field-dot field-${tr.phase.toLowerCase()}`} aria-hidden="true" />
+              <span className="grow">
+                {tr.label}
+                <span className="muted small"> · {tr.structureLabel}</span>
+                <span className="muted small field-status">{tr.status}</span>
+                {next.length > 0 && <span className="muted small field-status">Then {next.map((n) => n.structureLabel).join(', ')}</span>}
+              </span>
+            </button>
+          ))}
+          {out.length > 0 && <p className="muted small field-note">Simulated and sped up: a real truck roll takes hours.</p>}
         </SidePanel>
 
         <SidePanel id="alerts" title="Flight alerts" count={open.length}>

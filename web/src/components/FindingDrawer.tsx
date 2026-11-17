@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useContext, useEffect, useState } from 'react';
-import { FetcherContext, useCrews, useFindingAerial, useFindingImage, useFindingStatus } from '../api';
+import { FetcherContext, useAssignees, useFindingAerial, useFindingImage, useFindingStatus } from '../api';
+import { countdown, dispatchName, phaseAt, statusText } from '../lib/field';
 import { ACTION_LABEL, FINDING_TYPE_LABEL, relativeTime, slaText } from '../lib/format';
-import type { FindingStatus, FindingView } from '../types';
+import type { AssigneeOption, FindingStatus, FindingView } from '../types';
 import { PhotoZoom } from './PhotoZoom';
 import { SeverityBadge } from './SeverityBadge';
 import type { ToastMessage } from './Toast';
@@ -14,6 +15,10 @@ interface Props {
   onToast(t: ToastMessage): void;
 }
 
+/** "8.2 km from Concord yard" (straight line), or the depot alone when its position is unknown. */
+const distance = (o: AssigneeOption) =>
+  o.distanceKm == null ? (o.depotName ?? 'no depot set') : `${o.distanceKm.toFixed(1)} km from ${o.afterJob ?? o.depotName}`;
+
 const fmt = (iso: string) => new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
@@ -24,15 +29,29 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
   const [view, setView] = useState<'aerial' | 'closeup'>('aerial');
   const [zoom, setZoom] = useState<{ src: string; alt: string } | null>(null);
   const change = useFindingStatus();
-  const crews = useCrews();
+  const canAssign = Boolean(data?.nextStatuses.includes('Assigned'));
+  const options = useAssignees(id, canAssign);
   const [note, setNote] = useState('');
   const [assignee, setAssignee] = useState('');
 
-  // Start the picker on the crew that normally handles this kind of defect.
-  const suggested = data?.suggestedCrew;
+  // Start the picker on the nearest qualified technician; drop a pick that is no longer on the list.
+  const nearest = options.data?.find((o) => !o.busyUntil)?.label;
   useEffect(() => {
-    if (suggested) setAssignee((a) => a || suggested);
-  }, [suggested]);
+    if (!options.data) return;
+    setAssignee((a) => (a && options.data.some((o) => o.label === a && !o.busyUntil) ? a : nearest ?? ''));
+  }, [options.data, nearest]);
+  const technicians = options.data?.filter((o) => o.member && !o.busyUntil) ?? [];
+  const wholeCrews = options.data?.filter((o) => !o.member && !o.busyUntil) ?? [];
+  const busy = options.data?.filter((o) => o.busyUntil) ?? [];
+  const afterFor = (o: AssigneeOption) => (o.afterJob ? ` · after ${o.afterJob}` : '');
+  const [now, setNow] = useState(() => Date.now());
+  const dispatch = data?.finding.dispatch;
+  const moving = Boolean(dispatch && Date.parse(dispatch.returnsAt) > now - 1000);
+  useEffect(() => {
+    if (!moving && !busy.length) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [moving, busy.length]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -42,7 +61,7 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
 
   const act = (status: FindingStatus) => {
     if (status === 'Assigned' && !assignee.trim()) {
-      onToast({ kind: 'error', text: 'Pick a crew or crew member to assign.' });
+      onToast({ kind: 'error', text: !nearest ? 'Nobody qualified is free right now. Check Resources, or wait for a crew to get back.' : 'Pick a technician or crew to assign.' });
       return;
     }
     change.mutate(
@@ -134,25 +153,69 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
                 {f.assignedTo && (<><dt>Assigned to</dt><dd>{f.assignedTo}</dd></>)}
               </dl>
 
+              {dispatch && (() => {
+                const phase = phaseAt(dispatch, now);
+                const steps: [string, string][] = [
+                  [`Leaves ${dispatch.fromLabel}`, dispatch.departedAt],
+                  ['On site', dispatch.arrivesAt],
+                  [dispatch.recalledAt ? 'Called back' : 'Repaired', dispatch.recalledAt ?? dispatch.repairedAt],
+                  [dispatch.nextFindingId ? `On to ${dispatch.nextSiteLabel ?? 'next job'}` : `Back at ${dispatch.depotName}`, dispatch.returnsAt],
+                ];
+                return (
+                  <div className={`field-job field-job-${phase.toLowerCase()}`}>
+                    <strong>{dispatchName(dispatch)}</strong>
+                    <span> · {statusText(dispatch, now)}</span>
+                    <ol className="field-steps">
+                      {steps.map(([label, at]) => (
+                        <li key={label} className={Date.parse(at) <= now ? 'done' : undefined}>
+                          {label}<span className="muted small"> · {new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</span>
+                        </li>
+                      ))}
+                    </ol>
+                    <span className="muted small">
+                      Simulated and sped up{dispatch.onRoads ? ', along the roads' : ' (no road route found, so a straight line)'}; the truck shows on the Operations map.
+                    </span>
+                  </div>
+                );
+              })()}
+
               {data.nextStatuses.length > 0 && (
                 <section>
                   <h3>Actions</h3>
                   <input className="input" placeholder="Note for the record (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
                   {data.nextStatuses.includes('Assigned') && (
                     <label className="assign-field">
-                      <span className="muted small">Assign to</span>
-                      <select className="input" value={assignee} onChange={(e) => setAssignee(e.target.value)} disabled={!crews.data}>
-                        {!crews.data && <option value="">Loading crews…</option>}
-                        {crews.data?.map(({ crew, openWorkOrders }) => (
-                          <optgroup key={crew.id} label={`${crew.name} · ${crew.status === 'OffDuty' ? 'off duty' : crew.specialty}`} disabled={crew.status === 'OffDuty'}>
-                            <option value={crew.name}>
-                              Whole crew ({openWorkOrders} open){crew.name === suggested ? ' ★ suggested' : ''}
-                            </option>
-                            {crew.members.map((m) => (
-                              <option key={m.name} value={`${m.name} (${crew.name})`}>{m.name}, {m.role}</option>
+                      <span className="muted small">
+                        Assign to · only on-duty people qualified for {FINDING_TYPE_LABEL[f.type].toLowerCase()}, nearest depot first
+                      </span>
+                      <select className="input" value={assignee} onChange={(e) => setAssignee(e.target.value)} disabled={!options.data?.length}>
+                        {options.isPending && <option value="">Finding qualified technicians…</option>}
+                        {options.data && !nearest && <option value="">{busy.length ? 'Everyone qualified is out on a job' : 'Nobody on duty is qualified for this'}</option>}
+                        {technicians.length > 0 && (
+                          <optgroup label="Technicians, nearest first">
+                            {technicians.map((o, i) => (
+                              <option key={o.label} value={o.label}>
+                                {o.member} · {distance(o)}{afterFor(o)} · {o.role}, {o.crewName}{i === 0 ? ' ★ nearest' : ''}
+                              </option>
                             ))}
                           </optgroup>
-                        ))}
+                        )}
+                        {wholeCrews.length > 0 && (
+                          <optgroup label="Whole crews">
+                            {wholeCrews.map((o) => (
+                              <option key={o.label} value={o.label}>{o.crewName} · {distance(o)}{afterFor(o)} · {o.crewOpenWorkOrders} open</option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {busy.length > 0 && (
+                          <optgroup label="Out on another job">
+                            {busy.map((o) => (
+                              <option key={o.label} value={o.label} disabled>
+                                {o.member ?? `${o.crewName} (whole crew)`} · free in {countdown(Date.parse(o.busyUntil!), now)}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     </label>
                   )}

@@ -32,6 +32,7 @@ public sealed partial class ResourceCatalog
     public List<DroneAsset> Drones { get; init; } = [];
     public List<FlightCrew> FlightCrews { get; init; } = [];
     public List<Crew> GroundCrews { get; init; } = [];
+    public List<Depot> Depots { get; init; } = [];
 
     public DroneAsset? FindDrone(string id) => Drones.FirstOrDefault(d => d.Id.Equals(id.Trim(), StringComparison.OrdinalIgnoreCase));
 
@@ -59,7 +60,34 @@ public sealed partial class ResourceCatalog
                 CrewStatus.OffDuty),
         ],
         GroundCrews = [.. CrewRoster.All],
+        Depots = [.. CrewRoster.Depots],
     };
+
+    /// <summary>
+    /// Brings a catalog saved before depots and technician skills existed up to date: adds the demo depots, and gives
+    /// each seeded crew that has no depot yet its demo depot and its members' demo skills and depots. Returns this.
+    /// </summary>
+    public ResourceCatalog Normalize()
+    {
+        if (Depots.Count == 0) Depots.AddRange(CrewRoster.Depots);
+        for (var i = 0; i < GroundCrews.Count; i++)
+        {
+            var crew = GroundCrews[i];
+            if (crew.DepotId is not null) continue;
+            var seed = CrewRoster.All.FirstOrDefault(c => c.Id == crew.Id);
+            GroundCrews[i] = crew with
+            {
+                DepotId = seed?.DepotId ?? Depots.FirstOrDefault()?.Id,
+                Members = [.. crew.Members.Select(m =>
+                    seed?.Members.FirstOrDefault(s => s.Name.Equals(m.Name, StringComparison.OrdinalIgnoreCase)) is { } sm && m.Skills is null && m.DepotId is null
+                        ? m with { Skills = sm.Skills, DepotId = sm.DepotId }
+                        : m)],
+            };
+        }
+        return this;
+    }
+
+    public Depot? FindDepot(string? id) => id is null ? null : Depots.FirstOrDefault(d => d.Id == id);
 
     /// <summary>Checks one record before it is saved; returns field → messages (empty when valid).</summary>
     public static Dictionary<string, string[]> Validate(DroneAsset d)
@@ -86,6 +114,18 @@ public sealed partial class ResourceCatalog
         var e = ValidateCrew(c.Id, c.Name, c.Members, c.Status);
         if (Blank(c.Specialty, 80)) e["specialty"] = ["Specialty is required (max 80)."];
         if (c.Handles is null || c.Handles.Any(h => !Enum.IsDefined(h))) e["handles"] = ["Unknown issue type."];
+        if (!e.ContainsKey("members") && c.Members.Any(m => m.Skills is { } s && s.Any(t => !Enum.IsDefined(t))))
+            e["members"] = ["Unknown issue type in a member's skills."];
+        return e;
+    }
+
+    /// <summary>Checks a ground crew against this catalog: its depot, and each member's, must exist.</summary>
+    public Dictionary<string, string[]> ValidateDepots(Crew c)
+    {
+        var e = new Dictionary<string, string[]>();
+        if (FindDepot(c.DepotId) is null) e["depotId"] = ["Pick the depot this crew departs from."];
+        if (c.Members?.FirstOrDefault(m => m.DepotId is not null && FindDepot(m.DepotId) is null) is { } bad)
+            e["members"] = [$"{bad.Name}'s depot doesn't exist."];
         return e;
     }
 
@@ -126,7 +166,7 @@ public sealed class InMemoryResourceStore : IResourceStore
 
     public Task<ResourceCatalog> GetAsync(CancellationToken ct = default)
     {
-        lock (_gate) return Task.FromResult(_json is null ? ResourceCatalog.Default() : JsonSerializer.Deserialize<ResourceCatalog>(_json, Json.Options)!);
+        lock (_gate) return Task.FromResult(_json is null ? ResourceCatalog.Default() : JsonSerializer.Deserialize<ResourceCatalog>(_json, Json.Options)!.Normalize());
     }
 
     public Task SaveAsync(ResourceCatalog catalog, CancellationToken ct = default)
@@ -150,7 +190,7 @@ public sealed class DynamoResourceStore(IAmazonDynamoDB db, string tableName) : 
     public async Task<ResourceCatalog> GetAsync(CancellationToken ct = default)
     {
         var res = await db.GetItemAsync(new GetItemRequest { TableName = tableName, Key = Key(), ConsistentRead = true }, ct);
-        return res.Item is { Count: > 0 } item ? JsonSerializer.Deserialize<ResourceCatalog>(item["Doc"].S, Json.Options)! : ResourceCatalog.Default();
+        return res.Item is { Count: > 0 } item ? JsonSerializer.Deserialize<ResourceCatalog>(item["Doc"].S, Json.Options)!.Normalize() : ResourceCatalog.Default();
     }
 
     public async Task SaveAsync(ResourceCatalog catalog, CancellationToken ct = default)

@@ -18,11 +18,16 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
     public sealed class Factory : WebApplicationFactory<Program>
     {
         public FakeAerialSource Aerial { get; } = new();
+        public FakeRouteSource Routes { get; } = new();
 
         protected override void ConfigureWebHost(IWebHostBuilder builder) =>
             builder.UseEnvironment("Development")
                 .UseSetting("GridSafety:DemoTickMs", "0") // demo flights finish instantly
-                .ConfigureTestServices(s => s.AddSingleton<IAerialSource>(Aerial)); // never call USGS from tests
+                .ConfigureTestServices(s =>
+                {
+                    s.AddSingleton<IAerialSource>(Aerial); // never call USGS from tests
+                    s.AddSingleton<IRouteSource>(Routes);  // nor OSRM
+                });
     }
 
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
@@ -415,7 +420,8 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
     public async Task Ground_crew_edits_cannot_orphan_open_work_orders()
     {
         var sup = Client("dana", supervisor: true);
-        var crew = new Crew("test-gc", "Test Ground Crew", "Testing", [FindingType.MissingHardware], [new("Apu Nahasa", "Foreman"), new("Sanjay Nahasa", "Lineman")]);
+        var crew = new Crew("test-gc", "Test Ground Crew", "Testing", [FindingType.CrossarmDamage], [new("Apu Nahasa", "Foreman"), new("Sanjay Nahasa", "Lineman")],
+            DepotId: "concord");
         (await sup.PutAsJsonAsync("/api/resources/ground-crews/test-gc", crew, JsonOpts)).EnsureSuccessStatusCode();
 
         var m = await PlanAsync(sup, "DRN-GC");
@@ -439,6 +445,106 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         // Once the work order is resolved the crew can go.
         (await sup.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Resolved, "Fixed", null), JsonOpts)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.NoContent, (await sup.DeleteAsync("/api/resources/ground-crews/test-gc")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Work_orders_go_only_to_qualified_people_nearest_first()
+    {
+        var sup = Client("dana", supervisor: true);
+        var m = await PlanAsync(sup, "DRN-NEAR");
+        var id = await ReportFindingAsync(sup, m, 3); // crossarm damage
+        (await sup.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Triaged, null, null), JsonOpts)).EnsureSuccessStatusCode();
+
+        var options = (await sup.GetFromJsonAsync<List<AssigneeOption>>($"/api/findings/{id}/assignees", JsonOpts))!;
+        var technicians = options.Where(o => o.Member is not null && o.BusyUntil is null).ToList(); // other tests may have people out
+        Assert.NotEmpty(technicians);
+        Assert.Equal(technicians.Select(o => o.DistanceKm).Order(), technicians.Select(o => o.DistanceKm));
+        Assert.Contains(options, o => o.Member == "Barney Grumble"); // cross-trained on crossarms
+        Assert.DoesNotContain(options, o => o.Member is "Otto Mannheim" or "Lisa Simsen" or "Willie MacTavish");
+        Assert.Contains(options, o => o.Member is null && o.CrewId == "sector-7g");
+
+        var view = (await sup.GetFromJsonAsync<FindingView>($"/api/findings/{id}", JsonOpts))!;
+        Assert.Equal(technicians[0].Label, view.SuggestedCrew);
+
+        foreach (var who in new[] { "Otto Mannheim", "Lisa Simsen", "Evergreen Terrace Vegetation Crew" })
+        {
+            var res = await sup.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Assigned, null, who), JsonOpts);
+            Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+            Assert.Contains("qualified", await res.Content.ReadAsStringAsync());
+        }
+    }
+
+    [Fact]
+    public async Task Assigning_sends_a_truck_along_the_roads_and_nearby_jobs_line_up_behind_it()
+    {
+        var sup = Client("dana", supervisor: true);
+        var crew = new Crew("busy-gc", "Busy Test Crew", "Testing", [FindingType.CrossarmDamage],
+            [new("Jimbo Jones", "Lineman"), new("Kearney Zzyzwicz", "Lineman")], DepotId: "pittsburg");
+        (await sup.PutAsJsonAsync("/api/resources/ground-crews/busy-gc", crew, JsonOpts)).EnsureSuccessStatusCode();
+        var m = await PlanAsync(sup, "DRN-BUSY");
+        var first = await ReportFindingAsync(sup, m, 3);
+        var second = await ReportFindingAsync(sup, m, 3);
+        foreach (var id in new[] { first, second })
+            (await sup.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Triaged, null, null), JsonOpts)).EnsureSuccessStatusCode();
+
+        var sent = await sup.PostAsJsonAsync($"/api/findings/{first}/status", new FindingStatusRequest(FindingStatus.Assigned, null, "Jimbo Jones"), JsonOpts);
+        var view = (await sent.Content.ReadFromJsonAsync<FindingView>(JsonOpts))!;
+        var d = view.Finding.Dispatch!;
+        Assert.Equal("Jimbo Jones", d.Member);
+        Assert.Equal("pittsburg", d.DepotId);
+        Assert.True(d.OnRoads);
+        Assert.Equal(3, d.Route.Count); // the fake router's dog-leg
+        Assert.True(d.DepartedAt < d.ArrivesAt && d.ArrivesAt < d.RepairedAt && d.RepairedAt < d.ReturnsAt);
+
+        var jobs = (await sup.GetFromJsonAsync<FieldJobsView>("/api/field-jobs", JsonOpts))!;
+        Assert.Contains(jobs.Jobs, j => j.FindingId == first && j.Phase == FieldPhase.EnRoute);
+        Assert.Equal(HttpStatusCode.OK, (await factory.CreateClient().GetAsync("/api/public/field-jobs")).StatusCode);
+
+        // The second defect is on the same line, so Jimbo is offered it after his first job; his crew as a whole is busy.
+        var options = (await sup.GetFromJsonAsync<List<AssigneeOption>>($"/api/findings/{second}/assignees", JsonOpts))!;
+        var jimbo = options.Single(o => o.Member == "Jimbo Jones");
+        Assert.Null(jimbo.BusyUntil);
+        Assert.Equal(view.Finding.StructureLabel, jimbo.AfterJob);
+        Assert.NotNull(options.Single(o => o.Member is null && o.CrewId == "busy-gc").BusyUntil);
+        var crewRes = await sup.PostAsJsonAsync($"/api/findings/{second}/status", new FindingStatusRequest(FindingStatus.Assigned, null, "Busy Test Crew"), JsonOpts);
+        Assert.Equal(HttpStatusCode.BadRequest, crewRes.StatusCode);
+        Assert.Contains("out on a job elsewhere", await crewRes.Content.ReadAsStringAsync());
+
+        var chained = await sup.PostAsJsonAsync($"/api/findings/{second}/status", new FindingStatusRequest(FindingStatus.Assigned, null, "Jimbo Jones"), JsonOpts);
+        var next = (await chained.Content.ReadFromJsonAsync<FindingView>(JsonOpts))!.Finding.Dispatch!;
+        var handedOver = (await sup.GetFromJsonAsync<FindingView>($"/api/findings/{first}", JsonOpts))!.Finding.Dispatch!;
+        Assert.Equal(second, handedOver.NextFindingId);
+        Assert.Equal(handedOver.RepairedAt, next.DepartedAt);
+        Assert.Equal(d.Site, next.From);
+
+        jobs = (await sup.GetFromJsonAsync<FieldJobsView>("/api/field-jobs", JsonOpts))!;
+        Assert.Contains(jobs.Jobs, j => j.FindingId == second && j.Phase == FieldPhase.Queued);
+
+        // Closing the queued job by hand sends him home after the first instead; closing the first then turns him round.
+        (await sup.PostAsJsonAsync($"/api/findings/{second}/status", new FindingStatusRequest(FindingStatus.Resolved, "Done by another crew", null), JsonOpts)).EnsureSuccessStatusCode();
+        var cancelled = (await sup.GetFromJsonAsync<FindingView>($"/api/findings/{second}", JsonOpts))!.Finding.Dispatch!;
+        Assert.Equal(cancelled.DepartedAt, cancelled.RecalledAt);
+        (await sup.PostAsJsonAsync($"/api/findings/{first}/status", new FindingStatusRequest(FindingStatus.Resolved, null, null), JsonOpts)).EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Ground_crews_need_a_real_depot()
+    {
+        var sup = Client("dana", supervisor: true);
+        var crew = new Crew("depot-gc", "Depot Test Crew", "Testing", [FindingType.MissingHardware], [new("Kirk Van Houten", "Lineman")]);
+        Assert.Equal(HttpStatusCode.BadRequest, (await sup.PutAsJsonAsync("/api/resources/ground-crews/depot-gc", crew, JsonOpts)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await sup.PutAsJsonAsync("/api/resources/ground-crews/depot-gc", crew with { DepotId = "atlantis" }, JsonOpts)).StatusCode);
+        var badMember = crew with { DepotId = "concord", Members = [new("Kirk Van Houten", "Lineman", DepotId: "atlantis")] };
+        Assert.Equal(HttpStatusCode.BadRequest, (await sup.PutAsJsonAsync("/api/resources/ground-crews/depot-gc", badMember, JsonOpts)).StatusCode);
+
+        var good = crew with { DepotId = "concord", Members = [new("Kirk Van Houten", "Lineman", [FindingType.MissingHardware, FindingType.DamagedInsulator], "antioch")] };
+        (await sup.PutAsJsonAsync("/api/resources/ground-crews/depot-gc", good, JsonOpts)).EnsureSuccessStatusCode();
+        var res = (await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts))!;
+        var saved = res.GroundCrews.Single(c => c.Crew.Id == "depot-gc").Crew;
+        Assert.Equal("antioch", saved.Members[0].DepotId);
+        Assert.Equal([FindingType.MissingHardware, FindingType.DamagedInsulator], saved.Members[0].Skills);
+        Assert.Contains(res.Depots, d => d.Id == "concord");
+        Assert.Equal(HttpStatusCode.NoContent, (await sup.DeleteAsync("/api/resources/ground-crews/depot-gc")).StatusCode);
     }
 
     [Fact]

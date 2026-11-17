@@ -2,10 +2,14 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { ApiError, useMe, useResources, useSaveResource, type ResourceKind } from '../api';
 import { FINDING_TYPE_LABEL, miles, relativeTime } from '../lib/format';
 import { useSession } from '../session';
-import type { Crew, CrewMember, CrewStatus, DroneAsset, DroneAssetStatus, FindingType, FlightCrew } from '../types';
+import { involves } from '../lib/field';
+import { OutBadge } from './CrewsPanel';
+import type { Crew, CrewMember, CrewStatus, Depot, DroneAsset, DroneAssetStatus, FindingType, FlightCrew } from '../types';
 import type { ToastMessage } from './Toast';
 
-const SECTIONS = [['drones', 'Drones'], ['flight-crews', 'Flight crews'], ['ground-crews', 'Ground crews']] as const;
+const SECTIONS = [['drones', 'Drones'], ['flight-crews', 'Flight crews'], ['ground-crews', 'Ground crews'], ['depots', 'Depots']] as const;
+type Section = ResourceKind | 'depots';
+const ALL_TYPES = Object.keys(FINDING_TYPE_LABEL) as FindingType[];
 const PILOT = 'Remote pilot (PIC)';
 const OBSERVER = 'Visual observer';
 const DRONE_STATUS_LABEL: Record<DroneAssetStatus, string> = { Active: 'Active', Maintenance: 'Maintenance', Retired: 'Retired' };
@@ -16,10 +20,10 @@ type Editing =
   | { kind: 'flight-crews'; record?: FlightCrew }
   | { kind: 'ground-crews'; record?: Crew };
 
-function rememberedSection(): ResourceKind {
+function rememberedSection(): Section {
   try {
     const v = localStorage.getItem('gs.resources.section');
-    if (v === 'drones' || v === 'flight-crews' || v === 'ground-crews') return v;
+    if (v === 'drones' || v === 'flight-crews' || v === 'ground-crews' || v === 'depots') return v;
   } catch { /* storage blocked */ }
   return 'drones';
 }
@@ -31,10 +35,10 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
   const me = useMe();
   const { guest } = useSession();
   const canEdit = !guest && Boolean(me.data?.isSupervisor);
-  const [section, setSection] = useState<ResourceKind>(rememberedSection);
+  const [section, setSection] = useState<Section>(rememberedSection);
   const [editing, setEditing] = useState<Editing | null>(null);
 
-  const pick = (s: ResourceKind) => {
+  const pick = (s: Section) => {
     setSection(s);
     try { localStorage.setItem('gs.resources.section', s); } catch { /* storage blocked */ }
   };
@@ -48,12 +52,14 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
   };
 
   const data = resources.data;
-  const counts: Record<ResourceKind, number> = {
+  const counts: Record<Section, number> = {
     drones: data?.drones.length ?? 0,
     'flight-crews': data?.flightCrews.length ?? 0,
     'ground-crews': data?.groundCrews.length ?? 0,
+    depots: data?.depots.length ?? 0,
   };
-  const addLabel = { drones: 'Add drone', 'flight-crews': 'Add flight crew', 'ground-crews': 'Add ground crew' }[section];
+  const depots = data?.depots ?? [];
+  const depotName = (id?: string) => depots.find((d) => d.id === id)?.name ?? 'no depot';
 
   return (
     <section className="panel panel-flush resources">
@@ -62,7 +68,11 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
           <h2>Resources</h2>
           <p className="muted small">The fleet and the people who fly it and fix what it finds.</p>
         </div>
-        {canEdit && <button className="btn btn-primary" onClick={() => setEditing({ kind: section })}>+ {addLabel}</button>}
+        {canEdit && section !== 'depots' && (
+          <button className="btn btn-primary" onClick={() => setEditing({ kind: section })}>
+            + {{ drones: 'Add drone', 'flight-crews': 'Add flight crew', 'ground-crews': 'Add ground crew' }[section]}
+          </button>
+        )}
       </div>
       <div className="panel-toolbar filter-chips">
         <div className="chips" role="tablist" aria-label="Resource type">
@@ -140,16 +150,25 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
 
       {data && section === 'ground-crews' && (
         <CardGrid empty="No ground crews yet.">
-          {data.groundCrews.map(({ crew, openWorkOrders }) => (
+          {data.groundCrews.map(({ crew, openWorkOrders, inField = [] }) => (
             <ResourceCard
               key={crew.id}
               title={crew.name}
-              subtitle={crew.specialty}
+              subtitle={`${crew.specialty} · departs ${depotName(crew.depotId)}`}
               status={crew.status}
               badge={`${openWorkOrders} open`}
               badgeBusy={openWorkOrders > 0}
               members={crew.members}
-              footer={`Handles: ${crew.handles.map((t) => FINDING_TYPE_LABEL[t]).join(', ') || 'nothing yet'}`}
+              memberDetail={(m) => (
+                <>
+                  <OutBadge jobs={inField.filter((d) => involves(d, crew.id, m.name))} />
+                  {m.depotId && m.depotId !== crew.depotId && <span className="muted small"> · departs {depotName(m.depotId)}</span>}
+                  <span className="skill-tags">
+                    {(m.skills ?? crew.handles).map((t) => <span key={t} className="skill-tag">{FINDING_TYPE_LABEL[t]}</span>)}
+                  </span>
+                </>
+              )}
+              footer={`Whole-crew work orders: ${crew.handles.map((t) => FINDING_TYPE_LABEL[t]).join(', ') || 'none'}`}
               onEdit={canEdit ? () => setEditing({ kind: 'ground-crews', record: crew }) : undefined}
               onRemove={canEdit ? () => remove('ground-crews', crew.id, crew.name) : undefined}
             />
@@ -157,9 +176,48 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
         </CardGrid>
       )}
 
+      {data && section === 'depots' && (
+        depots.length === 0 ? <p className="empty-row muted">No depots yet.</p> : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead><tr><th>Depot</th><th>Location</th><th>Departing from here</th></tr></thead>
+              <tbody>
+                {depots.map((d) => {
+                  const departing = data.groundCrews.flatMap(({ crew }) =>
+                    crew.members.filter((m) => (m.depotId ?? crew.depotId) === d.id).map((m) => ({ crew, m })));
+                  return (
+                    <tr key={d.id}>
+                      <td><strong>{d.name}</strong></td>
+                      <td>
+                        <a className="link" href={`https://www.google.com/maps?q=${d.location.lat},${d.location.lon}`} target="_blank" rel="noopener noreferrer">
+                          {d.location.lat.toFixed(4)}, {d.location.lon.toFixed(4)} ↗
+                        </a>
+                      </td>
+                      <td>
+                        {departing.length === 0 ? <span className="muted">Nobody</span> : (
+                          <ul className="depot-people">
+                            {departing.map(({ crew, m }) => (
+                              <li key={`${crew.id}/${m.name}`} className={crew.status === 'OffDuty' ? 'muted' : undefined}>
+                                {m.name}<span className="muted small"> · {m.role}, {crew.name}{crew.status === 'OffDuty' ? ' (off duty)' : ''}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="muted small depot-note">The demo's yards; points are rough town centres. Each technician departs from their own depot, or their crew's.</p>
+          </div>
+        )
+      )}
+
       {editing && (
         <ResourceDialog
           editing={editing}
+          depots={depots}
           takenIds={new Set(
             editing.kind === 'drones' ? data?.drones.map((d) => d.drone.id) :
             editing.kind === 'flight-crews' ? data?.flightCrews.map((c) => c.crew.id) :
@@ -179,13 +237,14 @@ function CardGrid({ empty, children }: { empty: string; children: ReactNode[] })
   return children.length === 0 ? <p className="empty-row muted">{empty}</p> : <div className="crew-grid resource-grid">{children}</div>;
 }
 
-function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, footer, onEdit, onRemove }: {
+function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memberDetail, footer, onEdit, onRemove }: {
   title: string;
   subtitle: string;
   status: CrewStatus;
   badge?: string;
   badgeBusy?: boolean;
   members: CrewMember[];
+  memberDetail?(m: CrewMember): ReactNode;
   footer: string;
   onEdit?(): void;
   onRemove?(): void;
@@ -206,7 +265,7 @@ function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, foot
         {members.map((m) => (
           <li key={m.name}>
             <span className="crew-avatar" aria-hidden="true">{m.name.split(' ').map((p) => p[0]).join('').slice(0, 2)}</span>
-            <span>{m.name}<span className="muted small"> · {m.role}</span></span>
+            <span>{m.name}<span className="muted small"> · {m.role}</span>{memberDetail?.(m)}</span>
           </li>
         ))}
       </ul>
@@ -229,8 +288,9 @@ function uniqueId(base: string, taken: Set<string | undefined>) {
   return id;
 }
 
-function ResourceDialog({ editing, takenIds, onClose, onSaved }: {
+function ResourceDialog({ editing, depots, takenIds, onClose, onSaved }: {
   editing: Editing;
+  depots: Depot[];
   takenIds: Set<string | undefined>;
   onClose(): void;
   onSaved(label: string): void;
@@ -250,7 +310,7 @@ function ResourceDialog({ editing, takenIds, onClose, onSaved }: {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const text = (k: string) => String(f.get(k) ?? '').trim();
-    const crewMembers = members.map((m) => ({ name: m.name.trim(), role: m.role.trim() })).filter((m) => m.name);
+    const crewMembers = members.map((m) => ({ ...m, name: m.name.trim(), role: m.role.trim() })).filter((m) => m.name);
     setError(null);
     try {
       if (editing.kind === 'drones') {
@@ -269,7 +329,7 @@ function ResourceDialog({ editing, takenIds, onClose, onSaved }: {
       } else {
         const id = editing.record?.id ?? uniqueId(slug(text('name')), takenIds);
         await save.mutateAsync({ kind: 'ground-crews', id, record: {
-          id, name: text('name'), specialty: text('specialty'), status: text('status') as CrewStatus, members: crewMembers, handles,
+          id, name: text('name'), specialty: text('specialty'), status: text('status') as CrewStatus, members: crewMembers, handles, depotId: text('depotId'),
         } });
         onSaved(text('name'));
       }
@@ -342,10 +402,19 @@ function ResourceDialog({ editing, takenIds, onClose, onSaved }: {
             </div>
 
             {editing.kind === 'ground-crews' && (
+              <label>
+                Departs from
+                <select className="input" name="depotId" defaultValue={editing.record?.depotId ?? depots[0]?.id} required>
+                  {depots.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </label>
+            )}
+
+            {editing.kind === 'ground-crews' && (
               <fieldset className="resource-fieldset">
-                <legend>Handles</legend>
+                <legend>Whole-crew work orders</legend>
                 <div className="handles-grid">
-                  {(Object.keys(FINDING_TYPE_LABEL) as FindingType[]).map((t) => (
+                  {ALL_TYPES.map((t) => (
                     <label key={t} className="check">
                       <input type="checkbox" checked={handles.includes(t)}
                         onChange={(e) => setHandles((h) => (e.target.checked ? [...h, t] : h.filter((x) => x !== t)))} />
@@ -373,6 +442,32 @@ function ResourceDialog({ editing, takenIds, onClose, onSaved }: {
                   )}
                   <button type="button" className="btn btn-ghost btn-xs" aria-label={`Remove member ${i + 1}`} disabled={members.length === 1}
                     onClick={() => setMembers((ms) => ms.filter((_, j) => j !== i))}>✕</button>
+                  {editing.kind === 'ground-crews' && (
+                    <div className="member-extra">
+                      <label className="member-depot">
+                        <span className="muted small">Departs from</span>
+                        <select className="input" aria-label={`Member ${i + 1} depot`} value={m.depotId ?? ''}
+                          onChange={(e) => setMember(i, { depotId: e.target.value || undefined })}>
+                          <option value="">Crew's depot</option>
+                          {depots.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
+                      </label>
+                      <div className="member-skills" role="group" aria-label={`Member ${i + 1} qualified to fix`}>
+                        <span className="muted small">Qualified to fix</span>
+                        <label className="check">
+                          <input type="checkbox" checked={!m.skills} onChange={(e) => setMember(i, { skills: e.target.checked ? undefined : [...handles] })} />
+                          Same as crew
+                        </label>
+                        {m.skills && ALL_TYPES.map((t) => (
+                          <label key={t} className="check">
+                            <input type="checkbox" checked={m.skills!.includes(t)}
+                              onChange={(e) => setMember(i, { skills: e.target.checked ? [...m.skills!, t] : m.skills!.filter((x) => x !== t) })} />
+                            {FINDING_TYPE_LABEL[t]}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
               {members.length < 12 && (

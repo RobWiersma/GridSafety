@@ -1,12 +1,49 @@
 namespace GridSafety.Core;
 
-public sealed record CrewMember(string Name, string Role);
+/// <summary>
+/// One person on a crew. For ground crews, <paramref name="Skills"/> are the issue types this technician is qualified
+/// to fix (null: whatever the crew handles) and <paramref name="DepotId"/> is where they start the day (null: the crew's depot).
+/// </summary>
+public sealed record CrewMember(string Name, string Role, IReadOnlyList<FindingType>? Skills = null, string? DepotId = null);
 
 public enum CrewStatus { Available, OffDuty }
 
-/// <summary>A ground (field) crew that work orders (assigned findings) go to. <see cref="Handles"/> drives the suggested crew.</summary>
+/// <summary>
+/// A ground (field) crew that work orders (assigned findings) go to. <see cref="Handles"/> is what the crew as a whole is
+/// qualified for; members may be qualified for more or less. <see cref="DepotId"/> is the yard the crew rolls out of.
+/// </summary>
 public sealed record Crew(string Id, string Name, string Specialty, IReadOnlyList<FindingType> Handles, IReadOnlyList<CrewMember> Members,
-    CrewStatus Status = CrewStatus.Available);
+    CrewStatus Status = CrewStatus.Available, string? DepotId = null)
+{
+    /// <summary>What this member can fix: their own skills, or the crew's when they have none listed.</summary>
+    public IReadOnlyList<FindingType> SkillsOf(CrewMember m) => m.Skills ?? Handles;
+
+    /// <summary>Where this member departs from: their own depot, or the crew's.</summary>
+    public string? DepotOf(CrewMember m) => m.DepotId ?? DepotId;
+
+    /// <summary>Whether the crew, or one member of it, is qualified for this kind of defect.</summary>
+    public bool CanFix(FindingType type, CrewMember? member = null) =>
+        member is null ? Handles.Contains(type) : SkillsOf(member).Contains(type);
+}
+
+/// <summary>A yard that ground crews and technicians depart from.</summary>
+public sealed record Depot(string Id, string Name, GeoPoint Location);
+
+/// <summary>
+/// Someone who could take a work order: a technician, or a whole crew (<see cref="Member"/> null), with the depot
+/// they leave from and the straight-line distance from there to the defect.
+/// </summary>
+/// <remarks>
+/// <see cref="After"/> is set when they're already out nearby and would come here after their last job lined up; the
+/// distance is then from that job. <see cref="BusyUntil"/> is set when they're out elsewhere and can't take this one.
+/// </remarks>
+public sealed record AssignCandidate(Crew Crew, CrewMember? Member, Depot? Depot, double? DistanceKm, DateTimeOffset? BusyUntil = null,
+    FieldDispatch? After = null)
+{
+    public bool Available => BusyUntil is null;
+
+    public string Label => new CrewAssignee(Crew, Member).Label;
+}
 
 /// <summary>Who an assignee string points at: a whole crew, or one member of it.</summary>
 public sealed record CrewAssignee(Crew Crew, CrewMember? Member)
@@ -21,20 +58,52 @@ public sealed record CrewAssignee(Crew Crew, CrewMember? Member)
 /// </summary>
 public static class CrewRoster
 {
+    /// <summary>The demo's yards. Points are rough town centres, not real facilities.</summary>
+    public static readonly IReadOnlyList<Depot> Depots =
+    [
+        new("concord", "Concord yard", new(37.9780, -122.0311)),
+        new("walnut-creek", "Walnut Creek yard", new(37.9101, -122.0652)),
+        new("martinez", "Martinez yard", new(38.0194, -122.1341)),
+        new("pittsburg", "Pittsburg yard", new(38.0280, -121.8847)),
+        new("antioch", "Antioch yard", new(38.0049, -121.8058)),
+        new("san-ramon", "San Ramon yard", new(37.7799, -121.9780)),
+        new("richmond", "Richmond yard", new(37.9358, -122.3478)),
+    ];
+
     public static readonly IReadOnlyList<Crew> All =
     [
         new("sector-7g", "Sector 7G Line Crew", "Conductors and crossarms",
             [FindingType.ConductorDamage, FindingType.CrossarmDamage],
-            [new("Homer Simsen", "Foreman"), new("Lenny Leonardo", "Journeyman lineman"), new("Carl Carlsen", "Journeyman lineman")]),
+            [
+                new("Homer Simsen", "Foreman"),
+                new("Lenny Leonardo", "Journeyman lineman", [FindingType.ConductorDamage, FindingType.CrossarmDamage, FindingType.MissingHardware], "richmond"),
+                new("Carl Carlsen", "Journeyman lineman", [FindingType.ConductorDamage, FindingType.CrossarmDamage, FindingType.DamagedInsulator], "martinez"),
+            ],
+            DepotId: "concord"),
         new("evergreen", "Evergreen Terrace Vegetation Crew", "Tree trimming and clearance",
             [FindingType.VegetationEncroachment],
-            [new("Willie MacTavish", "Lead arborist"), new("Cletus Spuckley", "Climber"), new("Ned Flandry", "Groundman")]),
+            [
+                new("Willie MacTavish", "Lead arborist"),
+                new("Cletus Spuckley", "Climber", DepotId: "antioch"),
+                new("Ned Flandry", "Groundman", DepotId: "san-ramon"),
+            ],
+            DepotId: "walnut-creek"),
         new("shelbyville", "Shelbyville Hardware Crew", "Insulators and hardware",
             [FindingType.DamagedInsulator, FindingType.MissingHardware],
-            [new("Moe Sizlack", "Foreman"), new("Barney Grumble", "Lineman"), new("Otto Mannheim", "Apprentice lineman")]),
+            [
+                new("Moe Sizlack", "Foreman"),
+                new("Barney Grumble", "Lineman", [FindingType.DamagedInsulator, FindingType.MissingHardware, FindingType.CrossarmDamage], "san-ramon"),
+                new("Otto Mannheim", "Apprentice lineman", [FindingType.MissingHardware]),
+            ],
+            DepotId: "pittsburg"),
         new("hot-stick", "Springfield Hot-Stick Crew", "Thermal repairs on energized lines",
             [FindingType.ThermalHotspot],
-            [new("Frank Grimsby", "Foreman"), new("Lisa Simsen", "Thermographer"), new("Marjorie Bouvay", "Hot-stick lineman")]),
+            [
+                new("Frank Grimsby", "Foreman", [FindingType.ThermalHotspot, FindingType.ConductorDamage]),
+                new("Lisa Simsen", "Thermographer", DepotId: "walnut-creek"),
+                new("Marjorie Bouvay", "Hot-stick lineman", DepotId: "richmond"),
+            ],
+            DepotId: "antioch"),
     ];
 
     /// <summary>The crew that normally handles this kind of defect.</summary>
@@ -45,6 +114,33 @@ public static class CrewRoster
         crews.FirstOrDefault(c => c.Status == CrewStatus.Available && c.Handles.Contains(type))
         ?? crews.FirstOrDefault(c => c.Handles.Contains(type))
         ?? crews.FirstOrDefault();
+
+    /// <summary>
+    /// Who can take a work order for <paramref name="type"/> at <paramref name="site"/>: on-duty technicians qualified for
+    /// it, then on-duty crews that handle it as a unit, each list nearest depot first. People without a known depot go last.
+    /// Someone already out (<paramref name="active"/>) can take it after their current jobs when it's in the same area,
+    /// measured from their last job; otherwise they're listed after everyone available, marked busy.
+    /// </summary>
+    public static IReadOnlyList<AssignCandidate> Candidates(IReadOnlyList<Crew> crews, IReadOnlyList<Depot> depots, FindingType type, GeoPoint site,
+        IReadOnlyList<FieldDispatch>? active = null)
+    {
+        AssignCandidate Make(Crew c, CrewMember? m)
+        {
+            var depot = depots.FirstOrDefault(d => d.Id == (m is null ? c.DepotId : c.DepotOf(m)));
+            var label = new CrewAssignee(c, m).Label;
+            var busy = active is null ? null : FieldWork.BusyUntil(active, c.Id, m?.Name);
+            var after = busy is not null && FieldWork.CanChain(active!, label, site) ? FieldWork.Tail(active!, label) : null;
+            GeoPoint? start = after?.Site ?? depot?.Location;
+            return new(c, m, depot, start is { } p ? Math.Round(Geo.DistanceMeters(p, site) / 1000, 1) : null, after is null ? busy : null, after);
+        }
+        static IEnumerable<AssignCandidate> Nearest(IEnumerable<AssignCandidate> xs) =>
+            xs.OrderBy(x => !x.Available).ThenBy(x => x.DistanceKm ?? double.MaxValue).ThenBy(x => x.Crew.Name).ThenBy(x => x.Member?.Name);
+
+        var onDuty = crews.Where(c => c.Status == CrewStatus.Available).ToList();
+        var technicians = onDuty.SelectMany(c => c.Members.Where(m => c.CanFix(type, m)).Select(m => Make(c, m)));
+        var wholeCrews = onDuty.Where(c => c.CanFix(type)).Select(c => Make(c, null));
+        return [.. Nearest(technicians), .. Nearest(wholeCrews)];
+    }
 
     /// <summary>
     /// Matches a crew id, crew name, member name, or a stored "Member (Crew)" label, ignoring case.

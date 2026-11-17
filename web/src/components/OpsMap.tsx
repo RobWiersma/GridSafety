@@ -2,7 +2,27 @@ import L from 'leaflet';
 import { useEffect, useMemo, useState } from 'react';
 import { CircleMarker, MapContainer, Marker, Pane, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import { FINDING_TYPE_LABEL, TOWER_ZOOM, minKvForZoom, severityHex, voltageHex } from '../lib/format';
-import type { Circuit, DroneState, FindingView, TelemetryPoint } from '../types';
+import type { Circuit, Depot, DroneState, FieldDispatch, FieldPhase, FindingView, GeoPoint, TelemetryPoint } from '../types';
+
+/** A truck on a simulated field job, positioned for the current moment. */
+export interface TruckPin {
+  findingId: string;
+  label: string;
+  structureLabel: string;
+  dispatch: FieldDispatch;
+  phase: FieldPhase;
+  position: GeoPoint;
+  /** The road still ahead on the current drive, from the truck onwards. */
+  ahead: GeoPoint[];
+  /** e.g. "Repairing · 0:42" */
+  status: string;
+}
+
+/** A depot with the on-duty and off-duty people who depart from it. */
+export interface DepotPin {
+  depot: Depot;
+  people: { name: string; role: string; crewName: string; offDuty: boolean }[];
+}
 
 interface Props {
   circuits: Circuit[];
@@ -12,8 +32,29 @@ interface Props {
   focus?: Circuit | null;
   /** Mission id → callsign, to label the drone with the flight it's on. */
   flightNames?: Record<string, string>;
+  /** Yards ground crews depart from; omitted or empty to hide them. */
+  depots?: DepotPin[];
+  /** Field crews out on jobs. */
+  trucks?: TruckPin[];
   onOpenFinding(id: string): void;
 }
+
+const truckIcon = (phase: FieldPhase) =>
+  L.divIcon({
+    className: '',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    html: `<div class="truck-marker truck-${phase.toLowerCase()}"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+             <path d="M3 6h11v9H3zM14 9h4l3 3v3h-7zM6.5 19a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm11 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg></div>`,
+  });
+
+const depotIcon = L.divIcon({
+  className: '',
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
+  html: `<div class="depot-marker"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+           <path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></div>`,
+});
 
 const droneIcon = (d: DroneState) =>
   L.divIcon({
@@ -25,7 +66,7 @@ const droneIcon = (d: DroneState) =>
            </div>`,
   });
 
-export function OpsMap({ circuits, drones, findings, track, focus, flightNames = {}, onOpenFinding }: Props) {
+export function OpsMap({ circuits, drones, findings, track, focus, flightNames = {}, depots = [], trucks = [], onOpenFinding }: Props) {
   // SVG, not the map's shared canvas: a canvas in its own pane would cover the whole map and swallow
   // hover and clicks meant for the lines and parked drones underneath. There are only tens of findings.
   const findingsRenderer = useMemo(() => L.svg({ pane: 'findings' }), []);
@@ -52,8 +93,39 @@ export function OpsMap({ circuits, drones, findings, track, focus, flightNames =
         <Polyline positions={track.map((p) => [p.lat, p.lon] as L.LatLngTuple)} pathOptions={{ color: '#f43f5e', weight: 2.5, dashArray: '6 4' }} />
       )}
 
-      {/* Stacking, bottom to top: lines, parked drones, findings (worst on top), flying drones.
+      {/* Stacking, bottom to top: lines, depots, parked drones, findings (worst on top), flying drones.
           A drone that landed on a defect must not hide it. */}
+      <Pane name="depots" style={{ zIndex: 585 }} />
+      {depots.map(({ depot, people }) => {
+        const onDuty = people.filter((p) => !p.offDuty);
+        return (
+          <Marker key={depot.id} pane="depots" position={[depot.location.lat, depot.location.lon]} icon={depotIcon}
+            title={depot.name} alt={`${depot.name}: ${onDuty.length} on duty depart from here`}>
+            <Tooltip direction="top" offset={[0, -12]}>
+              <strong>{depot.name}</strong> · {onDuty.length} on duty depart{onDuty.length === 1 ? 's' : ''} from here
+              {people.map((p) => (
+                <div key={`${p.crewName}/${p.name}`} className={p.offDuty ? 'depot-tip-off' : undefined}>
+                  {p.name} · {p.role}, {p.crewName}{p.offDuty ? ' (off duty)' : ''}
+                </div>
+              ))}
+            </Tooltip>
+          </Marker>
+        );
+      })}
+      {/* Field trucks: the route they're driving, and the truck itself, above depots and findings but under flying drones. */}
+      <Pane name="trucks" style={{ zIndex: 597 }} />
+      {trucks.filter((tr) => tr.ahead.length > 1).map((tr) => (
+        <Polyline key={`route-${tr.findingId}`} pane="trucks" positions={tr.ahead.map((p) => [p.lat, p.lon] as L.LatLngTuple)} interactive={false}
+          pathOptions={{ color: tr.phase === 'Returning' ? '#94a3b8' : '#f5b224', weight: 3, dashArray: tr.dispatch.onRoads ? undefined : '2 6', opacity: 0.85 }} />
+      ))}
+      {trucks.filter((tr) => tr.phase !== 'Queued' && tr.phase !== 'MovedOn').map((tr) => (
+        <Marker key={`truck-${tr.findingId}`} pane="trucks" position={[tr.position.lat, tr.position.lon]} icon={truckIcon(tr.phase)}
+          title={`${tr.label}: ${tr.status}`} eventHandlers={{ click: () => onOpenFinding(tr.findingId) }}>
+          <Tooltip direction="top" offset={[0, -12]} permanent={tr.phase === 'OnSite'}>
+            <strong>{tr.label}</strong> · {tr.structureLabel}<br />{tr.status}
+          </Tooltip>
+        </Marker>
+      ))}
       <Pane name="parked-drones" style={{ zIndex: 590 }} />
       <Pane name="findings" style={{ zIndex: 595 }}>
       {[...findings].sort((a, b) => a.finding.severity - b.finding.severity).map((f) => (

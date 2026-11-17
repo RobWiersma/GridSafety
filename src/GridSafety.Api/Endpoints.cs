@@ -14,7 +14,11 @@ public sealed record FindingStatusRequest(FindingStatus Status, string? Note, st
 
 public sealed record MissionView(Mission Mission, string CircuitName, double Coverage, IReadOnlyList<MissionStatus> NextStatuses);
 public sealed record FindingView(Finding Finding, string CircuitName, IReadOnlyList<FindingStatus> NextStatuses, bool Overdue, string SeverityLabel, string SuggestedCrew);
-public sealed record CrewView(Crew Crew, int OpenWorkOrders);
+/// <summary>A ground crew with its open work orders and the jobs its people are out on right now.</summary>
+public sealed record CrewView(Crew Crew, int OpenWorkOrders, IReadOnlyList<FieldDispatch>? InField = null);
+/// <summary>Someone a work order can go to, nearest first: a technician (<see cref="Member"/> set) or a whole crew.</summary>
+public sealed record AssigneeOption(string Label, string CrewId, string CrewName, string? Member, string? Role,
+    string? DepotId, string? DepotName, double? DistanceKm, int CrewOpenWorkOrders, DateTimeOffset? BusyUntil, string? AfterJob);
 public sealed record AlertAckRequest(DateTimeOffset? At, AlertKind? Kind);
 public sealed record VisitRequest(string? Page, string? Referrer, bool SignedIn);
 public sealed record CountView(string Name, int Count);
@@ -53,8 +57,10 @@ public static partial class Endpoints
         guest.MapGet("/findings/{id}", GetFinding);
         guest.MapGet("/findings/{id}/image", GetFindingImage);
         guest.MapGet("/findings/{id}/aerial", GetFindingAerial);
+        guest.MapGet("/findings/{id}/assignees", ListAssignees);
         guest.MapGet("/crews", ListCrews);
         guest.MapGet("/resources", ListResources);
+        MapFieldJobs(guest);
 
         var secured = api.MapGroup("/").AddEndpointFilter(RequireUser);
         secured.MapGet("/me", (HttpContext ctx) => { var u = User(ctx); return TypedResults.Ok(new MeView(u.Id, u.DisplayName, u.IsSupervisor, u.Groups)); });
@@ -77,8 +83,10 @@ public static partial class Endpoints
         secured.MapGet("/findings/{id}", GetFinding);
         secured.MapGet("/findings/{id}/image", GetFindingImage);
         secured.MapGet("/findings/{id}/aerial", GetFindingAerial);
+        secured.MapGet("/findings/{id}/assignees", ListAssignees);
         secured.MapPost("/findings/{id}/status", ChangeFindingStatus);
         secured.MapGet("/crews", ListCrews);
+        MapFieldJobs(secured);
         MapResources(secured);
         MapAlertSettings(secured);
         MapSimulationSettings(secured);
@@ -112,14 +120,15 @@ public static partial class Endpoints
         return new MissionView(m, circuit?.Name ?? m.CircuitId, circuit is null ? 0 : m.Coverage(circuit), Mission.Workflow.Next(m.Status));
     }
 
-    private static FindingView ToView(Finding f, ICircuitCatalog circuits, DateTimeOffset now, IReadOnlyList<Crew> crews) =>
+    /// <summary>The suggested assignee is the nearest on-duty technician qualified for the defect who isn't out on another job.</summary>
+    private static FindingView ToView(Finding f, ICircuitCatalog circuits, DateTimeOffset now, ResourceCatalog catalog, IReadOnlyList<FieldDispatch> active) =>
         new(f, circuits.Find(f.CircuitId)?.Name ?? f.CircuitId, Finding.Workflow.Next(f.Status), f.IsOverdue(now), TriageSla.Describe(f.Severity),
-            CrewRoster.SuggestFor(crews, f.Type)?.Name ?? "");
+            CrewRoster.Candidates(catalog.GroundCrews, catalog.Depots, f.Type, f.Location, active).FirstOrDefault(c => c.Available)?.Label ?? "");
 
     private static async Task<Ok<OpsStats>> Stats(IGridRepository repo, TimeProvider clock, CancellationToken ct)
     {
         var missions = await repo.ListMissionsAsync(500, ct);
-        var findings = await repo.ListFindingsAsync(1000, ct);
+        var findings = await ListSettledFindingsAsync(repo, clock.GetUtcNow(), ct);
         var drones = await repo.ListDronesAsync(ct);
         return TypedResults.Ok(OpsStats.Compute(missions, findings, drones, clock.GetUtcNow()));
     }
@@ -254,8 +263,9 @@ public static partial class Endpoints
         string? status, string? missionId, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
-        var crews = (await resources.GetAsync(ct)).GroundCrews;
-        var all = await repo.ListFindingsAsync(1000, ct);
+        var catalog = await resources.GetAsync(ct);
+        var all = await ListSettledFindingsAsync(repo, now, ct);
+        var active = FieldWork.Active(all, now);
         var filtered = all.Where(f =>
             (missionId is null || f.MissionId == missionId) &&
             (status switch
@@ -270,14 +280,18 @@ public static partial class Endpoints
             .OrderByDescending(f => f.IsOverdue(now))
             .ThenByDescending(f => f.Severity)
             .ThenBy(f => f.CreatedAt)
-            .Select(f => ToView(f, circuits, now, crews)));
+            .Select(f => ToView(f, circuits, now, catalog, active)));
     }
 
     private static async Task<Results<Ok<FindingView>, NotFound>> GetFinding(
-        string id, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct) =>
-        await repo.GetFindingAsync(id, ct) is { } f
-            ? TypedResults.Ok(ToView(f, circuits, clock.GetUtcNow(), (await resources.GetAsync(ct)).GroundCrews))
+        string id, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var all = await ListSettledFindingsAsync(repo, now, ct);
+        return (all.FirstOrDefault(x => x.Id == id) ?? await GetSettledFindingAsync(repo, id, now, ct)) is { } f
+            ? TypedResults.Ok(ToView(f, circuits, now, await resources.GetAsync(ct), FieldWork.Active(all, now)))
             : TypedResults.NotFound();
+    }
 
     /// <summary>Synthetic drone capture of the finding (SVG). A real deployment would serve the uploaded photo from S3.</summary>
     private static async Task<Results<ContentHttpResult, NotFound>> GetFindingImage(string id, IGridRepository repo, CancellationToken ct) =>
@@ -357,11 +371,14 @@ public static partial class Endpoints
     }
 
     /// <summary>The crew roster with each crew's open work orders (assigned, not yet resolved), crew-wide or to a member.</summary>
-    private static async Task<Ok<IEnumerable<CrewView>>> ListCrews(IGridRepository repo, IResourceStore resources, CancellationToken ct)
+    private static async Task<Ok<IEnumerable<CrewView>>> ListCrews(IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct)
     {
+        var now = clock.GetUtcNow();
         var crews = (await resources.GetAsync(ct)).GroundCrews;
-        var open = OpenWorkOrders(await repo.ListFindingsAsync(1000, ct), crews);
-        return TypedResults.Ok(crews.Select(c => new CrewView(c, open.GetValueOrDefault(c.Id))));
+        var findings = await ListSettledFindingsAsync(repo, now, ct);
+        var open = OpenWorkOrders(findings, crews);
+        var active = FieldWork.Active(findings, now);
+        return TypedResults.Ok(crews.Select(c => new CrewView(c, open.GetValueOrDefault(c.Id), [.. active.Where(d => d.CrewId == c.Id)])));
     }
 
     /// <summary>Open work orders (assigned, not yet resolved) per crew id, crew-wide or to a member.</summary>
@@ -374,34 +391,79 @@ public static partial class Endpoints
             .ToDictionary();
 
     private static async Task<Results<Ok<FindingView>, NotFound, ValidationProblem, Conflict<string>, ProblemHttpResult>> ChangeFindingStatus(
-        string id, FindingStatusRequest req, HttpContext ctx, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
+        string id, FindingStatusRequest req, HttpContext ctx, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, IRouteSource routes,
+        TimeProvider clock, CancellationToken ct)
     {
         var user = User(ctx);
-        var crews = (await resources.GetAsync(ct)).GroundCrews;
+        var catalog = await resources.GetAsync(ct);
+        var crews = catalog.GroundCrews;
         if (Finding.RequiresSupervisor(req.Status) && !user.IsSupervisor)
             return TypedResults.Problem($"Only supervisors can move a finding to {req.Status}.", statusCode: StatusCodes.Status403Forbidden);
 
-        var f = await repo.GetFindingAsync(id, ct);
+        var now = clock.GetUtcNow();
+        var all = await ListSettledFindingsAsync(repo, now, ct);
+        var f = all.FirstOrDefault(x => x.Id == id) ?? await GetSettledFindingAsync(repo, id, now, ct);
         if (f is null) return TypedResults.NotFound();
+        var active = FieldWork.Active(all, now);
 
         // Work orders go to someone on the crew roster, stored under their canonical label.
         var assignee = req.Assignee;
+        FieldDispatch? dispatch = null;
+        Finding? previous = null;
         if (req.Status == FindingStatus.Assigned && !string.IsNullOrWhiteSpace(assignee))
         {
             if (CrewRoster.Resolve(crews, assignee) is not { } who)
                 return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["assignee"] = [$"'{assignee.Trim()}' isn't on the crew roster."] });
             if (who.Crew.Status == CrewStatus.OffDuty)
                 return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["assignee"] = [$"{who.Crew.Name} is off duty."] });
+            if (!who.Crew.CanFix(f.Type, who.Member))
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["assignee"] = [$"{who.Label} isn't qualified to fix {FindingImage.Label(f.Type).ToLowerInvariant()}."],
+                });
+            // Someone already out can take it after their current jobs if it's nearby; otherwise they're busy.
+            var candidate = CrewRoster.Candidates(crews, catalog.Depots, f.Type, f.Location, active).FirstOrDefault(c => c.Label == who.Label);
+            if (candidate is { BusyUntil: { } back })
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["assignee"] = [$"{who.Label} is out on a job elsewhere for about {Math.Max(1, (int)Math.Ceiling((back - now).TotalMinutes))} more minute(s)."],
+                });
             assignee = who.Label;
+
+            // Send them: a simulated truck roll along the roads, from their depot or straight on from their last job.
+            previous = candidate?.After is { } after ? all.FirstOrDefault(x => ReferenceEquals(x.Dispatch, after)) : null;
+            dispatch = candidate is null ? null : await FieldWork.PlanAsync(candidate, f, previous, routes, now, ct);
         }
         try
         {
-            f.MoveTo(req.Status, clock.GetUtcNow(), user.DisplayName, req.Note, assignee);
+            if (req.Status == FindingStatus.Resolved) await FieldWork.RecallAsync(f, routes, now, ct); // closed by hand before the repair finished
+            f.MoveTo(req.Status, now, user.DisplayName, req.Note, assignee);
+            if (dispatch is not null) f.Dispatch = dispatch;
             await repo.SaveFindingAsync(f, ct);
+            if (previous is not null)
+            {
+                // The job before now hands over to this one instead of driving back to the depot.
+                try { await repo.SaveFindingAsync(previous, ct); }
+                catch (ConcurrencyException) { /* it was just settled; its drive back stays as planned */ }
+            }
         }
         catch (InvalidTransitionException ex) { return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["status"] = [ex.Message] }); }
         catch (ArgumentException ex) { return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["assignee"] = [ex.Message] }); }
         catch (ConcurrencyException ex) { return TypedResults.Conflict(ex.Message); }
-        return TypedResults.Ok(ToView(f, circuits, clock.GetUtcNow(), crews));
+        return TypedResults.Ok(ToView(f, circuits, now, catalog, FieldWork.Active(all.Select(x => x.Id == f.Id ? f : x), now)));
+    }
+
+    /// <summary>Who this finding's work order can go to: qualified, on-duty technicians nearest first, then whole crews.</summary>
+    private static async Task<Results<Ok<IEnumerable<AssigneeOption>>, NotFound>> ListAssignees(
+        string id, IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var all = await ListSettledFindingsAsync(repo, now, ct);
+        if ((all.FirstOrDefault(x => x.Id == id) ?? await repo.GetFindingAsync(id, ct)) is not { } f) return TypedResults.NotFound();
+        var catalog = await resources.GetAsync(ct);
+        var open = OpenWorkOrders(all, catalog.GroundCrews);
+        return TypedResults.Ok(CrewRoster.Candidates(catalog.GroundCrews, catalog.Depots, f.Type, f.Location, FieldWork.Active(all, now)).Select(c =>
+            new AssigneeOption(c.Label, c.Crew.Id, c.Crew.Name, c.Member?.Name, c.Member?.Role, c.Depot?.Id, c.Depot?.Name, c.DistanceKm,
+                open.GetValueOrDefault(c.Crew.Id), c.BusyUntil, c.After?.SiteLabel)));
     }
 }

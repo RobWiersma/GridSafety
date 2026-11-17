@@ -467,3 +467,44 @@ button { font: inherit; color: inherit; }
 .sim-count .input { width: 76px; padding: 5px 8px; }
 .sim-indent { padding-left: 24px; }
 .sim-count select.input { width: 84px; }
+
+/* Crew depots: map pins, resources table, technician skills */
+.depot-marker { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center;
+  background: #1b2333; color: #f5b224; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.depot-tip-off { opacity: .6; }
+.legend-toggle { display: inline-flex; align-items: center; gap: 6px; font: inherit; color: inherit; background: none; border: 1px solid transparent;
+  border-radius: 999px; padding: 1px 8px 1px 4px; cursor: pointer; opacity: .55; }
+.legend-toggle:hover { border-color: var(--border); }
+.legend-toggle-on { opacity: 1; }
+.legend-depot { width: 12px !important; height: 12px !important; border-radius: 3px !important; background: #1b2333; border: 2px solid #f5b224; }
+.depot-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.depot-note { padding: 8px 14px 12px; margin: 0; }
+.skill-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.skill-tag { font-size: 11px; line-height: 1.5; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.member-extra { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; padding: 2px 0 10px 10px; border-left: 2px solid var(--border); margin-left: 4px; }
+.dialog label.member-depot { flex-direction: row; align-items: center; gap: 8px; font-weight: 500; }
+.member-depot .input { width: auto; }
+.member-skills { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+
+/* Simulated field crews: trucks on the map, the In the field panel, the job timeline in the drawer */
+.truck-marker { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #1b2333;
+  background: #f5b224; border: 2px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.4); }
+.truck-onsite { background: #22c55e; color: #fff; animation: truck-pulse 1.4s ease-in-out infinite; }
+.truck-returning { background: #94a3b8; color: #1b2333; }
+.truck-back { background: #475569; color: #e2e8f0; opacity: .7; }
+@keyframes truck-pulse { 50% { box-shadow: 0 0 0 7px rgba(34,197,94,.25); } }
+@media (prefers-reduced-motion: reduce) { .truck-onsite { animation: none; } }
+.legend-truck { width: 12px !important; height: 12px !important; border-radius: 50% !important; background: #f5b224; border: 2px solid #fff; }
+.field-row { align-items: flex-start; }
+.field-status { display: block; }
+.field-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex: none; background: #f5b224; }
+.field-onsite { background: #22c55e; }
+.field-returning { background: #94a3b8; }
+.field-note { margin: 6px 0 0; }
+.field-job { border: 1px solid var(--border); border-left: 3px solid #f5b224; border-radius: 8px; padding: 10px 12px; margin: 10px 0; font-size: 13.5px; }
+.field-job-onsite { border-left-color: #22c55e; }
+.field-job-returning, .field-job-back { border-left-color: #94a3b8; }
+.field-steps { margin: 8px 0 6px; padding-left: 20px; display: flex; flex-direction: column; gap: 2px; color: var(--muted); }
+.field-steps li.done { color: inherit; }
+.out-badge { display: inline-block; margin-left: 6px; font-size: 11px; line-height: 1.5; padding: 0 7px; border-radius: 999px;
+  background: rgba(245,178,36,.15); color: #f5b224; border: 1px solid rgba(245,178,36,.4); white-space: nowrap; }

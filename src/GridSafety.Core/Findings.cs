@@ -40,6 +40,8 @@ public sealed class Finding
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? TriageDueAt { get; init; }
     public bool Escalated { get; set; }
+    /// <summary>The simulated truck roll sent when the work order was assigned, if the assignee had a depot.</summary>
+    public FieldDispatch? Dispatch { get; set; }
     public List<StatusChange<FindingStatus>> History { get; init; } = [];
     public long Version { get; set; }
 

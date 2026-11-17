@@ -85,6 +85,18 @@ else if (!string.Equals(config["GridSafety:AerialImagery"], "Off", StringCompari
 else
     builder.Services.AddSingleton<IAerialLauncher>(DisabledAerialLauncher.Instance);
 
+// Road routes for simulated field crews (OSRM over OpenStreetMap roads), fetched once when a work order is assigned.
+// "GridSafety:Routing": "Off" makes trucks drive in straight lines; "GridSafety:RoutingUrl" points at another OSRM server.
+if (string.Equals(config["GridSafety:Routing"], "Off", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddSingleton<IRouteSource>(StraightLineRouteSource.Instance);
+else
+    builder.Services.AddHttpClient<IRouteSource, OsrmRouteSource>(c =>
+    {
+        c.BaseAddress = new Uri(config["GridSafety:RoutingUrl"] is { Length: > 0 } u ? u : OsrmRouteSource.DefaultBaseUrl);
+        c.Timeout = TimeSpan.FromSeconds(5); // the API Lambda has 15 s in all
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("GridSafety-demo/1.0");
+    });
+
 // Email alert recipients are SNS email subscriptions in AWS; locally nothing is emailed.
 if (config["GridSafety:AlertTopicArn"] is { Length: > 0 } alertTopic)
     builder.Services.AddSingleton<IAlertRecipients>(_ => new SnsAlertRecipients(new AmazonSimpleNotificationServiceClient(), alertTopic));

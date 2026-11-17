@@ -11,7 +11,7 @@ public sealed record DroneResourceView(
 /// <summary>A flight crew with the missions flown by its pilots.</summary>
 public sealed record FlightCrewView(FlightCrew Crew, int Missions, int ActiveMissions, DateTimeOffset? LastFlight);
 
-public sealed record ResourcesView(IReadOnlyList<DroneResourceView> Drones, IReadOnlyList<FlightCrewView> FlightCrews, IReadOnlyList<CrewView> GroundCrews);
+public sealed record ResourcesView(IReadOnlyList<DroneResourceView> Drones, IReadOnlyList<FlightCrewView> FlightCrews, IReadOnlyList<CrewView> GroundCrews, IReadOnlyList<Depot> Depots);
 
 /// <summary>Drones, flight crews and ground crews. Everyone can see them; supervisors add, edit and remove them.</summary>
 public static partial class Endpoints
@@ -27,8 +27,9 @@ public static partial class Endpoints
         secured.MapDelete("/resources/ground-crews/{id}", DeleteGroundCrew);
     }
 
-    private static async Task<Ok<ResourcesView>> ListResources(IGridRepository repo, IResourceStore resources, CancellationToken ct)
+    private static async Task<Ok<ResourcesView>> ListResources(IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct)
     {
+        var now = clock.GetUtcNow();
         var catalog = await resources.GetAsync(ct);
         var missions = await repo.ListMissionsAsync(1000, ct);
         var live = (await repo.ListDronesAsync(ct)).ToDictionary(d => d.DroneId, StringComparer.OrdinalIgnoreCase);
@@ -49,9 +50,11 @@ public static partial class Endpoints
                 flown.Max(m => (DateTimeOffset?)(m.StartedAt ?? m.CreatedAt)));
         }).ToList();
 
-        var open = OpenWorkOrders(await repo.ListFindingsAsync(1000, ct), catalog.GroundCrews);
-        var groundCrews = catalog.GroundCrews.Select(c => new CrewView(c, open.GetValueOrDefault(c.Id))).ToList();
-        return TypedResults.Ok(new ResourcesView(drones, flightCrews, groundCrews));
+        var findings = await ListSettledFindingsAsync(repo, now, ct);
+        var open = OpenWorkOrders(findings, catalog.GroundCrews);
+        var active = FieldWork.Active(findings, now);
+        var groundCrews = catalog.GroundCrews.Select(c => new CrewView(c, open.GetValueOrDefault(c.Id), [.. active.Where(d => d.CrewId == c.Id)])).ToList();
+        return TypedResults.Ok(new ResourcesView(drones, flightCrews, groundCrews, catalog.Depots));
     }
 
     /// <summary>Missions store the pilot as text, e.g. "Edna Krabble" or "Edna Krabble (Part 107)".</summary>
@@ -81,7 +84,7 @@ public static partial class Endpoints
     private static Task<IResult> PutFlightCrew(string id, FlightCrew body, HttpContext ctx, IResourceStore resources, CancellationToken ct) =>
         EditAsync(ctx, resources, catalog =>
         {
-            var crew = body with { Id = id.Trim(), Name = body.Name?.Trim()!, HomeBase = body.HomeBase?.Trim()!, Members = CleanMembers(body.Members) };
+            var crew = body with { Id = id.Trim(), Name = body.Name?.Trim()!, HomeBase = body.HomeBase?.Trim()!, Members = [.. CleanMembers(body.Members).Select(m => m with { Skills = null, DepotId = null })] };
             if (ResourceCatalog.Validate(crew) is { Count: > 0 } errors) return Task.FromResult<IResult>(TypedResults.ValidationProblem(errors));
             Upsert(catalog.FlightCrews, crew, c => c.Id == crew.Id);
             return Task.FromResult<IResult>(TypedResults.Ok(crew));
@@ -94,8 +97,9 @@ public static partial class Endpoints
     private static Task<IResult> PutGroundCrew(string id, Crew body, HttpContext ctx, IGridRepository repo, IResourceStore resources, CancellationToken ct) =>
         EditAsync(ctx, resources, async catalog =>
         {
-            var crew = body with { Id = id.Trim(), Name = body.Name?.Trim()!, Specialty = body.Specialty?.Trim()!, Members = CleanMembers(body.Members), Handles = body.Handles?.Distinct().ToList()! };
+            var crew = body with { Id = id.Trim(), Name = body.Name?.Trim()!, Specialty = body.Specialty?.Trim()!, Members = CleanMembers(body.Members), Handles = body.Handles?.Distinct().ToList()!, DepotId = Clean(body.DepotId) };
             if (ResourceCatalog.Validate(crew) is { Count: > 0 } errors) return TypedResults.ValidationProblem(errors);
+            if (catalog.ValidateDepots(crew) is { Count: > 0 } depotErrors) return TypedResults.ValidationProblem(depotErrors);
             if (catalog.GroundCrews.Any(c => c.Id != crew.Id && c.Name.Equals(crew.Name, StringComparison.OrdinalIgnoreCase)))
                 return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["name"] = ["Another ground crew already has that name."] });
 
@@ -161,7 +165,7 @@ public static partial class Endpoints
     }
 
     private static List<CrewMember> CleanMembers(IReadOnlyList<CrewMember>? members) =>
-        (members ?? []).Select(m => new CrewMember(m.Name?.Trim() ?? "", m.Role?.Trim() ?? "")).ToList();
+        (members ?? []).Select(m => new CrewMember(m.Name?.Trim() ?? "", m.Role?.Trim() ?? "", m.Skills?.Distinct().ToList(), Clean(m.DepotId))).ToList();
 
     private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 }

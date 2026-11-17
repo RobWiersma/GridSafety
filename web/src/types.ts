@@ -98,6 +98,58 @@ export interface Finding {
   triageDueAt?: string;
   escalated: boolean;
   history: StatusChange<FindingStatus>[];
+  /** The simulated truck roll sent when the work order was assigned. */
+  dispatch?: FieldDispatch;
+}
+
+/** Queued: still on an earlier job, comes here next. MovedOn: done here, drove on to the next job instead of back. */
+export type FieldPhase = 'Queued' | 'EnRoute' | 'OnSite' | 'Returning' | 'Back' | 'MovedOn';
+
+/**
+ * A simulated truck roll along the roads: depot (or the previous job) → site → repair → depot (or on to the next job),
+ * all timed when the work order was assigned (sped up for the demo).
+ */
+export interface FieldDispatch {
+  assignee: string;
+  crewId: string;
+  /** The technician sent; absent when the whole crew went. */
+  member?: string;
+  depotId: string;
+  depotName: string;
+  depot: GeoPoint;
+  site: GeoPoint;
+  siteLabel: string;
+  from: GeoPoint;
+  fromLabel: string;
+  /** The drive out, from → site. */
+  route: GeoPoint[];
+  /** The drive back to the depot; just the site when the truck goes on to another job. */
+  returnRoute: GeoPoint[];
+  /** False when no road route was found and the truck drives in straight lines. */
+  onRoads: boolean;
+  departedAt: string;
+  arrivesAt: string;
+  repairedAt: string;
+  returnsAt: string;
+  /** The work order this truck goes on to after this one. */
+  nextFindingId?: string;
+  nextSiteLabel?: string;
+  /** Set when the work order was closed by hand before the repair finished; the truck turned back. */
+  recalledAt?: string;
+}
+
+export interface FieldJob {
+  findingId: string;
+  structureLabel: string;
+  type: FindingType;
+  severity: number;
+  dispatch: FieldDispatch;
+  phase: FieldPhase;
+}
+
+export interface FieldJobs {
+  now: string;
+  jobs: FieldJob[];
 }
 
 export interface FindingView {
@@ -132,6 +184,34 @@ export interface VisitorStats {
 export interface CrewMember {
   name: string;
   role: string;
+  /** Ground crews: issue types this technician can fix; absent means whatever the crew handles. */
+  skills?: FindingType[];
+  /** Ground crews: the depot this technician departs from; absent means the crew's depot. */
+  depotId?: string;
+}
+
+/** A yard ground crews and technicians depart from. */
+export interface Depot {
+  id: string;
+  name: string;
+  location: { lat: number; lon: number };
+}
+
+/** Someone a work order can go to, nearest first: a technician (member set) or a whole crew. */
+export interface AssigneeOption {
+  label: string;
+  crewId: string;
+  crewName: string;
+  member?: string;
+  role?: string;
+  depotId?: string;
+  depotName?: string;
+  distanceKm?: number;
+  crewOpenWorkOrders: number;
+  /** Out on a job elsewhere until then; can't be assigned this one. */
+  busyUntil?: string;
+  /** Already out nearby: would come here after this job (structure label); distance is from there. */
+  afterJob?: string;
 }
 
 export type CrewStatus = 'Available' | 'OffDuty';
@@ -143,6 +223,8 @@ export interface Crew {
   handles: FindingType[];
   members: CrewMember[];
   status: CrewStatus;
+  /** The depot the crew rolls out of. */
+  depotId?: string;
 }
 
 export type DroneAssetStatus = 'Active' | 'Maintenance' | 'Retired';
@@ -185,11 +267,14 @@ export interface Resources {
   drones: DroneResourceView[];
   flightCrews: FlightCrewView[];
   groundCrews: CrewView[];
+  depots: Depot[];
 }
 
 export interface CrewView {
   crew: Crew;
   openWorkOrders: number;
+  /** Jobs this crew's people are out on right now. */
+  inField?: FieldDispatch[];
 }
 
 export interface DroneState {
