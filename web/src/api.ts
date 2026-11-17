@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext } from 'react';
 import { useSession } from './session';
 import type {
-  AlertKind,
+  AlertKind, AlertSettings, AlertSettingsView,
   Circuit, Crew, CrewView, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint,
 } from './types';
 
@@ -58,6 +58,7 @@ const keys = {
   findings: (filter: string) => ['findings', filter],
   crews: ['crews'],
   resources: ['resources'],
+  alertSettings: ['alert-settings'],
 };
 
 export const useMe = () => {
@@ -146,6 +147,22 @@ export function useSaveResource() {
       qc.invalidateQueries({ queryKey: keys.crews }),
       qc.invalidateQueries({ queryKey: ['findings'] }),
     ]),
+  });
+}
+
+/** Email alert settings and where each recipient's subscription stands. Signed-in users only (it lists addresses). */
+export const useAlertSettings = (enabled = true) => {
+  const api = useFetcher();
+  return useQuery({ queryKey: keys.alertSettings, queryFn: () => api<AlertSettingsView>('/alert-settings'), enabled });
+};
+
+/** Supervisor-only: replace the alert settings. Fails with 409 if someone else saved since `version` was read. */
+export function useSaveAlertSettings() {
+  const api = useFetcher();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: AlertSettings) => api<AlertSettingsView>('/alert-settings', { method: 'PUT', body: JSON.stringify(settings) }),
+    onSuccess: (view) => qc.setQueryData(keys.alertSettings, view),
   });
 }
 

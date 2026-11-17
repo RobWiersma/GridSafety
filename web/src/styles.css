@@ -444,3 +444,18 @@ button { font: inherit; color: inherit; }
 .photo-zoom-stage.is-zoomed:active { cursor: grabbing; }
 .photo-zoom-stage img { width: 100%; height: 100%; object-fit: contain; display: block; transform-origin: center; user-select: none; -webkit-user-drag: none; }
 .photo-zoom-hint { margin: 0; padding: 6px 12px 10px; }
+
+/* Email alerts */
+.alerts { max-width: 760px; gap: 14px; }
+.alerts-head p { margin: 2px 0 0; }
+.alerts-form { display: flex; flex-direction: column; gap: 14px; }
+.alerts-form fieldset:disabled { opacity: .85; }
+.alerts label.check { display: flex; flex-direction: row; align-items: flex-start; gap: 8px; font-weight: 500; }
+.alerts label.check input { margin-top: 3px; }
+.alerts-severity { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 13px; max-width: 280px; }
+.alerts-severity .input { font-weight: 400; }
+.alerts-recipients { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.alerts-recipients li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.alerts-recipients .mono { overflow-wrap: anywhere; }
+.alerts-add { display: flex; gap: 8px; }
+.alerts-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }

@@ -180,6 +180,9 @@ public sealed class GridSafetyStack : Stack
             opsTopic.AddSubscription(new EmailSubscription(opsEmail));
             alarmTopic.AddSubscription(new EmailSubscription(opsEmail));
         }
+        // Recipients supervisors add in the console (Email alerts). The API owns this topic's email subscriptions;
+        // SNS mails each new address a confirmation link, so nothing has to be verified in the account (unlike SES).
+        var alertTopic = new Topic(this, "AlertRecipients", new TopicProps { DisplayName = $"GridSafety {props.Stage} alerts" });
 
         // ───────────── Cost guardrail ─────────────
         // A monthly AWS Budget that emails the ops address before the bill surprises anyone. Budgets cover the
@@ -371,9 +374,11 @@ public sealed class GridSafetyStack : Stack
         {
             ["TABLE_NAME"] = table.TableName,
             ["OPS_TOPIC_ARN"] = opsTopic.TopicArn,
+            ["ALERT_TOPIC_ARN"] = alertTopic.TopicArn,
         });
         table.GrantReadWriteData(escalationFn);
         opsTopic.GrantPublish(escalationFn);
+        alertTopic.GrantPublish(escalationFn);
 
         var schedulerRole = new Role(this, "SchedulerRole", new RoleProps
         {
@@ -408,7 +413,8 @@ public sealed class GridSafetyStack : Stack
             Targets = new IRuleTarget[] { new LambdaFunction(slaFn, new LambdaFunctionProps { DeadLetterQueue = eventsDlq, RetryAttempts = 4 }) },
         });
 
-        // Paging: critical drone alerts and sev 4–5 findings ─► SQS (buffer, retries, DLQ) ─► notifier ─► SNS.
+        // Paging: critical drone alerts, new findings and ended missions ─► SQS (buffer, retries, DLQ) ─► notifier ─► SNS.
+        // The notifier applies the supervisors' alert settings (which types, which severities), so the rules stay broad.
         var pageDlq = new Queue(this, "PageDlq", new QueueProps { RetentionPeriod = Duration.Days(14), EnforceSSL = true });
         var pageQueue = new Queue(this, "PageQueue", new QueueProps
         {
@@ -431,15 +437,11 @@ public sealed class GridSafetyStack : Stack
         new Rule(this, "SevereFindingRule", new RuleProps
         {
             EventBus = bus,
-            Description = "Severity 4-5 findings need eyes immediately",
+            Description = "New findings; the notifier emails those at or above the configured severity",
             EventPattern = new EventPattern
             {
                 Source = new[] { EventSource },
                 DetailType = new[] { "FindingCreated" },
-                Detail = new Dictionary<string, object>
-                {
-                    ["severity"] = new object[] { new Dictionary<string, object> { ["numeric"] = new object[] { ">=", 4 } } },
-                },
             },
             Targets = new IRuleTarget[] { new SqsQueue(pageQueue) },
         });
@@ -448,9 +450,19 @@ public sealed class GridSafetyStack : Stack
         {
             ["TABLE_NAME"] = table.TableName,
             ["OPS_TOPIC_ARN"] = opsTopic.TopicArn,
+            ["ALERT_TOPIC_ARN"] = alertTopic.TopicArn,
         });
-        table.GrantReadWriteData(notifierFn); // idempotency records
+        table.GrantReadWriteData(notifierFn); // idempotency records, alert settings
         opsTopic.GrantPublish(notifierFn);
+        alertTopic.GrantPublish(notifierFn);
+
+        // The API turns the supervisors' recipient list into email subscriptions on the alert topic.
+        apiFn.AddEnvironment("GridSafety__AlertTopicArn", alertTopic.TopicArn);
+        apiFn.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
+        {
+            Actions = new[] { "sns:Subscribe", "sns:Unsubscribe", "sns:ListSubscriptionsByTopic" },
+            Resources = new[] { alertTopic.TopicArn, $"{alertTopic.TopicArn}:*" },
+        }));
         notifierFn.AddEventSource(new SqsEventSource(pageQueue, new SqsEventSourceProps { BatchSize = 10, ReportBatchItemFailures = true }));
 
         // Mission reports: completed/aborted mission ─► HTML report in S3.
@@ -464,14 +476,18 @@ public sealed class GridSafetyStack : Stack
         new Rule(this, "MissionEndedRule", new RuleProps
         {
             EventBus = bus,
-            Description = "Generate the inspection report when a mission ends",
+            Description = "Generate the inspection report (and email it if mission alerts are on) when a mission ends",
             EventPattern = new EventPattern
             {
                 Source = new[] { EventSource },
                 DetailType = new[] { "MissionStatusChanged" },
                 Detail = new Dictionary<string, object> { ["newStatus"] = new[] { "Completed", "Aborted" } },
             },
-            Targets = new IRuleTarget[] { new LambdaFunction(reportFn, new LambdaFunctionProps { DeadLetterQueue = eventsDlq, RetryAttempts = 4 }) },
+            Targets = new IRuleTarget[]
+            {
+                new LambdaFunction(reportFn, new LambdaFunctionProps { DeadLetterQueue = eventsDlq, RetryAttempts = 4 }),
+                new SqsQueue(pageQueue),
+            },
         });
 
         // On-demand demo flights: the API invokes this when a supervisor presses "Demo flight".

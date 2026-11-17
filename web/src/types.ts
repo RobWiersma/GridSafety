@@ -235,3 +235,29 @@ export interface Me {
   groups: string[];
   isGuest?: boolean;
 }
+
+export type AlertType = 'CriticalFinding' | 'OverdueTriage' | 'FlightAlert' | 'MissionComplete';
+
+/** Which events send email and to whom. Supervisors edit it; `version` guards against overwriting someone else's save. */
+export interface AlertSettings {
+  version: number;
+  criticalFindings: boolean;
+  overdueTriage: boolean;
+  flightAlerts: boolean;
+  missionComplete: boolean;
+  /** Findings below this severity (1–5) never send email, new or overdue. */
+  minSeverity: number;
+  recipients: string[];
+  updatedBy?: string;
+  updatedAt?: string;
+}
+
+/** Confirmed: receiving email. Pending: hasn't clicked the confirmation link yet. Local: dev mode, nothing is sent. */
+export type RecipientState = 'Confirmed' | 'Pending' | 'NotSubscribed' | 'Local' | 'Unknown';
+
+export interface AlertSettingsView {
+  settings: AlertSettings;
+  recipients: { email: string; status: RecipientState }[];
+  emailEnabled: boolean;
+  warning?: string;
+}

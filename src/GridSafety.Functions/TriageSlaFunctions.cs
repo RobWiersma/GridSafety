@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Amazon.DynamoDBv2;
 using Amazon.Lambda.CloudWatchEvents;
 using Amazon.Lambda.Core;
 using Amazon.Scheduler;
@@ -86,10 +87,14 @@ public sealed class SlaScheduler(IAmazonScheduler scheduler, SlaSettings setting
     }
 }
 
-/// <summary>Fires at the triage deadline. If the finding is still untouched, flag it and page the on-call supervisor.</summary>
-public sealed class SlaEscalation(IGridRepository repo, IOpsNotifier notifier, TimeProvider clock)
+/// <summary>
+/// Fires at the triage deadline. If the finding is still untouched, flag it (the console shows it as overdue) and,
+/// when the alert settings allow it, email the on-call supervisors.
+/// </summary>
+public sealed class SlaEscalation(IGridRepository repo, IOpsNotifier notifier, TimeProvider clock, IAlertSettingsStore settings)
 {
-    public SlaEscalation() : this(Repo.FromEnvironment(), SnsOpsNotifier.FromEnvironment(), TimeProvider.System) { }
+    public SlaEscalation() : this(Repo.FromEnvironment(), SnsOpsNotifier.FromEnvironment(), TimeProvider.System,
+        new DynamoAlertSettingsStore(new AmazonDynamoDBClient(), Env.Required("TABLE_NAME"))) { }
 
     [Logging(LogEvent = true)]
     [Metrics(Namespace = "GridSafety")]
@@ -117,6 +122,13 @@ public sealed class SlaEscalation(IGridRepository repo, IOpsNotifier notifier, T
             return;
         }
 
+        Metrics.AddMetric("SlaEscalations", 1, MetricUnit.Count);
+        if (!(await settings.GetAsync()).Allows(AlertType.OverdueTriage, f.Severity))
+        {
+            Logger.LogInformation("Overdue-triage email is off for severity {Severity}; {FindingId} is flagged only", f.Severity, f.Id);
+            return;
+        }
+
         var overdueBy = clock.GetUtcNow() - f.TriageDueAt!.Value;
         await notifier.NotifyAsync(
             $"[GridSafety] SLA breach: Sev {f.Severity} {StreamPublisher.Humanize(f.Type)} at {f.StructureLabel}",
@@ -131,7 +143,6 @@ public sealed class SlaEscalation(IGridRepository repo, IOpsNotifier notifier, T
              Due:        {f.TriageDueAt:u} ({overdueBy.TotalMinutes:0} min ago)
              Location:   https://maps.google.com/?q={f.Location.Lat:0.00000},{f.Location.Lon:0.00000}
              """,
-            "critical");
-        Metrics.AddMetric("SlaEscalations", 1, MetricUnit.Count);
+            "critical", AlertType.OverdueTriage);
     }
 }

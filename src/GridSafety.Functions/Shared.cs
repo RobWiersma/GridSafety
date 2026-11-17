@@ -56,23 +56,37 @@ public sealed class EventBridgePublisher(IAmazonEventBridge eventBridge, string 
 /// <summary>Ops notifications (on-call email/SMS/chat via SNS subscriptions).</summary>
 public interface IOpsNotifier
 {
-    Task NotifyAsync(string subject, string message, string severity, CancellationToken ct = default);
+    Task NotifyAsync(string subject, string message, string severity, AlertType type, CancellationToken ct = default);
 }
 
-public sealed class SnsOpsNotifier(IAmazonSimpleNotificationService sns, string topicArn) : IOpsNotifier
+/// <summary>
+/// Publishes each page to the ops topic (the deploy-time ops address) and to the alert topic, whose email
+/// subscriptions are the recipients supervisors set in the console.
+/// </summary>
+public sealed class SnsOpsNotifier(IAmazonSimpleNotificationService sns, IReadOnlyList<string> topicArns) : IOpsNotifier
 {
-    public Task NotifyAsync(string subject, string message, string severity, CancellationToken ct = default) =>
-        sns.PublishAsync(new PublishRequest
+    public async Task NotifyAsync(string subject, string message, string severity, AlertType type, CancellationToken ct = default)
+    {
+        foreach (var topicArn in topicArns)
         {
-            TopicArn = topicArn,
-            Subject = subject.Length > 100 ? subject[..100] : subject,
-            Message = message,
-            // Lets subscribers filter, e.g. SMS only for critical pages.
-            MessageAttributes = new() { ["severity"] = new MessageAttributeValue { DataType = "String", StringValue = severity } },
-        }, ct);
+            await sns.PublishAsync(new PublishRequest
+            {
+                TopicArn = topicArn,
+                Subject = subject.Length > 100 ? subject[..100] : subject,
+                Message = message,
+                // Lets subscribers filter, e.g. SMS only for critical pages or only flight alerts.
+                MessageAttributes = new()
+                {
+                    ["severity"] = new MessageAttributeValue { DataType = "String", StringValue = severity },
+                    ["alertType"] = new MessageAttributeValue { DataType = "String", StringValue = type.ToString() },
+                },
+            }, ct);
+        }
+    }
 
     public static IOpsNotifier FromEnvironment() =>
-        new SnsOpsNotifier(new AmazonSimpleNotificationServiceClient(), Env.Required("OPS_TOPIC_ARN"));
+        new SnsOpsNotifier(new AmazonSimpleNotificationServiceClient(),
+            new[] { Env.Required("OPS_TOPIC_ARN"), Env.Optional("ALERT_TOPIC_ARN") }.OfType<string>().ToList());
 }
 
 /// <summary>

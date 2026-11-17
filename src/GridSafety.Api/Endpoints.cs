@@ -80,6 +80,7 @@ public static partial class Endpoints
         secured.MapPost("/findings/{id}/status", ChangeFindingStatus);
         secured.MapGet("/crews", ListCrews);
         MapResources(secured);
+        MapAlertSettings(secured);
         secured.MapGet("/visitors", GetVisitorStats);
 
         if (devIngest)

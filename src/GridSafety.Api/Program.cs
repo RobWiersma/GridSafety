@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Amazon.DynamoDBv2;
 using Amazon.Lambda;
 using Amazon.S3;
+using Amazon.SimpleNotificationService;
 using GridSafety.Api;
 using GridSafety.Core;
 
@@ -27,6 +28,7 @@ if ((config["GridSafety:Storage"] ?? "DynamoDb").Equals("InMemory", StringCompar
     builder.Services.AddSingleton<IGridRepository, InMemoryGridRepository>();
     builder.Services.AddSingleton<IVisitStore, InMemoryVisitStore>();
     builder.Services.AddSingleton<IResourceStore, InMemoryResourceStore>();
+    builder.Services.AddSingleton<IAlertSettingsStore, InMemoryAlertSettingsStore>();
     builder.Services.AddSingleton<IAerialStore, InMemoryAerialStore>();
 }
 else
@@ -41,6 +43,8 @@ else
         new DynamoVisitStore(sp.GetRequiredService<IAmazonDynamoDB>(), config["GridSafety:TableName"]!));
     builder.Services.AddSingleton<IResourceStore>(sp =>
         new DynamoResourceStore(sp.GetRequiredService<IAmazonDynamoDB>(), config["GridSafety:TableName"]!));
+    builder.Services.AddSingleton<IAlertSettingsStore>(sp =>
+        new DynamoAlertSettingsStore(sp.GetRequiredService<IAmazonDynamoDB>(), config["GridSafety:TableName"]!));
     builder.Services.AddSingleton<IAerialStore>(sp =>
         new DynamoAerialStore(sp.GetRequiredService<IAmazonDynamoDB>(), config["GridSafety:TableName"]!));
     if (config.GetValue<bool>("GridSafety:CreateTableOnStartup"))
@@ -77,6 +81,12 @@ else if (!string.Equals(config["GridSafety:AerialImagery"], "Off", StringCompari
     builder.Services.AddSingleton<IAerialLauncher, InProcessAerialLauncher>();
 else
     builder.Services.AddSingleton<IAerialLauncher>(DisabledAerialLauncher.Instance);
+
+// Email alert recipients are SNS email subscriptions in AWS; locally nothing is emailed.
+if (config["GridSafety:AlertTopicArn"] is { Length: > 0 } alertTopic)
+    builder.Services.AddSingleton<IAlertRecipients>(_ => new SnsAlertRecipients(new AmazonSimpleNotificationServiceClient(), alertTopic));
+else
+    builder.Services.AddSingleton<IAlertRecipients, LocalAlertRecipients>();
 
 // Created on first use: only the report endpoint needs S3.
 builder.Services.AddSingleton(new S3Presigner(() => new AmazonS3Client()));

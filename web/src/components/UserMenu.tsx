@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 
 /** The signed-in user's name as a dropdown: supervisor tools and sign-out live here. */
-export function UserMenu({ name, isSupervisor, onVisitors, onSignOut }: {
+export function UserMenu({ name, isSupervisor, onVisitors, onAlerts, onSignOut }: {
   name: string;
   isSupervisor: boolean;
   onVisitors(): void;
+  onAlerts(): void;
   onSignOut(): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -41,6 +42,10 @@ export function UserMenu({ name, isSupervisor, onVisitors, onSignOut }: {
               <span className="muted small">Anonymous site traffic</span>
             </button>
           )}
+          <button role="menuitem" onClick={pick(onAlerts)}>
+            Email alerts
+            <span className="muted small">{isSupervisor ? 'Who gets emailed, and for what' : 'Who gets emailed (view only)'}</span>
+          </button>
           <button role="menuitem" onClick={pick(onSignOut)}>Sign out</button>
         </div>
       )}

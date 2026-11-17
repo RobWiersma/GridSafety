@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMe } from './api';
 import { AboutDialog } from './components/AboutDialog';
+import { AlertsView } from './components/AlertsView';
 import { FindingDrawer } from './components/FindingDrawer';
 import { CrewsPanel } from './components/CrewsPanel';
 import { FindingsView } from './components/FindingsView';
@@ -15,13 +16,13 @@ import { Toast, type ToastMessage } from './components/Toast';
 import { recordVisit } from './lib/visits';
 import { Logo, useSession } from './session';
 
-type Tab = 'ops' | 'findings' | 'missions' | 'resources' | 'visitors';
+type Tab = 'ops' | 'findings' | 'missions' | 'resources' | 'visitors' | 'alerts';
 
-/** #ops, #findings, #missions, #resources, or #mission/<id> for one mission's overview (linkable, works with back/forward). */
+/** #ops, #findings, #missions, #resources, #visitors, #alerts, or #mission/<id> for one mission's overview (linkable, works with back/forward). */
 function parseHash(): { tab: Tab; mission: string | null } {
   const h = location.hash.slice(1);
   if (h.startsWith('mission/')) return { tab: 'missions', mission: decodeURIComponent(h.slice('mission/'.length)) };
-  return { tab: h === 'findings' || h === 'missions' || h === 'resources' || h === 'visitors' ? h : 'ops', mission: null };
+  return { tab: h === 'findings' || h === 'missions' || h === 'resources' || h === 'visitors' || h === 'alerts' ? h : 'ops', mission: null };
 }
 
 export function App() {
@@ -92,7 +93,7 @@ export function App() {
               {session.signIn && <button className="btn btn-primary" onClick={session.signIn}>Sign in</button>}
             </>
           ) : (
-            <UserMenu name={session.displayName} isSupervisor={isSupervisor} onVisitors={() => go('visitors')} onSignOut={session.signOut} />
+            <UserMenu name={session.displayName} isSupervisor={isSupervisor} onVisitors={() => go('visitors')} onAlerts={() => go('alerts')} onSignOut={session.signOut} />
           )}
         </div>
       </header>
@@ -115,6 +116,7 @@ export function App() {
           </>
         )}
         {tab === 'resources' && <ResourcesView onToast={setToast} onOpenMission={openMission} />}
+        {tab === 'alerts' && (session.guest ? <div className="banner banner-info">Sign in to see email alert settings.</div> : <AlertsView onToast={setToast} />)}
         {tab === 'visitors' && (isSupervisor ? <VisitorsView /> : <div className="banner banner-info">Visitor stats are for supervisors.</div>)}
         {tab === 'missions' && !missionId && <MissionsView onToast={setToast} onShowOnMap={() => go('ops')} onOpenMission={openMission} />}
         {tab === 'missions' && missionId && (

@@ -193,12 +193,13 @@ public class SlaAndNotifierTests
     [Fact]
     public void Pages_for_critical_alerts_and_high_severity_findings_only()
     {
-        Assert.NotNull(AlertNotifier.Compose(Created(4, DateTimeOffset.UtcNow)));
-        Assert.Null(AlertNotifier.Compose(Created(3, DateTimeOffset.UtcNow)));
+        var defaults = AlertSettings.Default();
+        Assert.NotNull(AlertNotifier.Compose(Created(4, DateTimeOffset.UtcNow), defaults));
+        Assert.Null(AlertNotifier.Compose(Created(3, DateTimeOffset.UtcNow), defaults));
 
         var alert = new GridEvent { DetailType = EventNames.DroneAlertRaised, EntityType = "Drone", EntityId = "D", Level = "Critical", NewStatus = "CorridorBreach", Summary = "x" };
-        Assert.Equal("critical", AlertNotifier.Compose(alert)!.Value.Severity);
-        Assert.Null(AlertNotifier.Compose(alert with { Level = "Warning" }));
+        Assert.Equal("critical", AlertNotifier.Compose(alert, defaults)!.Value.Severity);
+        Assert.Null(AlertNotifier.Compose(alert with { Level = "Warning" }, defaults));
     }
 
     [Fact]
@@ -208,7 +209,7 @@ public class SlaAndNotifierTests
         var f = WorkflowTests.NewFinding(5, due: DateTimeOffset.UtcNow.AddMinutes(-5));
         await repo.SaveFindingAsync(f);
         var notifier = new FakeNotifier();
-        var fn = new SlaEscalation(repo, notifier, TimeProvider.System);
+        var fn = new SlaEscalation(repo, notifier, TimeProvider.System, new InMemoryAlertSettingsStore());
 
         await fn.HandleAsync(Payload(f.Id), new TestLambdaContext());
         await fn.HandleAsync(Payload(f.Id), new TestLambdaContext());   // scheduler retry / duplicate
@@ -227,7 +228,7 @@ public class SlaAndNotifierTests
         await repo.SaveFindingAsync(f);
         var notifier = new FakeNotifier();
 
-        await new SlaEscalation(repo, notifier, TimeProvider.System).HandleAsync(Payload(f.Id), new TestLambdaContext());
+        await new SlaEscalation(repo, notifier, TimeProvider.System, new InMemoryAlertSettingsStore()).HandleAsync(Payload(f.Id), new TestLambdaContext());
         Assert.Empty(notifier.Sent);
     }
 
@@ -259,11 +260,11 @@ public class ReportTests
 
 internal sealed class FakeNotifier : IOpsNotifier
 {
-    public List<(string Subject, string Body, string Severity)> Sent { get; } = [];
+    public List<(string Subject, string Body, string Severity, AlertType Type)> Sent { get; } = [];
 
-    public Task NotifyAsync(string subject, string message, string severity, CancellationToken ct = default)
+    public Task NotifyAsync(string subject, string message, string severity, AlertType type, CancellationToken ct = default)
     {
-        Sent.Add((subject, message, severity));
+        Sent.Add((subject, message, severity, type));
         return Task.CompletedTask;
     }
 }
