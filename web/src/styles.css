@@ -465,3 +465,5 @@ button { font: inherit; color: inherit; }
 .alerts-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .sim-count { align-items: center !important; flex-wrap: wrap; }
 .sim-count .input { width: 76px; padding: 5px 8px; }
+.sim-indent { padding-left: 24px; }
+.sim-count select.input { width: 84px; }

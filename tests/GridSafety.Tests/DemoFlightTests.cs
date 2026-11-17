@@ -62,6 +62,28 @@ public class DemoFlightTests
     }
 
     [Fact]
+    public void Random_mode_sends_some_flights_out_clean()
+    {
+        var rng = new Random(11);
+        var settings = new SimulationSettings { CleanFlightPercent = 25 };
+        var rolls = Enumerable.Range(0, 4000).Select(_ => settings.FindingCountForNextFlight(rng)).ToList();
+        Assert.All(rolls, r => Assert.True(r is null or 0));
+        var clean = rolls.Count(r => r == 0) / 4000.0;
+        Assert.InRange(clean, 0.22, 0.28);
+
+        Assert.All(Enumerable.Range(0, 200), _ => Assert.Null(new SimulationSettings { CleanFlightPercent = 0 }.FindingCountForNextFlight(rng)));
+        Assert.All(Enumerable.Range(0, 200), _ => Assert.Equal(0, new SimulationSettings { CleanFlightPercent = 100 }.FindingCountForNextFlight(rng)));
+    }
+
+    [Fact]
+    public void A_fixed_count_ignores_the_clean_flight_chance()
+    {
+        var settings = new SimulationSettings { FindingsPerFlight = 3, CleanFlightPercent = 100 };
+        Assert.Equal(3, settings.FindingCountForNextFlight(new Random(1)));
+        Assert.NotEmpty(SimulationSettings.Validate(new SimulationSettings { CleanFlightPercent = 101 }));
+    }
+
+    [Fact]
     public async Task Lands_early_when_told_to_stop()
     {
         var link = new RecordingLink();

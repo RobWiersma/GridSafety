@@ -243,6 +243,8 @@ export interface SimulationSettings {
   version: number;
   /** Exactly this many findings per simulated flight, or absent for random. */
   findingsPerFlight?: number;
+  /** With a random count: chance (0–100) that a flight finds nothing. */
+  cleanFlightPercent: number;
   updatedBy?: string;
   updatedAt?: string;
 }

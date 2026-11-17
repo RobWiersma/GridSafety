@@ -4,6 +4,7 @@ import { relativeTime } from '../lib/format';
 import type { ToastMessage } from './Toast';
 
 const MAX = 25;
+const CLEAN_OPTIONS = [0, 10, 25, 50, 75] as const;
 
 /** How many findings demo and simulated flights come back with. Everyone signed in can look; supervisors change it. */
 export function SimulationSettingsPanel({ onToast }: { onToast(t: ToastMessage): void }) {
@@ -14,6 +15,7 @@ export function SimulationSettingsPanel({ onToast }: { onToast(t: ToastMessage):
 
   const [mode, setMode] = useState<'random' | 'fixed'>('random');
   const [count, setCount] = useState(3);
+  const [clean, setClean] = useState(25);
   const [error, setError] = useState<string | null>(null);
 
   const saved = query.data;
@@ -21,18 +23,19 @@ export function SimulationSettingsPanel({ onToast }: { onToast(t: ToastMessage):
     if (!saved) return;
     setMode(saved.findingsPerFlight == null ? 'random' : 'fixed');
     if (saved.findingsPerFlight != null) setCount(saved.findingsPerFlight);
+    setClean(saved.cleanFlightPercent);
   }, [saved]);
 
   const wanted = mode === 'random' ? null : count;
-  const dirty = saved !== undefined && (saved.findingsPerFlight ?? null) !== wanted;
+  const dirty = saved !== undefined && ((saved.findingsPerFlight ?? null) !== wanted || saved.cleanFlightPercent !== clean);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!saved) return;
     setError(null);
     try {
-      await save.mutateAsync({ ...saved, findingsPerFlight: wanted ?? undefined });
-      onToast({ kind: 'success', text: wanted == null ? 'Simulated flights find a random number of issues' : `Simulated flights now find ${wanted} issue${wanted === 1 ? '' : 's'} each` });
+      await save.mutateAsync({ ...saved, findingsPerFlight: wanted ?? undefined, cleanFlightPercent: clean });
+      onToast({ kind: 'success', text: wanted == null ? `Simulated flights find a random number of issues; ${clean}% come back clean` : `Simulated flights now find ${wanted} issue${wanted === 1 ? '' : 's'} each` });
     } catch (err) {
       setError(err instanceof ApiError || err instanceof Error ? err.message : 'Failed');
     }
@@ -55,6 +58,13 @@ export function SimulationSettingsPanel({ onToast }: { onToast(t: ToastMessage):
             <label className="check">
               <input type="radio" name="findings-mode" checked={mode === 'random'} onChange={() => setMode('random')} />
               <span>Random<span className="muted small"> · about 1 in 5 structures, so longer lines find more</span></span>
+            </label>
+            <label className="check sim-count sim-indent">
+              <select className="input" value={clean} disabled={mode !== 'random'} aria-label="Share of flights that find nothing"
+                onChange={(e) => setClean(Number(e.target.value))}>
+                {[...new Set([...CLEAN_OPTIONS, clean])].sort((a, b) => a - b).map((p) => <option key={p} value={p}>{p}%</option>)}
+              </select>
+              <span className="muted small">of flights come back clean, with no issues at all</span>
             </label>
             <label className="check sim-count">
               <input type="radio" name="findings-mode" checked={mode === 'fixed'} onChange={() => setMode('fixed')} />

@@ -296,7 +296,14 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         var unknown = await sup.PostAsJsonAsync("/api/demo-flights", new DemoFlightRequest("NOPE"), JsonOpts);
         Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
 
+        // No clean-flight roll here: this flight must find something.
+        var sim = (await sup.GetFromJsonAsync<SimulationSettings>("/api/simulation-settings", JsonOpts))!;
+        var neverClean = await sup.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { Version = sim.Version, CleanFlightPercent = 0 }, JsonOpts);
+        neverClean.EnsureSuccessStatusCode();
         var res = await sup.PostAsJsonAsync("/api/demo-flights", new DemoFlightRequest("CLAY-MEAD-115"), JsonOpts);
+        var restored = (await neverClean.Content.ReadFromJsonAsync<SimulationSettings>(JsonOpts))!;
+        (await sup.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { Version = restored.Version, CleanFlightPercent = sim.CleanFlightPercent }, JsonOpts))
+            .EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Accepted, res.StatusCode);
         var launched = (await res.Content.ReadFromJsonAsync<MissionView>(JsonOpts))!;
         Assert.Equal(DemoFlight.DroneId, launched.Mission.DroneId);
@@ -499,7 +506,7 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
 
         Assert.Equal(HttpStatusCode.Forbidden, (await inspector.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { FindingsPerFlight = 2 }, JsonOpts)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await sup.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { FindingsPerFlight = 99 }, JsonOpts)).StatusCode);
-        var saved = await sup.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { FindingsPerFlight = 2 }, JsonOpts);
+        var saved = await sup.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { Version = defaults.Version, FindingsPerFlight = 2 }, JsonOpts);
         saved.EnsureSuccessStatusCode();
         var version = (await saved.Content.ReadFromJsonAsync<SimulationSettings>(JsonOpts))!.Version;
         try
@@ -513,7 +520,7 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         finally
         {
             // Back to random so other tests' flights aren't affected.
-            (await sup.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { Version = version, FindingsPerFlight = null }, JsonOpts)).EnsureSuccessStatusCode();
+            (await sup.PutAsJsonAsync("/api/simulation-settings", new SimulationSettings { Version = version, FindingsPerFlight = null, CleanFlightPercent = defaults.CleanFlightPercent }, JsonOpts)).EnsureSuccessStatusCode();
         }
     }
 

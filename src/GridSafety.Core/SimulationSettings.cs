@@ -18,6 +18,9 @@ public sealed class SimulationSettings
     /// <summary>Exactly this many findings per flight (capped by the structures on the line), or null for random (about 1 in 5 structures).</summary>
     public int? FindingsPerFlight { get; set; }
 
+    /// <summary>With a random count: the chance (0–100%) that a flight comes back with no findings at all.</summary>
+    public int CleanFlightPercent { get; set; } = 25;
+
     public string? UpdatedBy { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
 
@@ -28,7 +31,20 @@ public sealed class SimulationSettings
         var e = new Dictionary<string, string[]>();
         if (s.FindingsPerFlight is < 0 or > MaxFindingsPerFlight)
             e["findingsPerFlight"] = [$"Findings per flight must be 0 to {MaxFindingsPerFlight}, or random."];
+        if (s.CleanFlightPercent is < 0 or > 100)
+            e["cleanFlightPercent"] = ["The chance of a clean flight must be 0 to 100%."];
         return e;
+    }
+
+    /// <summary>
+    /// The finding count for the next flight: the fixed count, 0 for a clean flight (rolled against
+    /// <see cref="CleanFlightPercent"/>), or null to let the flight decide at random.
+    /// </summary>
+    public int? FindingCountForNextFlight(Random rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (FindingsPerFlight is { } fixedCount) return fixedCount;
+        return rng.Next(100) < CleanFlightPercent ? 0 : null;
     }
 }
 
