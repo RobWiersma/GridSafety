@@ -96,6 +96,7 @@ export function OpsMap({ circuits, drones, findings, track, focus, flightNames =
     // preferCanvas: hundreds of lines and thousands of towers draw on one canvas instead of as SVG nodes
     <MapContainer className="map" bounds={bounds} boundsOptions={{ padding: [30, 30] }} scrollWheelZoom preferCanvas>
       <FitBounds bounds={bounds} />
+      <MiddlePan />
       <TileLayer
         className="map-tiles"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -288,6 +289,50 @@ function BoxSelect({ findings, always, onSelect }: { findings: FindingView[]; al
       el.classList.remove('map-selecting');
     };
   }, [map, always]);
+  return null;
+}
+
+/** Hold the middle mouse button to pan, in select mode too (where a left drag draws a box). */
+function MiddlePan() {
+  const map = useMap();
+  useEffect(() => {
+    const el = map.getContainer();
+    let last: { x: number; y: number; id: number } | null = null;
+    const down = (e: PointerEvent) => {
+      if (e.button !== 1 || last) return;
+      e.preventDefault(); // no browser autoscroll
+      e.stopPropagation(); // and no Leaflet drag or box select
+      last = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      el.setPointerCapture(e.pointerId);
+      el.classList.add('map-panning');
+    };
+    const move = (e: PointerEvent) => {
+      if (!last || e.pointerId !== last.id) return;
+      map.panBy([last.x - e.clientX, last.y - e.clientY], { animate: false });
+      last = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    };
+    const up = (e: PointerEvent) => {
+      if (!last || e.pointerId !== last.id) return;
+      last = null;
+      el.classList.remove('map-panning');
+    };
+    const noAutoscroll = (e: MouseEvent) => { if (e.button === 1) e.preventDefault(); };
+    el.addEventListener('pointerdown', down, true);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('mousedown', noAutoscroll, true);
+    el.addEventListener('auxclick', noAutoscroll, true);
+    return () => {
+      el.removeEventListener('pointerdown', down, true);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+      el.removeEventListener('mousedown', noAutoscroll, true);
+      el.removeEventListener('auxclick', noAutoscroll, true);
+      el.classList.remove('map-panning');
+    };
+  }, [map]);
   return null;
 }
 

@@ -3,28 +3,32 @@ import { ApiError, useMe, useResources, useSaveResource, type ReportTarget, type
 import { ReportDialog } from './ReportDialog';
 import { FINDING_TYPE_LABEL, miles, relativeTime } from '../lib/format';
 import { useSession } from '../session';
-import { involves } from '../lib/field';
+import { PHASE_LABEL, dispatchName, involves } from '../lib/field';
 import { OutBadge, ShiftMeter } from './CrewsPanel';
-import type { Crew, CrewMember, CrewStatus, Depot, DroneAsset, DroneAssetStatus, FindingType, FlightCrew } from '../types';
+import type { Crew, CrewMember, CrewStatus, Depot, DroneAsset, DroneAssetStatus, FindingType, FlightCrew, Vehicle, VehicleKind, VehicleStatus } from '../types';
 import type { ToastMessage } from './Toast';
 
-const SECTIONS = [['drones', 'Drones'], ['flight-crews', 'Flight crews'], ['ground-crews', 'Ground crews'], ['depots', 'Depots']] as const;
+const SECTIONS = [['drones', 'Drones'], ['flight-crews', 'Flight crews'], ['ground-crews', 'Ground crews'], ['vehicles', 'Trucks'], ['depots', 'Depots']] as const;
 type Section = ResourceKind | 'depots';
 const ALL_TYPES = Object.keys(FINDING_TYPE_LABEL) as FindingType[];
 const PILOT = 'Remote pilot (PIC)';
 const OBSERVER = 'Visual observer';
 const DRONE_STATUS_LABEL: Record<DroneAssetStatus, string> = { Active: 'Active', Maintenance: 'Maintenance', Retired: 'Retired' };
 const CREW_STATUS_LABEL: Record<CrewStatus, string> = { Available: 'On duty', OffDuty: 'Off duty' };
+const VEHICLE_KIND_LABEL: Record<VehicleKind, string> = { BucketTruck: 'Bucket truck', LineTruck: 'Line truck', Pickup: 'Pickup' };
+const VEHICLE_STATUS_LABEL: Record<VehicleStatus, string> = { InService: 'In service', OutOfService: 'Out of service' };
+const ADD_LABEL: Record<ResourceKind, string> = { drones: 'Add drone', 'flight-crews': 'Add flight crew', 'ground-crews': 'Add ground crew', vehicles: 'Add truck' };
 
 type Editing =
   | { kind: 'drones'; record?: DroneAsset }
   | { kind: 'flight-crews'; record?: FlightCrew }
-  | { kind: 'ground-crews'; record?: Crew };
+  | { kind: 'ground-crews'; record?: Crew }
+  | { kind: 'vehicles'; record?: Vehicle };
 
 function rememberedSection(): Section {
   try {
     const v = localStorage.getItem('gs.resources.section');
-    if (v === 'drones' || v === 'flight-crews' || v === 'ground-crews' || v === 'depots') return v;
+    if (v === 'drones' || v === 'flight-crews' || v === 'ground-crews' || v === 'vehicles' || v === 'depots') return v;
   } catch { /* storage blocked */ }
   return 'drones';
 }
@@ -58,6 +62,7 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
     drones: data?.drones.length ?? 0,
     'flight-crews': data?.flightCrews.length ?? 0,
     'ground-crews': data?.groundCrews.length ?? 0,
+    vehicles: data?.vehicles?.length ?? 0,
     depots: data?.depots.length ?? 0,
   };
   const depots = data?.depots ?? [];
@@ -72,7 +77,7 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
         </div>
         {canEdit && section !== 'depots' && (
           <button className="btn btn-primary" onClick={() => setEditing({ kind: section })}>
-            + {{ drones: 'Add drone', 'flight-crews': 'Add flight crew', 'ground-crews': 'Add ground crew' }[section]}
+            + {ADD_LABEL[section]}
           </button>
         )}
       </div>
@@ -145,6 +150,8 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
               members={crew.members}
               onMemberReport={(m) => setReport({ kind: 'pilot', crewId: crew.id, member: m.name })}
               memberReportLabel="Flight log"
+              onReport={() => setReport({ kind: 'flight-crew', crewId: crew.id, name: crew.name })}
+              reportLabel="Crew flight log"
               footer={`${missions} mission${missions === 1 ? '' : 's'}${lastFlight ? ` · last ${relativeTime(lastFlight)}` : ''}`}
               onEdit={canEdit ? () => setEditing({ kind: 'flight-crews', record: crew }) : undefined}
               onRemove={canEdit ? () => remove('flight-crews', crew.id, crew.name) : undefined}
@@ -166,6 +173,8 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
               members={crew.members}
               onMemberReport={(m) => setReport({ kind: 'technician', crewId: crew.id, member: m.name })}
               memberReportLabel="Shift report"
+              onReport={() => setReport({ kind: 'ground-crew', crewId: crew.id, name: crew.name })}
+              reportLabel="Crew work report"
               memberDetail={(m) => (
                 <>
                   <OutBadge jobs={inField.filter((d) => involves(d, crew.id, m.name))} />
@@ -184,6 +193,54 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
         </CardGrid>
       )}
 
+      {data && section === 'vehicles' && (
+        (data.vehicles ?? []).length === 0 ? <p className="empty-row muted">No trucks yet.</p> : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr><th>Truck</th><th>Seats</th><th>Kept at</th><th>Status</th><th>Now</th><th>Jobs</th><th>Last out</th>{canEdit && <th />}</tr>
+              </thead>
+              <tbody>
+                {[...data.vehicles].sort((a, b) => depotName(a.vehicle.depotId).localeCompare(depotName(b.vehicle.depotId)) || a.vehicle.id.localeCompare(b.vehicle.id)).map((v) => (
+                  <tr key={v.vehicle.id}>
+                    <td>
+                      <strong className="mono">{v.vehicle.id}</strong>
+                      <div className="muted small">{v.kindLabel}</div>
+                      <button className="link-button small" onClick={() => setReport({ kind: 'truck', id: v.vehicle.id })}>Work report</button>
+                      {v.vehicle.notes && <div className="muted small resource-note">{v.vehicle.notes}</div>}
+                    </td>
+                    <td>{v.vehicle.seats}</td>
+                    <td>{depotName(v.vehicle.depotId)}</td>
+                    <td><span className={`pill pill-res-${v.vehicle.status === 'InService' ? 'active' : 'maintenance'}`}>{VEHICLE_STATUS_LABEL[v.vehicle.status]}</span></td>
+                    <td>
+                      {v.trip && v.phase ? (
+                        <>
+                          <span className="truck-out">{PHASE_LABEL[v.phase]} · {v.trip.siteLabel}</span>
+                          <div className="muted small">{dispatchName(v.trip)}</div>
+                        </>
+                      ) : <span className="muted">{v.vehicle.status === 'InService' ? 'At the yard' : 'In the shop'}</span>}
+                    </td>
+                    <td>{v.jobs}</td>
+                    <td>{v.lastOut ? relativeTime(v.lastOut) : <span className="muted">Never</span>}</td>
+                    {canEdit && (
+                      <td className="row-actions">
+                        <button className="btn btn-ghost" onClick={() => setEditing({ kind: 'vehicles', record: v.vehicle })}>Edit</button>
+                        <button className="btn btn-danger-ghost" onClick={() => remove('vehicles', v.vehicle.id, v.vehicle.id)}>Remove</button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="muted small depot-note">
+              A technician leaving a yard takes its smallest free truck, and someone else on duty at that yard rides along when there's a seat.
+              Jobs near the truck's last stop that anyone in it can fix go on the same trip instead of sending another truck,
+              and repairs go quicker with more hands: two people take about 70% of the time one would.
+            </p>
+          </div>
+        )
+      )}
+
       {data && section === 'depots' && (
         depots.length === 0 ? <p className="empty-row muted">No depots yet.</p> : (
           <div className="table-wrap">
@@ -195,7 +252,10 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
                     crew.members.filter((m) => (m.depotId ?? crew.depotId) === d.id).map((m) => ({ crew, m })));
                   return (
                     <tr key={d.id}>
-                      <td><strong>{d.name}</strong></td>
+                      <td>
+                        <strong>{d.name}</strong>
+                        <div><button className="link-button small" onClick={() => setReport({ kind: 'depot', id: d.id, name: d.name })}>Work report</button></div>
+                      </td>
                       <td>
                         <a className="link" href={`https://www.google.com/maps?q=${d.location.lat},${d.location.lon}`} target="_blank" rel="noopener noreferrer">
                           {d.location.lat.toFixed(4)}, {d.location.lon.toFixed(4)} ↗
@@ -231,6 +291,7 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
           takenIds={new Set(
             editing.kind === 'drones' ? data?.drones.map((d) => d.drone.id) :
             editing.kind === 'flight-crews' ? data?.flightCrews.map((c) => c.crew.id) :
+            editing.kind === 'vehicles' ? data?.vehicles?.map((v) => v.vehicle.id) :
             data?.groundCrews.map((c) => c.crew.id))}
           onClose={() => setEditing(null)}
           onSaved={(label) => {
@@ -247,7 +308,7 @@ function CardGrid({ empty, children }: { empty: string; children: ReactNode[] })
   return children.length === 0 ? <p className="empty-row muted">{empty}</p> : <div className="crew-grid resource-grid">{children}</div>;
 }
 
-function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memberDetail, onMemberReport, memberReportLabel, footer, onEdit, onRemove }: {
+function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memberDetail, onMemberReport, memberReportLabel, onReport, reportLabel, footer, onEdit, onRemove }: {
   title: string;
   subtitle: string;
   status: CrewStatus;
@@ -258,6 +319,9 @@ function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memb
   /** Makes each name open that person's report. */
   onMemberReport?(m: CrewMember): void;
   memberReportLabel?: string;
+  /** The report for the whole crew. */
+  onReport?(): void;
+  reportLabel?: string;
   footer: string;
   onEdit?(): void;
   onRemove?(): void;
@@ -268,6 +332,7 @@ function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memb
         <div>
           <h3>{title}</h3>
           <p className="muted small">{subtitle}</p>
+          {onReport && <button className="link-button small" onClick={onReport}>{reportLabel ?? 'Report'}</button>}
         </div>
         <div className="resource-badges">
           <span className={`pill pill-res-${status.toLowerCase()}`}>{CREW_STATUS_LABEL[status]}</span>
@@ -320,7 +385,7 @@ function ResourceDialog({ editing, depots, takenIds, onClose, onSaved }: {
 
   const isNew = !editing.record;
   const [members, setMembers] = useState<CrewMember[]>(
-    editing.kind === 'drones' ? [] : editing.record?.members ?? [{ name: '', role: editing.kind === 'flight-crews' ? PILOT : '' }],
+    editing.kind === 'drones' || editing.kind === 'vehicles' ? [] : editing.record?.members ?? [{ name: '', role: editing.kind === 'flight-crews' ? PILOT : '' }],
   );
   const [handles, setHandles] = useState<FindingType[]>(editing.kind === 'ground-crews' ? editing.record?.handles ?? [] : []);
 
@@ -336,6 +401,14 @@ function ResourceDialog({ editing, depots, takenIds, onClose, onSaved }: {
         if (isNew && takenIds.has(id)) throw new Error(`${id} is already in the fleet.`);
         await save.mutateAsync({ kind: 'drones', id, record: {
           id, model: text('model'), homeBase: text('homeBase'), status: text('status') as DroneAssetStatus, notes: text('notes') || undefined,
+        } });
+        onSaved(id);
+      } else if (editing.kind === 'vehicles') {
+        const id = editing.record?.id ?? text('id').toUpperCase();
+        if (isNew && takenIds.has(id)) throw new Error(`${id} is already in the fleet.`);
+        await save.mutateAsync({ kind: 'vehicles', id, record: {
+          id, kind: text('kind') as VehicleKind, seats: Number(text('seats')), depotId: text('depotId'), status: text('status') as VehicleStatus,
+          notes: text('notes') || undefined,
         } });
         onSaved(id);
       } else if (editing.kind === 'flight-crews') {
@@ -356,7 +429,7 @@ function ResourceDialog({ editing, depots, takenIds, onClose, onSaved }: {
     }
   };
 
-  const title = `${isNew ? 'Add' : 'Edit'} ${{ drones: 'drone', 'flight-crews': 'flight crew', 'ground-crews': 'ground crew' }[editing.kind]}`;
+  const title = `${isNew ? 'Add' : 'Edit'} ${{ drones: 'drone', 'flight-crews': 'flight crew', 'ground-crews': 'ground crew', vehicles: 'truck' }[editing.kind]}`;
   const setMember = (i: number, patch: Partial<CrewMember>) => setMembers((ms) => ms.map((m, j) => (j === i ? { ...m, ...patch } : m)));
 
   return (
@@ -393,7 +466,46 @@ function ResourceDialog({ editing, depots, takenIds, onClose, onSaved }: {
           </>
         )}
 
-        {editing.kind !== 'drones' && (
+        {editing.kind === 'vehicles' && (
+          <>
+            <div className="grid-2">
+              <label>
+                Truck ID
+                <input className="input mono" name="id" defaultValue={editing.record?.id} disabled={!isNew} required pattern="[A-Za-z0-9-]{1,20}" placeholder="T-074" />
+              </label>
+              <label>
+                Status
+                <select className="input" name="status" defaultValue={editing.record?.status ?? 'InService'}>
+                  {Object.entries(VEHICLE_STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="grid-2">
+              <label>
+                Kind
+                <select className="input" name="kind" defaultValue={editing.record?.kind ?? 'BucketTruck'}>
+                  {Object.entries(VEHICLE_KIND_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </label>
+              <label>
+                Seats
+                <input className="input" name="seats" type="number" min={1} max={6} defaultValue={editing.record?.seats ?? 2} required />
+              </label>
+            </div>
+            <label>
+              Kept at
+              <select className="input" name="depotId" defaultValue={editing.record?.depotId ?? depots[0]?.id} required>
+                {depots.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </label>
+            <label>
+              Notes
+              <input className="input" name="notes" defaultValue={editing.record?.notes} maxLength={200} placeholder="Optional, e.g. why it's out of service" />
+            </label>
+          </>
+        )}
+
+        {(editing.kind === 'flight-crews' || editing.kind === 'ground-crews') && (
           <>
             <label>
               Crew name

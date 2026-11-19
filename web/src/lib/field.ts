@@ -87,8 +87,8 @@ export const SHIFT_HOURS = 8;
 export const REST_HOURS = 10;
 
 /** Whether this option can take the job now: not out elsewhere, not resting, enough hours left. */
-export const canTake = (o: { busyUntil?: string; restingUntil?: string; hoursLeft?: number; jobHours?: number }) =>
-  !o.busyUntil && !o.restingUntil && !(o.hoursLeft != null && o.jobHours != null && o.jobHours > o.hoursLeft);
+export const canTake = (o: { busyUntil?: string; restingUntil?: string; hoursLeft?: number; jobHours?: number; noTruck?: boolean }) =>
+  !o.busyUntil && !o.restingUntil && !o.noTruck && !(o.hoursLeft != null && o.jobHours != null && o.jobHours > o.hoursLeft);
 
 export const PHASE_LABEL: Record<FieldPhase, string> = {
   Queued: 'Next up',
@@ -114,12 +114,24 @@ export function countdown(until: number, now: number) {
   return s === 0 ? 'now' : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** Who the job ties up: the technician sent, or the whole crew. */
-export const dispatchName = (d: FieldDispatch) => d.member ?? d.assignee;
+/** Who the job ties up: everyone in the truck ("Lenny Leonardo & Marjorie Bouvay"), the technician sent, or the whole crew. */
+export const dispatchName = (d: FieldDispatch) => (d.riders?.length ? d.riders.map((r) => r.name).join(' & ') : d.member ?? d.assignee);
 
-/** Whether this job ties up a member of the crew (or, with no member given, the crew as a whole). */
+/** The truck and who's in it: "T-071 · Lenny Leonardo & Marjorie Bouvay". */
+export const truckName = (d: FieldDispatch) => (d.vehicleId ? `${d.vehicleId} · ${dispatchName(d)}` : dispatchName(d));
+
+/** Stops on the same trip share a truck (or, before trucks were tracked, an assignee). */
+export const tripKey = (d: FieldDispatch) => d.vehicleId ?? d.assignee;
+
+/** Everyone the job ties up, by name: the people in the truck, or the technician (or crew) sent. */
+export const peopleOf = (d: FieldDispatch) => (d.riders?.length ? d.riders.map((r) => r.name) : [d.member ?? d.assignee]);
+
+const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+/** Whether this job ties up a member of the crew, in the truck or as the one sent (or, with no member given, anyone of the crew). */
 export const involves = (d: FieldDispatch, crewId: string, member?: string) =>
-  d.crewId === crewId && (!d.member || !member || d.member.toLowerCase() === member.toLowerCase());
+  (d.crewId === crewId && (!d.member || !member || same(d.member, member)))
+  || Boolean(d.riders?.some((r) => r.crewId === crewId && (!member || same(r.name, member))));
 
 /**
  * The server's clock, ticking once a second. Anchored to the server time of the last response, so trucks don't jump

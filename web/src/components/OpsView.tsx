@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAcknowledgeAlerts, useBulkFindings, type BulkResult, useCircuits, useDrones, useFieldJobs, useFindings, useMissions, useResources, useTrack } from '../api';
-import { REST_HOURS, SHIFT_HOURS, dispatchName, phaseAt, positionAt, roadAhead, statusText, useServerClock } from '../lib/field';
+import { REST_HOURS, SHIFT_HOURS, phaseAt, positionAt, roadAhead, statusText, tripKey, truckName, useServerClock } from '../lib/field';
 import { ShiftMeter } from './CrewsPanel';
 import { FINDING_TYPE_LABEL, miles, pct, relativeTime } from '../lib/format';
 import type { DroneAlert, MissionView } from '../types';
@@ -69,7 +69,7 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue, onToa
     const phase = phaseAt(j.dispatch, fieldNow);
     return {
       findingId: j.findingId,
-      label: dispatchName(j.dispatch),
+      label: truckName(j.dispatch),
       structureLabel: j.structureLabel,
       dispatch: j.dispatch,
       phase,
@@ -79,9 +79,9 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue, onToa
     };
   });
   const out = trucks.filter((tr) => tr.phase !== 'Back' && tr.phase !== 'MovedOn');
-  // One row per person: their current job, with what's lined up after it.
-  const people = [...new Set(out.map((tr) => tr.dispatch.assignee))].map((who) => {
-    const jobs = out.filter((tr) => tr.dispatch.assignee === who);
+  // One row per truck: its current job, with the stops lined up after it.
+  const people = [...new Set(out.map((tr) => tripKey(tr.dispatch)))].map((who) => {
+    const jobs = out.filter((tr) => tripKey(tr.dispatch) === who);
     return { who, now: jobs.find((tr) => tr.phase !== 'Queued') ?? jobs[0], next: jobs.filter((tr) => tr.phase === 'Queued') };
   });
 
@@ -229,7 +229,7 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue, onToa
           ) },
           { id: 'field', node: (
             <SidePanel id="field" title="In the field" count={people.length}>
-              {people.length === 0 && <p className="muted small">No crews out. Assign a work order to send the nearest qualified technician.</p>}
+              {people.length === 0 && <p className="muted small">No trucks out. Assign a work order to send the nearest qualified technician; someone from the same yard rides along when there's a seat.</p>}
               {people.map(({ who, now: tr, next }) => (
                 <button key={who} className="finding-row field-row" onClick={() => onOpenFinding(tr.findingId)} title="Open the work order">
                   <span className={`field-dot field-${tr.phase.toLowerCase()}`} aria-hidden="true" />

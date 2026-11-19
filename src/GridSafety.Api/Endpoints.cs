@@ -24,7 +24,8 @@ public sealed record MemberShift(string Member, double WorkedHours, double Booke
 /// <summary>Someone a work order can go to, nearest first: a technician (<see cref="Member"/> set) or a whole crew.</summary>
 public sealed record AssigneeOption(string Label, string CrewId, string CrewName, string? Member, string? Role,
     string? DepotId, string? DepotName, double? DistanceKm, int CrewOpenWorkOrders, DateTimeOffset? BusyUntil, string? AfterJob,
-    double? HoursLeft = null, double? JobHours = null, DateTimeOffset? RestingUntil = null)
+    double? HoursLeft = null, double? JobHours = null, DateTimeOffset? RestingUntil = null,
+    string? Vehicle = null, string? RidesWith = null, bool NoTruck = false, DateTimeOffset? TruckBackAt = null)
 {
     /// <summary>Not enough of their shift left for this job (resting people are marked by <see cref="RestingUntil"/> instead).</summary>
     public bool OutOfHours => RestingUntil is null && HoursLeft is { } left && JobHours is { } job && job > left;
@@ -133,7 +134,7 @@ public static partial class Endpoints
     /// <summary>The suggested assignee is the nearest on-duty technician qualified for the defect who isn't out on another job.</summary>
     private static FindingView ToView(Finding f, ICircuitCatalog circuits, DateTimeOffset now, ResourceCatalog catalog, FieldHours hours) =>
         new(f, circuits.Find(f.CircuitId)?.Name ?? f.CircuitId, Finding.Workflow.Next(f.Status), f.IsOverdue(now), TriageSla.Describe(f.Severity),
-            CrewRoster.Candidates(catalog.GroundCrews, catalog.Depots, f.Type, f.Location, ActiveOf(hours), hours with { Severity = f.Severity })
+            CrewRoster.Candidates(catalog.GroundCrews, catalog.Depots, f.Type, f.Location, ActiveOf(hours), hours with { Severity = f.Severity }, catalog.Vehicles)
                 .FirstOrDefault(c => c.Available)?.Label ?? "");
 
     private static IReadOnlyList<FieldDispatch> ActiveOf(FieldHours hours) => [.. hours.History.Where(d => d.IsActive(hours.Now))];
@@ -403,7 +404,7 @@ public static partial class Endpoints
         var open = OpenWorkOrders(findings, crews);
         var hours = new FieldHours(FieldWork.History(findings), now);
         var active = ActiveOf(hours);
-        return TypedResults.Ok(crews.Select(c => new CrewView(c, open.GetValueOrDefault(c.Id), [.. active.Where(d => d.CrewId == c.Id)], MemberShifts(c, hours))));
+        return TypedResults.Ok(crews.Select(c => new CrewView(c, open.GetValueOrDefault(c.Id), [.. active.Where(d => d.Involves(c.Id, null))], MemberShifts(c, hours))));
     }
 
     /// <summary>Open work orders (assigned, not yet resolved) per crew id, crew-wide or to a member.</summary>
@@ -448,7 +449,7 @@ public static partial class Endpoints
                     ["assignee"] = [$"{who.Label} isn't qualified to fix {FindingImage.Label(f.Type).ToLowerInvariant()}."],
                 });
             // Someone already out can take it after their current jobs if it's nearby; otherwise they're busy.
-            var candidate = CrewRoster.Candidates(crews, catalog.Depots, f.Type, f.Location, active, hours).FirstOrDefault(c => c.Label == who.Label);
+            var candidate = CrewRoster.Candidates(crews, catalog.Depots, f.Type, f.Location, active, hours, catalog.Vehicles).FirstOrDefault(c => c.Label == who.Label);
             if (candidate is { BusyUntil: { } back })
                 return TypedResults.ValidationProblem(new Dictionary<string, string[]>
                 {
@@ -465,6 +466,14 @@ public static partial class Endpoints
                 {
                     ["assignee"] = [$"{who.Label} has {Shifts.Hours(shift.Left):0.#} h of their {Shifts.LimitHours:0} h shift left; this job needs about {Shifts.Hours(job):0.#} h."],
                 });
+            // Trucks: leaving the yard takes a free one.
+            if (candidate is { NoVehicle: true, Depot: { } yard })
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["assignee"] = [candidate.VehicleBackAt is { } truckBack
+                        ? $"Every truck at {yard.Name} is out; the next one is back in about {Math.Max(1, (int)Math.Ceiling((truckBack - now).TotalMinutes))} minute(s)."
+                        : $"{yard.Name} has no trucks in service."],
+                });
             assignee = who.Label;
 
             // Send them: a simulated truck roll along the roads, from their depot or straight on from their last job.
@@ -475,11 +484,14 @@ public static partial class Endpoints
             if (dispatch is not null)
             {
                 var planned = new FieldHours([.. all.Where(x => x.Id != f.Id).Select(x => x.Dispatch).OfType<FieldDispatch>(), dispatch], now);
-                IEnumerable<CrewMember> members = who.Member is { } one ? [one] : who.Crew.Members;
-                if (members.Select(m => planned.Of(who.Crew, m)).FirstOrDefault(s => s.Booked > Shifts.Limit) is { } over)
+                // Everyone in the truck is on the clock.
+                IEnumerable<CrewAssignee> members = dispatch.Riders is { } riders
+                    ? riders.Select(r => CrewRoster.Resolve(crews, $"{r.Name} ({crews.FirstOrDefault(c => c.Id == r.CrewId)?.Name})")).OfType<CrewAssignee>()
+                    : who.Member is { } one ? [who] : who.Crew.Members.Select(m => new CrewAssignee(who.Crew, m));
+                if (members.Select(m => planned.Of(m.Crew, m.Member)).FirstOrDefault(s => s.Booked > Shifts.Limit) is { } over)
                     return TypedResults.ValidationProblem(new Dictionary<string, string[]>
                     {
-                        ["assignee"] = [$"By road this job would take {who.Label} to {Shifts.Hours(over.Booked):0.#} h, over the {Shifts.LimitHours:0} h shift limit."],
+                        ["assignee"] = [$"By road this job would take {(members.Count() > 1 ? $"the crew in {dispatch.VehicleId ?? "the truck"}" : who.Label)} to {Shifts.Hours(over.Booked):0.#} h, over the {Shifts.LimitHours:0} h shift limit."],
                     });
             }
         }
@@ -512,9 +524,18 @@ public static partial class Endpoints
         var catalog = await resources.GetAsync(ct);
         var open = OpenWorkOrders(all, catalog.GroundCrews);
         var hours = new FieldHours(FieldWork.History(all), now, f.Severity);
-        return TypedResults.Ok(CrewRoster.Candidates(catalog.GroundCrews, catalog.Depots, f.Type, f.Location, ActiveOf(hours), hours).Select(c =>
+        return TypedResults.Ok(CrewRoster.Candidates(catalog.GroundCrews, catalog.Depots, f.Type, f.Location, ActiveOf(hours), hours, catalog.Vehicles).Select(c =>
             new AssigneeOption(c.Label, c.Crew.Id, c.Crew.Name, c.Member?.Name, c.Member?.Role, c.Depot?.Id, c.Depot?.Name, c.DistanceKm,
                 open.GetValueOrDefault(c.Crew.Id), c.BusyUntil, c.After?.SiteLabel,
-                c.Shift is { } s ? Shifts.Hours(s.Left) : null, c.JobTime is { } j ? Shifts.Hours(j) : null, c.Shift?.RestingUntil)));
+                c.Shift is { } s ? Shifts.Hours(s.Left) : null, c.JobTime is { } j ? Shifts.Hours(j) : null, c.Shift?.RestingUntil,
+                c.After?.VehicleLabel ?? c.Vehicle?.Label, RidesWith(c), c.NoVehicle, c.VehicleBackAt)));
+    }
+
+    /// <summary>Who else is (or would be) in the truck: the ride-along crewmate, or the others already in it.</summary>
+    private static string? RidesWith(AssignCandidate c)
+    {
+        var others = c.After?.Riders is { } on ? on.Where(r => !string.Equals(r.Name, c.Member?.Name, StringComparison.OrdinalIgnoreCase)).Select(r => r.Name).ToList()
+            : c.Partner?.Member is { } p ? [p.Name] : [];
+        return others.Count > 0 ? string.Join(" & ", others) : null;
     }
 }

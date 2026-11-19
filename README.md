@@ -63,7 +63,7 @@ GridSafety is a **proof of concept for a software-as-a-service product**: one ho
 | Question a buyer would ask | What's here |
 |---|---|
 | Can it take live drone data at scale? | MQTT telemetry through AWS IoT Core into an event-driven, serverless pipeline, with per-device identity, idempotent processing and out-of-order tolerance |
-| Does it fit how operations actually work? | Flight-safety alerts, a triage queue with severity-based SLAs and escalation, work orders that go only to qualified, on-shift technicians nearest first, crew hours of service, and an audit trail on every decision |
+| Does it fit how operations actually work? | Flight-safety alerts, a triage queue with severity-based SLAs and escalation, work orders that go only to qualified, on-shift technicians nearest first, crew hours of service, trucks tracked per yard with crews riding together and nearby jobs chained onto the same trip, and an audit trail on every decision |
 | Can managers see what happened? | Live ops map, KPIs, a mission overview and downloadable report per flight, flight logs per drone and pilot, shift reports per technician (CSV) |
 | Is it secure? | Cognito sign-in with role-based rights enforced by the API, a read-only guest view with names removed, least-privilege IAM per function, CI/CD through OIDC with no long-lived keys |
 | What does it cost to run? | Pay-per-use AWS services only: an idle deployment costs close to nothing, and a budget alert watches spend (default $5/month) |
@@ -280,4 +280,4 @@ I've spent the last couple of years supporting grid operations software (ADMS on
 | Infrastructure as code | `infra/GridSafetyStack.cs` (CDK in C#) |
 | Secure CI/CD | GitHub Actions with OIDC, no long-lived keys |
 | RBAC / identity | Cognito groups → JWT authorizer → API-enforced Supervisor rights |
-| Automation and testing | Simulator with scripted incidents; 187 .NET tests + frontend tests |
+| Automation and testing | Simulator with scripted incidents; 195 .NET tests + frontend tests |

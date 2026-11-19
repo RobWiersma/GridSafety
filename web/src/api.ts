@@ -5,7 +5,7 @@ import { canTake } from './lib/field';
 import type {
   AlertKind, AlertSettings, AlertSettingsView,
   AssigneeOption, Circuit, Crew, CrewView, FieldJobs, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint, SimulationSettings,
- DroneReport, PilotReport, TechnicianReport,} from './types';
+ DroneReport, PilotReport, TechnicianReport, Vehicle, VehicleReport, CrewWorkReport, DepotReport, FlightCrewReport,} from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public fieldErrors?: Record<string, string[]>) {
@@ -140,12 +140,13 @@ export const useResources = () => {
   return useQuery({ queryKey: keys.resources, queryFn: () => api<Resources>('/resources'), refetchInterval: 15_000 });
 };
 
-export type ResourceKind = 'drones' | 'flight-crews' | 'ground-crews';
+export type ResourceKind = 'drones' | 'flight-crews' | 'ground-crews' | 'vehicles';
 /** A save (with record) or a removal (without) of one drone or crew. */
 export type ResourceChange =
   | { kind: 'drones'; id: string; record?: DroneAsset }
   | { kind: 'flight-crews'; id: string; record?: FlightCrew }
-  | { kind: 'ground-crews'; id: string; record?: Crew };
+  | { kind: 'ground-crews'; id: string; record?: Crew }
+  | { kind: 'vehicles'; id: string; record?: Vehicle };
 
 /** Supervisor-only: add or update (PUT) or remove (DELETE) one drone or crew. */
 export function useSaveResource() {
@@ -376,16 +377,33 @@ export function useBulkFindings() {
 export type ReportTarget =
   | { kind: 'drone'; id: string }
   | { kind: 'pilot'; crewId: string; member: string }
-  | { kind: 'technician'; crewId: string; member: string };
+  | { kind: 'technician'; crewId: string; member: string }
+  | { kind: 'truck'; id: string }
+  | { kind: 'ground-crew'; crewId: string; name: string }
+  | { kind: 'flight-crew'; crewId: string; name: string }
+  | { kind: 'depot'; id: string; name: string };
+
+export type AnyReport = TechnicianReport | DroneReport | PilotReport | VehicleReport | CrewWorkReport | DepotReport | FlightCrewReport;
+
+function reportPath(t: ReportTarget) {
+  const e = encodeURIComponent;
+  switch (t.kind) {
+    case 'drone': return `/resources/drones/${e(t.id)}/report`;
+    case 'pilot': return `/resources/flight-crews/${e(t.crewId)}/members/${e(t.member)}/report`;
+    case 'technician': return `/resources/ground-crews/${e(t.crewId)}/members/${e(t.member)}/report`;
+    case 'truck': return `/resources/vehicles/${e(t.id)}/report`;
+    case 'ground-crew': return `/resources/ground-crews/${e(t.crewId)}/report`;
+    case 'flight-crew': return `/resources/flight-crews/${e(t.crewId)}/report`;
+    case 'depot': return `/resources/depots/${e(t.id)}/report`;
+  }
+}
 
 export function useReport(target: ReportTarget) {
   const api = useFetcher();
-  const e = encodeURIComponent;
-  const path = target.kind === 'drone' ? `/resources/drones/${e(target.id)}/report`
-    : `/resources/${target.kind === 'pilot' ? 'flight-crews' : 'ground-crews'}/${e(target.crewId)}/members/${e(target.member)}/report`;
+  const path = reportPath(target);
   return useQuery({
     queryKey: ['report', path],
-    queryFn: () => api<TechnicianReport | DroneReport | PilotReport>(path),
+    queryFn: () => api<AnyReport>(path),
     refetchInterval: 10_000,
   });
 }

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useContext, useEffect, useState } from 'react';
 import { FetcherContext, useAssignees, useFindingAerial, useFindingImage, useFindingStatus } from '../api';
-import { SHIFT_HOURS, canTake, countdown, dispatchName, phaseAt, statusText } from '../lib/field';
+import { SHIFT_HOURS, canTake, countdown, phaseAt, statusText, truckName } from '../lib/field';
 import { ACTION_LABEL, FINDING_TYPE_LABEL, relativeTime, slaText } from '../lib/format';
 import type { AssigneeOption, FindingStatus, FindingView } from '../types';
 import { PhotoZoom } from './PhotoZoom';
@@ -47,8 +47,12 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
   const whyNot = (o: AssigneeOption) =>
     o.busyUntil ? `out elsewhere, free in ${countdown(Date.parse(o.busyUntil), now)}`
     : o.restingUntil ? `resting after a full shift, back in ${countdown(Date.parse(o.restingUntil), now)}`
+    : o.noTruck ? (o.truckBackAt ? `no truck free at ${o.depotName}, one's back in ${countdown(Date.parse(o.truckBackAt), now)}` : `no trucks in service at ${o.depotName}`)
     : `needs ~${o.jobHours} h, ${o.hoursLeft} h left`;
-  const afterFor = (o: AssigneeOption) => (o.afterJob ? ` · after ${o.afterJob}` : '');
+  // "after SA-010 in T-071", or the truck they'd take, and who rides with them.
+  const afterFor = (o: AssigneeOption) =>
+    (o.afterJob ? ` · after ${o.afterJob}${o.vehicle ? ` in ${o.vehicle.split(' · ')[0]}` : ''}` : o.vehicle ? ` · ${o.vehicle.split(' · ')[0]}` : '')
+    + (o.ridesWith ? ` with ${o.ridesWith}` : '');
   const [now, setNow] = useState(() => Date.now());
   const dispatch = data?.finding.dispatch;
   const moving = Boolean(dispatch && Date.parse(dispatch.returnsAt) > now - 1000);
@@ -162,13 +166,13 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
                 const phase = phaseAt(dispatch, now);
                 const steps: [string, string][] = [
                   [`Leaves ${dispatch.fromLabel}`, dispatch.departedAt],
-                  ['On site', dispatch.arrivesAt],
+                  [dispatch.riders && dispatch.riders.length > 1 ? `On site, ${dispatch.riders.length} working (quicker repair)` : 'On site', dispatch.arrivesAt],
                   [dispatch.recalledAt ? 'Called back' : 'Repaired', dispatch.recalledAt ?? dispatch.repairedAt],
                   [dispatch.nextFindingId ? `On to ${dispatch.nextSiteLabel ?? 'next job'}` : `Back at ${dispatch.depotName}`, dispatch.returnsAt],
                 ];
                 return (
                   <div className={`field-job field-job-${phase.toLowerCase()}`}>
-                    <strong>{dispatchName(dispatch)}</strong>
+                    <strong>{truckName(dispatch)}</strong>
                     <span> · {statusText(dispatch, now)}</span>
                     <ol className="field-steps">
                       {steps.map(([label, at]) => (

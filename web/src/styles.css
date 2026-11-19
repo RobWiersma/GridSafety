@@ -98,10 +98,11 @@ button { font: inherit; color: inherit; }
 /* Stats */
 .stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 /* Top bar: stats grouped into Drones, Field crews and Findings & triage cards. */
-.stats-grouped { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 3fr); }
+.stats-grouped { grid-template-columns: minmax(0, 2fr) minmax(0, 4fr) minmax(0, 3fr); }
 .stat-group { display: grid; grid-template-rows: auto 1fr; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .stat-group-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .stat-group-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stat-group-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .stat-group-title { grid-column: 1 / -1; margin: 0; padding: 9px 14px 0; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
 .stat-group .stat { background: none; border: 0; border-left: 1px solid var(--border); border-radius: 0; box-shadow: none; padding: 4px 14px 11px; margin-top: 6px; min-width: 0; font: inherit; color: inherit; }
 .stat-group .stat-group-title + .stat { border-left: 0; }
@@ -539,6 +540,7 @@ button { font: inherit; color: inherit; }
   box-shadow: var(--shadow); max-width: calc(100% - 70px); }
 .select-bar-open { border-color: #38bdf8; }
 .map-selecting, .map-selecting .leaflet-interactive { cursor: crosshair !important; }
+.map-panning, .map-panning * { cursor: grabbing !important; }
 @media (max-width: 520px) { .select-bar { top: 64px; left: 52px; } }
 .select-box { position: absolute; z-index: 650; pointer-events: none; border: 1.5px dashed #38bdf8; background: rgb(56 189 248 / .08); border-radius: 2px; }
 
@@ -576,3 +578,6 @@ button { font: inherit; color: inherit; }
   .stat-group .stat-value { font-size: 22px; }
   .stat-group .stat-sub { font-size: 11px; }
 }
+
+/* Work reports */
+.report-subhead { margin: 14px 0 6px; font-size: 13px; }

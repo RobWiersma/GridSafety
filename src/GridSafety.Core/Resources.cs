@@ -33,13 +33,16 @@ public sealed partial class ResourceCatalog
     /// <summary>Which demo additions this catalog has had (see <see cref="Normalize"/>); each is applied once, so deleting one sticks.</summary>
     public int SeedVersion { get; set; }
 
-    /// <summary>2: Alameda and Solano County yards and crews.</summary>
-    public const int CurrentSeedVersion = 2;
+    /// <summary>2: Alameda and Solano County yards and crews. 3: trucks at every yard.</summary>
+    public const int CurrentSeedVersion = 3;
 
     public List<DroneAsset> Drones { get; init; } = [];
     public List<FlightCrew> FlightCrews { get; init; } = [];
     public List<Crew> GroundCrews { get; init; } = [];
     public List<Depot> Depots { get; init; } = [];
+    public List<Vehicle> Vehicles { get; init; } = [];
+
+    public Vehicle? FindVehicle(string id) => Vehicles.FirstOrDefault(v => v.Id.Equals(id.Trim(), StringComparison.OrdinalIgnoreCase));
 
     public DroneAsset? FindDrone(string id) => Drones.FirstOrDefault(d => d.Id.Equals(id.Trim(), StringComparison.OrdinalIgnoreCase));
 
@@ -68,6 +71,7 @@ public sealed partial class ResourceCatalog
         ],
         GroundCrews = [.. CrewRoster.All],
         Depots = [.. CrewRoster.Depots],
+        Vehicles = [.. Fleet.Default(CrewRoster.Depots)],
         SeedVersion = CurrentSeedVersion,
     };
 
@@ -87,6 +91,12 @@ public sealed partial class ResourceCatalog
             Depots.AddRange(CrewRoster.Depots.Where(d => Depots.All(x => x.Id != d.Id)));
             GroundCrews.AddRange(CrewRoster.All.Where(c => Seed2Crews.Contains(c.Id) && GroundCrews.All(x => x.Id != c.Id)));
             SeedVersion = 2;
+        }
+        if (SeedVersion < 3)
+        {
+            // Trucks are tracked now: the demo fleet, at the yards this catalog has. Applied once.
+            Vehicles.AddRange(Fleet.Default(CrewRoster.Depots).Where(v => FindDepot(v.DepotId) is not null && FindVehicle(v.Id) is null));
+            SeedVersion = 3;
         }
         for (var i = 0; i < GroundCrews.Count; i++)
         {
@@ -116,6 +126,19 @@ public sealed partial class ResourceCatalog
         if (Blank(d.HomeBase, 60)) e["homeBase"] = ["Home base is required (max 60)."];
         if (!Enum.IsDefined(d.Status)) e["status"] = ["Unknown status."];
         if (d.Notes?.Length > 200) e["notes"] = ["Notes: max 200 characters."];
+        return e;
+    }
+
+    /// <summary>Checks a truck against this catalog (its depot must exist); returns field → messages (empty when valid).</summary>
+    public Dictionary<string, string[]> Validate(Vehicle v)
+    {
+        var e = new Dictionary<string, string[]>();
+        if (v.Id is not { Length: > 0 and <= 20 } || !DroneIdPattern().IsMatch(v.Id)) e["id"] = ["Truck ID: letters, digits and dashes, max 20."];
+        if (!Enum.IsDefined(v.Kind)) e["kind"] = ["Unknown kind of truck."];
+        if (v.Seats is < 1 or > 6) e["seats"] = ["A truck seats 1 to 6."];
+        if (FindDepot(v.DepotId) is null) e["depotId"] = ["Pick the yard this truck is kept at."];
+        if (!Enum.IsDefined(v.Status)) e["status"] = ["Unknown status."];
+        if (v.Notes?.Length > 200) e["notes"] = ["Notes: max 200 characters."];
         return e;
     }
 

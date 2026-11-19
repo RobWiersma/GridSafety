@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useFieldJobs, useStats } from '../api';
-import { phaseAt, useServerClock } from '../lib/field';
+import { peopleOf, phaseAt, tripKey, useServerClock } from '../lib/field';
 import { severityColor } from '../lib/format';
 
 export function StatsBar({ onOpenFindings }: { onOpenFindings(): void }) {
@@ -9,21 +9,23 @@ export function StatsBar({ onOpenFindings }: { onOpenFindings(): void }) {
   const now = useServerClock(field.data?.now);
   const v = (n: number | undefined | null, suffix = '') => (n == null ? '–' : `${n}${suffix}`);
 
-  // Each technician counts once, by what their current job has them doing right now.
+  // Each technician counts once (riders too), by what their truck is doing right now.
   const crew = useMemo(() => {
     if (!field.data) return null;
     const byPerson = new Map<string, string[]>();
+    const trucks = new Set<string>();
     for (const j of field.data.jobs) {
       const phase = phaseAt(j.dispatch, now);
       if (phase === 'Back' || phase === 'MovedOn') continue;
-      byPerson.set(j.dispatch.assignee, [...(byPerson.get(j.dispatch.assignee) ?? []), phase]);
+      trucks.add(tripKey(j.dispatch));
+      for (const who of peopleOf(j.dispatch)) byPerson.set(who, [...(byPerson.get(who) ?? []), phase]);
     }
     let working = 0, traveling = 0;
     for (const phases of byPerson.values()) {
       if (phases.includes('OnSite')) working++;
       else if (phases.includes('EnRoute') || phases.includes('Returning')) traveling++;
     }
-    return { out: byPerson.size, working, traveling };
+    return { out: byPerson.size, working, traveling, trucks: trucks.size };
   }, [field.data, now]);
 
   return (
@@ -44,7 +46,7 @@ export function StatsBar({ onOpenFindings }: { onOpenFindings(): void }) {
         </div>
       </div>
 
-      <div className="stat-group stat-group-3" role="group" aria-labelledby="stats-crews">
+      <div className="stat-group stat-group-4" role="group" aria-labelledby="stats-crews">
         <h2 className="stat-group-title" id="stats-crews">Field crews</h2>
         <div className="stat">
           <div className="stat-label">In the field</div>
@@ -63,6 +65,11 @@ export function StatsBar({ onOpenFindings }: { onOpenFindings(): void }) {
           <div className="stat-label">Traveling</div>
           <div className="stat-value">{v(crew?.traveling)}</div>
           <div className="stat-sub">driving to or from a job</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">Trucks out</div>
+          <div className="stat-value">{v(crew?.trucks)}</div>
+          <div className="stat-sub">{crew && crew.trucks > 0 ? `${(crew.out / crew.trucks).toFixed(1)} people per truck` : 'all at the yards'}</div>
         </div>
       </div>
 
@@ -86,8 +93,9 @@ export function StatsBar({ onOpenFindings }: { onOpenFindings(): void }) {
           <div className="stat-sub">past SLA, still New</div>
         </button>
         <div className="stat">
-          <div className="stat-label">Median to triage</div>
+          <div className="stat-label">To triage</div>
           <div className="stat-value">{data?.medianHoursToTriage != null ? `${data.medianHoursToTriage}h` : '–'}</div>
+          <div className="stat-sub">median</div>
         </div>
       </div>
     </section>

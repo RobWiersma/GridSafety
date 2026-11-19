@@ -116,7 +116,7 @@ public static class Shifts
                 : nextStart is not null || now - end >= Rest ? ShiftStatus.Done
                 : ClockedOut(booked, end, now) ? ShiftStatus.Resting
                 : ShiftStatus.OnCall;
-            var jobs = shifts[i].Select(d => Job((Finding)byDispatch[d]!, d, now)).ToList();
+            var jobs = shifts[i].Select(d => Job((Finding)byDispatch[d]!, d, now, member)).ToList();
             reports.Add(new ShiftReport(start, end, status, Hours(worked), Hours(booked), Math.Round(jobs.Sum(j => j.DriveHours), 1),
                 Math.Round(jobs.Sum(j => j.RepairHours), 1), jobs.Count(j => j.Outcome == JobOutcome.Repaired),
                 nextStart is { } n ? Hours(n - end) : null, LimitHours, jobs));
@@ -124,7 +124,7 @@ public static class Shifts
         return reports;
     }
 
-    private static ShiftJob Job(Finding f, FieldDispatch d, DateTimeOffset now)
+    internal static ShiftJob Job(Finding f, FieldDispatch d, DateTimeOffset now, string member)
     {
         // Time at the site: from arrival until the repair is done, or until they were called away.
         var leftSite = Min(d.RecalledAt ?? d.RepairedAt, d.RepairedAt);
@@ -134,18 +134,19 @@ public static class Shifts
             : now >= d.DepartedAt ? JobOutcome.InProgress
             : JobOutcome.LinedUp;
         return new ShiftJob(f.Id, f.StructureLabel, f.Type, f.Severity, d.Assignee, d.FromLabel, d.DepartedAt, d.ArrivesAt, d.ReturnsAt,
-            Hours(d.ReturnsAt - d.DepartedAt - onSite), Hours(onSite), outcome, d.NextSiteLabel, d.OnRoads);
+            Hours(d.ReturnsAt - d.DepartedAt - onSite), Hours(onSite), outcome, d.NextSiteLabel, d.OnRoads, d.VehicleLabel,
+            d.Riders?.Where(r => !string.Equals(r.Name, member, StringComparison.OrdinalIgnoreCase)).Select(r => r.Name).ToList() is { Count: > 0 } with ? string.Join(" & ", with) : null);
     }
 
     /// <summary>
     /// Rough real time a job would add to someone's shift: the drive there (from <paramref name="from"/>), the repair, and
     /// the drive back to <paramref name="depot"/>, less the drive home they'd no longer make when going on from an
-    /// earlier job (<paramref name="after"/>).
+    /// earlier job (<paramref name="after"/>). The repair is quicker with more <paramref name="people"/> on it.
     /// </summary>
-    public static TimeSpan Estimate(GeoPoint from, GeoPoint site, GeoPoint depot, int severity, FieldDispatch? after = null)
+    public static TimeSpan Estimate(GeoPoint from, GeoPoint site, GeoPoint depot, int severity, FieldDispatch? after = null, int people = 1)
     {
         static TimeSpan Drive(GeoPoint a, GeoPoint b) => FieldWork.TravelTime(Geo.DistanceMeters(a, b) / 1000 * RoadFactor);
-        var job = Drive(from, site) + FieldWork.RepairTime(severity) + Drive(site, depot);
+        var job = Drive(from, site) + FieldWork.RepairTime(severity, people) + Drive(site, depot);
         return after is null ? job : job - (after.ReturnsAt - after.RepairedAt);
     }
 
@@ -165,10 +166,13 @@ public enum ShiftStatus { Working, OnCall, Resting, Done }
 
 public enum JobOutcome { Repaired, CalledBack, InProgress, LinedUp }
 
-/// <summary>One job in a shift report, with its time split into driving and repairing (simulated hours).</summary>
+/// <summary>
+/// One job in a shift report, with its time split into driving and repairing (simulated hours), the truck, and who else
+/// was in it (<see cref="With"/>).
+/// </summary>
 public sealed record ShiftJob(string FindingId, string StructureLabel, FindingType Type, int Severity, string Assignee, string FromLabel,
     DateTimeOffset DepartedAt, DateTimeOffset ArrivesAt, DateTimeOffset EndsAt, double DriveHours, double RepairHours, JobOutcome Outcome,
-    string? NextSiteLabel, bool OnRoads);
+    string? NextSiteLabel, bool OnRoads, string? Vehicle = null, string? With = null);
 
 /// <summary>
 /// One shift for one technician. Hours are simulated: <see cref="WorkedHours"/> up to now, <see cref="BookedHours"/>

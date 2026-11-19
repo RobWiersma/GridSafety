@@ -136,6 +136,41 @@ export interface FieldDispatch {
   nextSiteLabel?: string;
   /** Set when the work order was closed by hand before the repair finished; the truck turned back. */
   recalledAt?: string;
+  /** The truck, e.g. "T-071"; absent for truck rolls from before vehicles were tracked. */
+  vehicleId?: string;
+  /** e.g. "T-071 · Bucket truck". */
+  vehicleLabel?: string;
+  /** Everyone in the truck, the technician doing this repair included; absent when a whole crew went. */
+  riders?: Rider[];
+}
+
+/** Someone in a truck: technicians from the same yard ride together, whatever their crew. */
+export interface Rider {
+  crewId: string;
+  name: string;
+}
+
+export type VehicleKind = 'BucketTruck' | 'LineTruck' | 'Pickup';
+export type VehicleStatus = 'InService' | 'OutOfService';
+
+/** A truck kept at a depot; seats is how many people ride in it. */
+export interface Vehicle {
+  id: string;
+  kind: VehicleKind;
+  seats: number;
+  depotId: string;
+  status: VehicleStatus;
+  notes?: string;
+}
+
+/** A truck with the trip it's on now, if any. */
+export interface VehicleView {
+  vehicle: Vehicle;
+  kindLabel: string;
+  trip?: FieldDispatch;
+  phase?: FieldPhase;
+  jobs: number;
+  lastOut?: string;
 }
 
 export interface FieldJob {
@@ -217,6 +252,13 @@ export interface AssigneeOption {
   jobHours?: number;
   /** Off, resting after a full shift, until then. */
   restingUntil?: string;
+  /** The truck they'd take, or the one they're already out in. */
+  vehicle?: string;
+  /** Who'd be in the truck with them. */
+  ridesWith?: string;
+  /** Every truck at their yard is out (until truckBackAt), or it has none in service. */
+  noTruck?: boolean;
+  truckBackAt?: string;
 }
 
 export type CrewStatus = 'Available' | 'OffDuty';
@@ -273,6 +315,7 @@ export interface Resources {
   flightCrews: FlightCrewView[];
   groundCrews: CrewView[];
   depots: Depot[];
+  vehicles: VehicleView[];
 }
 
 export interface CrewView {
@@ -398,6 +441,9 @@ export interface ShiftJob {
   outcome: JobOutcome;
   nextSiteLabel?: string;
   onRoads: boolean;
+  /** The truck, and who else was in it. */
+  vehicle?: string;
+  with?: string;
 }
 
 export interface ShiftReport {
@@ -464,4 +510,15 @@ export interface FlightReport {
 }
 
 export interface DroneReport { drone: DroneAsset; report: FlightReport; now: string }
+
+/** Simulated hours; personHours counts each person in the truck. A trip that went on from job to job counts once. */
+export interface WorkTotals { trips: number; jobs: number; repaired: number; calledBack: number; driveHours: number; repairHours: number; personHours: number }
+/** One line of a breakdown: a person or a truck. */
+export interface WorkBreakdown { name: string; detail?: string; jobs: number; repaired: number; hours: number }
+/** Field work by a truck, a crew or out of a yard; in each job, `with` is everyone who was in the truck. */
+export interface WorkReport { totals: WorkTotals; breakdown: WorkBreakdown[]; jobs: ShiftJob[] }
+export interface VehicleReport { vehicle: Vehicle; kindLabel: string; depotName?: string; work: WorkReport; now: string }
+export interface CrewWorkReport { crewId: string; crewName: string; specialty: string; depotName?: string; work: WorkReport; now: string }
+export interface DepotReport { depot: Depot; trucks: number; people: number; work: WorkReport; now: string }
+export interface FlightCrewReport { crewId: string; crewName: string; homeBase: string; report: FlightReport; now: string }
 export interface PilotReport { crewId: string; crewName: string; member: string; role: string; report: FlightReport; now: string }

@@ -6,6 +6,9 @@ namespace GridSafety.Core;
 /// </summary>
 public enum FieldPhase { Queued, EnRoute, OnSite, Returning, Back, MovedOn }
 
+/// <summary>Someone in a truck: a technician of any crew (crewmates from the same yard ride together).</summary>
+public sealed record Rider(string CrewId, string Name);
+
 /// <summary>
 /// A simulated truck roll for one work order: the technician (or whole crew) drives along the roads from their depot,
 /// or from their previous job, to the defect, repairs it, and drives back to the depot, unless another job nearby is
@@ -45,6 +48,16 @@ public sealed record FieldDispatch
     /// <summary>Set when the work order was closed by hand before the repair finished: the truck turned back.</summary>
     public DateTimeOffset? RecalledAt { get; init; }
 
+    /// <summary>The truck, e.g. "T-071"; null for truck rolls from before vehicles were tracked.</summary>
+    public string? VehicleId { get; init; }
+    /// <summary>e.g. "T-071 · Bucket truck".</summary>
+    public string? VehicleLabel { get; init; }
+    /// <summary>
+    /// Everyone in the truck, the technician doing this repair included; all of them are on the clock for the whole trip.
+    /// Null when the whole crew went, or for truck rolls from before vehicles were tracked (just <see cref="Member"/>).
+    /// </summary>
+    public IReadOnlyList<Rider>? Riders { get; init; }
+
     public FieldPhase PhaseAt(DateTimeOffset now) =>
         now >= ReturnsAt ? (NextFindingId is null ? FieldPhase.Back : FieldPhase.MovedOn)
         : now < DepartedAt ? FieldPhase.Queued
@@ -69,7 +82,16 @@ public sealed record FieldDispatch
 
     /// <summary>Whether this job ties up <paramref name="member"/> of <paramref name="crewId"/> (null member: the crew as a whole).</summary>
     public bool Involves(string crewId, string? member) =>
-        CrewId == crewId && (Member is null || member is null || string.Equals(Member, member, StringComparison.OrdinalIgnoreCase));
+        (CrewId == crewId && (Member is null || member is null || Same(Member, member)))
+        || Riders?.Any(r => r.CrewId == crewId && (member is null || Same(r.Name, member))) == true;
+
+    /// <summary>Whether <paramref name="member"/> of <paramref name="crewId"/> is in the truck.</summary>
+    public bool Carries(string crewId, string member) => Riders?.Any(r => r.CrewId == crewId && Same(r.Name, member)) == true;
+
+    /// <summary>Whether two jobs are stops on the same trip: the same truck, or (before vehicles were tracked) the same assignee.</summary>
+    public bool SameTrip(FieldDispatch other) => VehicleId is not null ? VehicleId == other.VehicleId : other.VehicleId is null && IsFor(other.Assignee);
+
+    private static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     public bool IsFor(string assignee) => string.Equals(Assignee, assignee, StringComparison.OrdinalIgnoreCase);
 
@@ -89,8 +111,19 @@ public static class FieldWork
     /// <summary>Drive time, sped up (a second stands for a minute, see <see cref="Shifts.DemoSpeed"/>): about 3 seconds per road km, 15 seconds to 3 minutes.</summary>
     public static TimeSpan TravelTime(double km) => TimeSpan.FromSeconds(Math.Clamp(15 + km * 3, 15, 180));
 
-    /// <summary>Time on site, sped up: worse defects take longer.</summary>
-    public static TimeSpan RepairTime(int severity) => TimeSpan.FromSeconds(40 + 15 * Math.Clamp(severity, 1, 5));
+    /// <summary>
+    /// Time on site, sped up: worse defects take longer, and more hands make it quicker, with diminishing returns
+    /// (two people take about 70% of the time one would, three about 55%).
+    /// </summary>
+    public static TimeSpan RepairTime(int severity, int people = 1) =>
+        TimeSpan.FromSeconds((40 + 15 * Math.Clamp(severity, 1, 5)) / Speedup(people));
+
+    /// <summary>How much faster <paramref name="people"/> repair than one person: each extra pair of hands adds 45%.</summary>
+    public static double Speedup(int people) => 1 + 0.45 * (Math.Clamp(people, 1, 6) - 1);
+
+    /// <summary>How many people work the job: everyone in the truck, a whole crew, or the one technician sent.</summary>
+    public static int People(AssignCandidate who, IReadOnlyList<Rider>? riders) =>
+        riders?.Count ?? (who.Member is null ? Math.Max(1, who.Crew.Members.Count) : 1);
 
     public const string RepairedNote = "Repaired on site (simulated field crew).";
 
@@ -106,28 +139,54 @@ public static class FieldWork
         active.Where(d => d.IsFor(assignee) && d.NextFindingId is null).MaxBy(d => d.DepartedAt);
 
     /// <summary>
-    /// Whether <paramref name="assignee"/>, already out, can take a job at <paramref name="site"/> after their current
-    /// ones: it's in the same area as their last job and their list isn't full.
+    /// The last stop lined up for the truck <paramref name="member"/> is out in, whether they're doing that repair or riding
+    /// along; for a whole crew (null member), the last of the crew's own whole-crew jobs. Null when they're not out.
     /// </summary>
-    public static bool CanChain(IReadOnlyList<FieldDispatch> active, string assignee, GeoPoint site) =>
-        Tail(active, assignee) is { RecalledAt: null } tail
+    public static FieldDispatch? Tail(IReadOnlyList<FieldDispatch> active, string crewId, string? member) =>
+        active.Where(d => d.NextFindingId is null && (member is null ? d.Member is null && d.CrewId == crewId : d.Member is not null && d.Involves(crewId, member)))
+            .MaxBy(d => d.DepartedAt);
+
+    /// <summary>
+    /// Whether the trip ending in <paramref name="tail"/> can take a job at <paramref name="site"/> next: it's in the same
+    /// area as the last stop, the truck wasn't called back, and its list isn't full.
+    /// </summary>
+    public static bool CanChain(IReadOnlyList<FieldDispatch> active, FieldDispatch? tail, GeoPoint site) =>
+        tail is { RecalledAt: null }
         && Geo.DistanceMeters(tail.Site, site) <= AreaKm * 1000
-        && active.Count(d => d.IsFor(assignee)) < MaxStops;
+        && active.Count(d => d.SameTrip(tail)) < MaxStops;
+
+    /// <inheritdoc cref="CanChain(IReadOnlyList{FieldDispatch}, FieldDispatch?, GeoPoint)"/>
+    public static bool CanChain(IReadOnlyList<FieldDispatch> active, string assignee, GeoPoint site) => CanChain(active, Tail(active, assignee), site);
 
     /// <summary>When <paramref name="member"/> (or the whole crew, if null) is free again, or null when free now.</summary>
     public static DateTimeOffset? BusyUntil(IReadOnlyList<FieldDispatch> active, string crewId, string? member) =>
         active.Where(d => d.Involves(crewId, member)).Max(d => (DateTimeOffset?)d.ReturnsAt);
 
     /// <summary>
-    /// Plans the truck roll for sending <paramref name="who"/> to <paramref name="f"/>: from their depot now, or, when
-    /// <paramref name="previous"/> is their last job lined up, from that job's site as soon as it's done (or from
-    /// wherever they are, if they're already driving back). <paramref name="previous"/> is changed to hand over to the
-    /// new job instead of returning to the depot. Returns null when they have no depot.
+    /// Plans the truck roll for sending <paramref name="who"/> to <paramref name="f"/>: from their depot now, in the free
+    /// truck picked for them (<see cref="AssignCandidate.Vehicle"/>) with their ride-along crewmate, or, when
+    /// <paramref name="previous"/> is the last stop of the truck they're already out in, from that job's site as soon as
+    /// it's done (or from wherever the truck is, if it's already driving back), with the same truck and people.
+    /// <paramref name="previous"/> is changed to hand over to the new job instead of returning to the depot. Returns null
+    /// when they have no depot.
     /// </summary>
     public static async Task<FieldDispatch?> PlanAsync(AssignCandidate who, Finding f, Finding? previous, IRouteSource routes, DateTimeOffset now,
         CancellationToken ct = default)
     {
         if (who.Depot is not { } depot) return null;
+        var (vehicleId, vehicleLabel) = (who.Vehicle?.Id, who.Vehicle?.Label);
+        IReadOnlyList<Rider>? riders = who.Member is { } m
+            ? [new(who.Crew.Id, m.Name), .. who.Partner is { Member: { } pm } p ? [new Rider(p.Crew.Id, pm.Name)] : Array.Empty<Rider>()]
+            : null;
+        if (previous?.Dispatch is { } chained)
+        {
+            // Same truck, same people; the job goes to whoever on it does the repair.
+            (vehicleId, vehicleLabel) = (chained.VehicleId, chained.VehicleLabel);
+            riders = chained.Riders is { } on && who.Member is { } doer
+                ? [.. on, .. chained.Carries(who.Crew.Id, doer.Name) ? Array.Empty<Rider>() : [new Rider(who.Crew.Id, doer.Name)]]
+                : riders;
+            if (chained.VehicleId is not null || chained.Riders is not null) depot = new Depot(chained.DepotId, chained.DepotName, chained.Depot);
+        }
 
         var (from, fromLabel, start) = (depot.Location, depot.Name, now);
         if (previous?.Dispatch is { } prev)
@@ -152,7 +211,7 @@ public static class FieldWork
         var backTask = RouteOrStraightAsync(routes, f.Location, depot.Location, ct);
         var (outbound, back) = (await outboundTask, await backTask);
         var arrives = start + TravelTime(outbound.Meters / 1000);
-        var repaired = arrives + RepairTime(f.Severity);
+        var repaired = arrives + RepairTime(f.Severity, People(who, riders));
         return new FieldDispatch
         {
             Assignee = who.Label, CrewId = who.Crew.Id, Member = who.Member?.Name,
@@ -160,6 +219,7 @@ public static class FieldWork
             Site = f.Location, SiteLabel = f.StructureLabel, From = from, FromLabel = fromLabel,
             Route = outbound.Path, ReturnRoute = back.Path, OnRoads = outbound.OnRoads && back.OnRoads,
             DepartedAt = start, ArrivesAt = arrives, RepairedAt = repaired, ReturnsAt = repaired + TravelTime(back.Meters / 1000),
+            VehicleId = vehicleId, VehicleLabel = vehicleLabel, Riders = riders,
         };
     }
 

@@ -38,13 +38,17 @@ public sealed record Depot(string Id, string Name, GeoPoint Location);
 /// distance is then from that job. <see cref="BusyUntil"/> is set when they're out elsewhere and can't take this one.
 /// <see cref="Shift"/> (when hours are tracked) says how much of their shift is left; <see cref="JobTime"/> is roughly how
 /// much of it this job would take. Someone resting, or without enough hours left for the job, can't take it.
+/// When trucks are tracked, someone leaving the yard needs a free one: <see cref="Vehicle"/> is the truck they'd take and
+/// <see cref="Partner"/> the technician from the same yard (their own crew first) who'd ride along; <see cref="NoVehicle"/> is set when every
+/// truck at their yard is out (<see cref="VehicleBackAt"/>: when the next one is back).
 /// </remarks>
 public sealed record AssignCandidate(Crew Crew, CrewMember? Member, Depot? Depot, double? DistanceKm, DateTimeOffset? BusyUntil = null,
-    FieldDispatch? After = null, ShiftState? Shift = null, TimeSpan? JobTime = null)
+    FieldDispatch? After = null, ShiftState? Shift = null, TimeSpan? JobTime = null, Vehicle? Vehicle = null, CrewAssignee? Partner = null,
+    bool NoVehicle = false, DateTimeOffset? VehicleBackAt = null)
 {
     public bool Resting => Shift?.RestingUntil is not null;
     public bool OutOfHours => !Resting && Shift is { } s && JobTime is { } job && job > s.Left;
-    public bool Available => BusyUntil is null && !Resting && !OutOfHours;
+    public bool Available => BusyUntil is null && !Resting && !OutOfHours && !NoVehicle;
 
     public string Label => new CrewAssignee(Crew, Member).Label;
 }
@@ -150,27 +154,60 @@ public static class CrewRoster
     /// <summary>
     /// Who can take a work order for <paramref name="type"/> at <paramref name="site"/>: on-duty technicians qualified for
     /// it, then on-duty crews that handle it as a unit, each list nearest depot first. People without a known depot go last.
-    /// Someone already out (<paramref name="active"/>) can take it after their current jobs when it's in the same area,
-    /// measured from their last job; otherwise they're listed after everyone available, marked busy.
+    /// Someone already out (<paramref name="active"/>) can take it after their truck's current jobs when it's in the same
+    /// area, measured from its last stop, whether they're doing that repair or riding along; otherwise they're listed after
+    /// everyone available, marked busy. With <paramref name="vehicles"/>, someone leaving the yard takes a free truck there
+    /// (none free: not available) and, when it has room, an on-duty technician from the same yard rides along: one from
+    /// their own crew if there is one, then whoever has the most hours left.
     /// </summary>
     public static IReadOnlyList<AssignCandidate> Candidates(IReadOnlyList<Crew> crews, IReadOnlyList<Depot> depots, FindingType type, GeoPoint site,
-        IReadOnlyList<FieldDispatch>? active = null, FieldHours? hours = null)
+        IReadOnlyList<FieldDispatch>? active = null, FieldHours? hours = null, IReadOnlyList<Vehicle>? vehicles = null)
     {
+        var onDuty = crews.Where(c => c.Status == CrewStatus.Available).ToList();
         AssignCandidate Make(Crew c, CrewMember? m)
         {
             var depot = depots.FirstOrDefault(d => d.Id == (m is null ? c.DepotId : c.DepotOf(m)));
-            var label = new CrewAssignee(c, m).Label;
             var busy = active is null ? null : FieldWork.BusyUntil(active, c.Id, m?.Name);
-            var after = busy is not null && FieldWork.CanChain(active!, label, site) ? FieldWork.Tail(active!, label) : null;
+            var tail = busy is null ? null : FieldWork.Tail(active!, c.Id, m?.Name);
+            var after = FieldWork.CanChain(active!, tail, site) ? tail : null;
+            // A chained job ends back at the truck's own yard.
+            var home = after is not null ? after.Depot : depot?.Location;
             GeoPoint? start = after?.Site ?? depot?.Location;
-            var shift = hours?.Of(c, m);
-            var job = hours is not null && start is { } from && depot is not null ? Shifts.Estimate(from, site, depot.Location, hours.Severity, after) : (TimeSpan?)null;
-            return new(c, m, depot, start is { } p ? Math.Round(Geo.DistanceMeters(p, site) / 1000, 1) : null, after is null ? busy : null, after, shift, job);
+            // Going on in a truck that's already out: the job is as tight as the most worked person in it.
+            var shift = after?.Riders is { } on && hours is not null
+                ? Shifts.Combine([hours.Of(c, m), .. on.Select(r => crews.FirstOrDefault(x => x.Id == r.CrewId) is { } rc
+                    && rc.Members.FirstOrDefault(x => x.Name.Equals(r.Name, StringComparison.OrdinalIgnoreCase)) is { } rm ? hours.Of(rc, rm) : ShiftState.Fresh)])
+                : hours?.Of(c, m);
+            var people = after?.Riders?.Count ?? (m is null ? Math.Max(1, c.Members.Count) : 1);
+            var job = hours is not null && start is { } from && home is { } h ? Shifts.Estimate(from, site, h, hours.Severity, after, people) : (TimeSpan?)null;
+
+            // Leaving the yard: a free truck, and a crewmate to ride along when there's a seat.
+            Vehicle? vehicle = null;
+            CrewAssignee? partner = null;
+            var noVehicle = false;
+            DateTimeOffset? backAt = null;
+            if (vehicles is not null && busy is null && depot is not null)
+            {
+                vehicle = m is null ? Fleet.RoomiestAt(vehicles, depot.Id, active ?? []) : Fleet.FreeAt(vehicles, depot.Id, active ?? []);
+                noVehicle = vehicle is null;
+                if (noVehicle) backAt = Fleet.NextBackAt(vehicles, depot.Id, active ?? []);
+                if (m is not null && vehicle is { Seats: >= 2 })
+                    partner = onDuty
+                        .SelectMany(pc => pc.Members.Where(x => x != m && pc.DepotOf(x) == depot.Id).Select(x => new CrewAssignee(pc, x)))
+                        .Where(x => active is null || FieldWork.BusyUntil(active, x.Crew.Id, x.Member!.Name) is null)
+                        .Select(x => (x, s: hours?.Of(x.Crew, x.Member)))
+                        .Where(t => t.s is null || (t.s.RestingUntil is null && (job is null || t.s.Left >= job)))
+                        .OrderBy(t => t.x.Crew.Id != c.Id).ThenByDescending(t => t.s?.Left ?? TimeSpan.MaxValue).ThenBy(t => t.x.Member!.Name, StringComparer.Ordinal)
+                        .Select(t => t.x).FirstOrDefault();
+            }
+            if (partner is not null && hours is not null && depot is not null)
+                job = Shifts.Estimate(depot.Location, site, depot.Location, hours.Severity, null, 2); // two pairs of hands
+            return new(c, m, depot, start is { } p ? Math.Round(Geo.DistanceMeters(p, site) / 1000, 1) : null, after is null ? busy : null, after, shift, job,
+                vehicle, partner, noVehicle, backAt);
         }
         static IEnumerable<AssignCandidate> Nearest(IEnumerable<AssignCandidate> xs) =>
             xs.OrderBy(x => !x.Available).ThenBy(x => x.DistanceKm ?? double.MaxValue).ThenBy(x => x.Crew.Name).ThenBy(x => x.Member?.Name);
 
-        var onDuty = crews.Where(c => c.Status == CrewStatus.Available).ToList();
         var technicians = onDuty.SelectMany(c => c.Members.Where(m => c.CanFix(type, m)).Select(m => Make(c, m)));
         var wholeCrews = onDuty.Where(c => c.CanFix(type)).Select(c => Make(c, null));
         return [.. Nearest(technicians), .. Nearest(wholeCrews)];
