@@ -8,7 +8,7 @@ import { OpsMap, pickable, type DepotPin, type TruckPin } from './OpsMap';
 import type { ToastMessage } from './Toast';
 import { SeverityBadge } from './SeverityBadge';
 import { SeverityFilter, useSeverityFilter } from './SeverityFilter';
-import { SidePanel } from './SidePanel';
+import { PanelStack, SidePanel } from './SidePanel';
 import { useSession } from '../session';
 import { SignalBars } from './SignalBars';
 
@@ -214,82 +214,89 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue, onToa
         </div>
       </div>
 
-      <aside className="ops-side">
-        <SidePanel id="active" title="Active missions" count={active.length}>
-          {active.length === 0 && <p className="muted small">No drones in the air. Plan a mission and start the simulator.</p>}
-          {active.map((m) => <MissionCard key={m.mission.id} m={m} selected={focus?.mission.id === m.mission.id} onSelect={() => setFocusId(m.mission.id)} />)}
-        </SidePanel>
-
-        <SidePanel id="recent" title="Recently completed" count={recent.length}>
-          {recent.length === 0 && <p className="muted small">No finished missions yet.</p>}
-          {recent.map((m) => <MissionCard key={m.mission.id} m={m} selected={focus?.mission.id === m.mission.id} onSelect={() => setFocusId(m.mission.id)} />)}
-        </SidePanel>
-
-        <SidePanel id="field" title="In the field" count={people.length}>
-          {people.length === 0 && <p className="muted small">No crews out. Assign a work order to send the nearest qualified technician.</p>}
-          {people.map(({ who, now: tr, next }) => (
-            <button key={who} className="finding-row field-row" onClick={() => onOpenFinding(tr.findingId)} title="Open the work order">
-              <span className={`field-dot field-${tr.phase.toLowerCase()}`} aria-hidden="true" />
-              <span className="grow">
-                {tr.label}
-                <span className="muted small"> · {tr.structureLabel}</span>
-                <span className="muted small field-status">{tr.status}</span>
-                {next.length > 0 && <span className="muted small field-status">Then {next.map((n) => n.structureLabel).join(', ')}</span>}
-              </span>
-            </button>
-          ))}
-          {out.length > 0 && <p className="muted small field-note">Simulated and sped up: a real truck roll takes hours.</p>}
-        </SidePanel>
-
-        <SidePanel id="shifts" title="Crew shifts" count={shiftBoard.working.length + shiftBoard.resting.length}>
-          {shiftBoard.working.length + shiftBoard.resting.length === 0 && (
-            <p className="muted small">Everyone is fresh. Each technician works up to {SHIFT_HOURS} h of driving and repairs, then rests {REST_HOURS} h.</p>
-          )}
-          {shiftBoard.working.map((s) => (
-            <div key={`${s.crewName}/${s.member}`} className="shift-row">
-              <span className="grow">{s.member}<span className="muted small"> · {s.crewName}</span></span>
-              <ShiftMeter shift={s} now={fieldNow} />
-            </div>
-          ))}
-          {shiftBoard.resting.map((s) => (
-            <div key={`${s.crewName}/${s.member}`} className="shift-row muted">
-              <span className="grow">{s.member}<span className="small"> · {s.crewName}</span></span>
-              <ShiftMeter shift={s} now={fieldNow} />
-            </div>
-          ))}
-          {shiftBoard.working.length + shiftBoard.resting.length > 0 && (
-            <p className="muted small field-note">{shiftBoard.fresh} more fresh and ready. Shifts are {SHIFT_HOURS} h of driving and repairs, then {REST_HOURS} h off (sped up: 1 s = 1 min).</p>
-          )}
-        </SidePanel>
-
-        <SidePanel id="alerts" title="Flight alerts" count={open.length}>
-          <FlightAlerts open={open} acknowledged={acknowledged} onOpenMission={onOpenMission} />
-        </SidePanel>
-
-        <SidePanel id="triage" title="Needs triage" count={untriaged.length}>
-          {untriaged.length === 0 && <p className="muted small">{visible.length < allOpen.length ? 'Nothing waiting for triage at the selected severities.' : 'Nothing waiting for triage.'}</p>}
-          {urgent.map((f) => (
-            <div key={f.finding.id} className="triage-row">
-              <button className="finding-row" onClick={() => onOpenFinding(f.finding.id)} title="Open the finding">
-                <SeverityBadge severity={f.finding.severity} />
-                <span className="grow">
-                  {FINDING_TYPE_LABEL[f.finding.type]}
-                  <span className="muted small"> · {f.finding.structureLabel}</span>
-                </span>
-                {f.overdue && <span className="pill pill-danger">overdue</span>}
-              </button>
-              <button className="btn btn-ghost btn-xs" onClick={() => onOpenMission(f.finding.missionId)} title="Open the flight that found it">
-                Flight →
-              </button>
-            </div>
-          ))}
-          {untriaged.length > urgent.length && (
-            <button className="link-button" onClick={onOpenTriageQueue}>
-              View all {untriaged.length} in Findings →
-            </button>
-          )}
-        </SidePanel>
-      </aside>
+      <PanelStack storageKey="gs.ops.panelOrder" className="ops-side" panels={[
+          { id: 'active', node: (
+            <SidePanel id="active" title="Active missions" count={active.length}>
+              {active.length === 0 && <p className="muted small">No drones in the air. Plan a mission and start the simulator.</p>}
+              {active.map((m) => <MissionCard key={m.mission.id} m={m} selected={focus?.mission.id === m.mission.id} onSelect={() => setFocusId(m.mission.id)} />)}
+            </SidePanel>
+          ) },
+          { id: 'recent', node: (
+            <SidePanel id="recent" title="Recently completed" count={recent.length}>
+              {recent.length === 0 && <p className="muted small">No finished missions yet.</p>}
+              {recent.map((m) => <MissionCard key={m.mission.id} m={m} selected={focus?.mission.id === m.mission.id} onSelect={() => setFocusId(m.mission.id)} />)}
+            </SidePanel>
+          ) },
+          { id: 'field', node: (
+            <SidePanel id="field" title="In the field" count={people.length}>
+              {people.length === 0 && <p className="muted small">No crews out. Assign a work order to send the nearest qualified technician.</p>}
+              {people.map(({ who, now: tr, next }) => (
+                <button key={who} className="finding-row field-row" onClick={() => onOpenFinding(tr.findingId)} title="Open the work order">
+                  <span className={`field-dot field-${tr.phase.toLowerCase()}`} aria-hidden="true" />
+                  <span className="grow">
+                    {tr.label}
+                    <span className="muted small"> · {tr.structureLabel}</span>
+                    <span className="muted small field-status">{tr.status}</span>
+                    {next.length > 0 && <span className="muted small field-status">Then {next.map((n) => n.structureLabel).join(', ')}</span>}
+                  </span>
+                </button>
+              ))}
+              {out.length > 0 && <p className="muted small field-note">Simulated and sped up: a real truck roll takes hours.</p>}
+            </SidePanel>
+          ) },
+          { id: 'shifts', node: (
+            <SidePanel id="shifts" title="Crew shifts" count={shiftBoard.working.length + shiftBoard.resting.length}>
+              {shiftBoard.working.length + shiftBoard.resting.length === 0 && (
+                <p className="muted small">Everyone is fresh. Each technician works up to {SHIFT_HOURS} h of driving and repairs, then rests {REST_HOURS} h.</p>
+              )}
+              {shiftBoard.working.map((s) => (
+                <div key={`${s.crewName}/${s.member}`} className="shift-row">
+                  <span className="grow">{s.member}<span className="muted small"> · {s.crewName}</span></span>
+                  <ShiftMeter shift={s} now={fieldNow} />
+                </div>
+              ))}
+              {shiftBoard.resting.map((s) => (
+                <div key={`${s.crewName}/${s.member}`} className="shift-row muted">
+                  <span className="grow">{s.member}<span className="small"> · {s.crewName}</span></span>
+                  <ShiftMeter shift={s} now={fieldNow} />
+                </div>
+              ))}
+              {shiftBoard.working.length + shiftBoard.resting.length > 0 && (
+                <p className="muted small field-note">{shiftBoard.fresh} more fresh and ready. Shifts are {SHIFT_HOURS} h of driving and repairs, then {REST_HOURS} h off (sped up: 1 s = 1 min).</p>
+              )}
+            </SidePanel>
+          ) },
+          { id: 'alerts', node: (
+            <SidePanel id="alerts" title="Flight alerts" count={open.length}>
+              <FlightAlerts open={open} acknowledged={acknowledged} onOpenMission={onOpenMission} />
+            </SidePanel>
+          ) },
+          { id: 'triage', node: (
+            <SidePanel id="triage" title="Needs triage" count={untriaged.length}>
+              {untriaged.length === 0 && <p className="muted small">{visible.length < allOpen.length ? 'Nothing waiting for triage at the selected severities.' : 'Nothing waiting for triage.'}</p>}
+              {urgent.map((f) => (
+                <div key={f.finding.id} className="triage-row">
+                  <button className="finding-row" onClick={() => onOpenFinding(f.finding.id)} title="Open the finding">
+                    <SeverityBadge severity={f.finding.severity} />
+                    <span className="grow">
+                      {FINDING_TYPE_LABEL[f.finding.type]}
+                      <span className="muted small"> · {f.finding.structureLabel}</span>
+                    </span>
+                    {f.overdue && <span className="pill pill-danger">overdue</span>}
+                  </button>
+                  <button className="btn btn-ghost btn-xs" onClick={() => onOpenMission(f.finding.missionId)} title="Open the flight that found it">
+                    Flight →
+                  </button>
+                </div>
+              ))}
+              {untriaged.length > urgent.length && (
+                <button className="link-button" onClick={onOpenTriageQueue}>
+                  View all {untriaged.length} in Findings →
+                </button>
+              )}
+            </SidePanel>
+          ) },
+      ]} />
     </div>
   );
 }

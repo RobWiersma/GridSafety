@@ -97,6 +97,17 @@ button { font: inherit; color: inherit; }
 
 /* Stats */
 .stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+/* Top bar: stats grouped into Drones, Field crews and Findings & triage cards. */
+.stats-grouped { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 3fr); }
+.stat-group { display: grid; grid-template-rows: auto 1fr; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.stat-group-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stat-group-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stat-group-title { grid-column: 1 / -1; margin: 0; padding: 9px 14px 0; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.stat-group .stat { background: none; border: 0; border-left: 1px solid var(--border); border-radius: 0; box-shadow: none; padding: 4px 14px 11px; margin-top: 6px; min-width: 0; font: inherit; color: inherit; }
+.stat-group .stat-group-title + .stat { border-left: 0; }
+.stat-group .stat-button:hover { background: var(--surface-2); }
+.stat-group .stat-alert { background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+.stat-group .stat-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 14px; box-shadow: var(--shadow); text-align: left; }
 .stat-button { cursor: pointer; transition: border-color .15s; }
 .stat-button:hover { border-color: var(--accent); }
@@ -225,6 +236,7 @@ button { font: inherit; color: inherit; }
   .ops { grid-template-columns: 1fr; height: auto; }
   .map-wrap { height: 60vh; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats-grouped { grid-template-columns: 1fr; }
   .topbar { flex-wrap: wrap; gap: 8px 16px; padding: 10px 16px; }
   .content { padding: 12px 16px 24px; }
   .user-name { display: none; }
@@ -281,7 +293,19 @@ button { font: inherit; color: inherit; }
 
 /* Collapsible sidebar cards */
 .side-panel { flex: none; }
-.side-panel-toggle { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; padding: 2px 0; margin: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.side-panel-head { display: flex; align-items: center; gap: 2px; }
+.side-panel-handle { flex: none; display: grid; place-items: center; width: 22px; height: 24px; margin-left: -6px; padding: 0; background: none; border: 0; border-radius: 4px;
+  color: var(--muted); font-size: 14px; line-height: 1; cursor: grab; touch-action: none; opacity: .55; transition: opacity .15s, background .15s; }
+.side-panel:hover .side-panel-handle, .side-panel-handle:focus-visible { opacity: 1; }
+.side-panel-handle:hover { background: var(--surface-2); }
+.side-panel-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.side-panel-dragging { position: relative; z-index: 5; opacity: .92; box-shadow: 0 12px 28px rgb(0 0 0 / 28%); }
+.side-panel-dragging .side-panel-handle, .panel-stack-dragging { cursor: grabbing; user-select: none; }
+.side-panel-drop-before { box-shadow: 0 -8px 0 -5px var(--accent), var(--shadow); }
+.panel-stack-end { flex: none; height: 0; margin-top: -12px; }
+.panel-stack-end.side-panel-drop-before { box-shadow: 0 -2px 0 1px var(--accent); }
+.panel-stack-reset { align-self: flex-start; font-size: 12px; }
+.side-panel-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; padding: 2px 0; margin: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
 .side-panel-toggle:hover h2 { color: var(--text); }
 .side-panel-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .side-panel-count { font-size: 11px; font-weight: 700; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; line-height: 18px; }
@@ -545,3 +569,10 @@ button { font: inherit; color: inherit; }
 .shift-status-resting { background: color-mix(in srgb, #94a3b8 25%, transparent); }
 .table-compact th, .table-compact td { padding: 5px 8px; font-size: 12.5px; }
 .member-link { font: inherit; font-weight: 600; }
+
+@media (max-width: 520px) {
+  .stat-group .stat { padding: 4px 10px 10px; }
+  .stat-group .stat-label { white-space: normal; font-size: 10.5px; }
+  .stat-group .stat-value { font-size: 22px; }
+  .stat-group .stat-sub { font-size: 11px; }
+}
