@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext } from 'react';
 import { useSession } from './session';
+import { canTake } from './lib/field';
 import type {
   AlertKind, AlertSettings, AlertSettingsView,
   AssigneeOption, Circuit, Crew, CrewView, FieldJobs, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint, SimulationSettings,
-} from './types';
+ DroneReport, PilotReport, TechnicianReport,} from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public fieldErrors?: Record<string, string[]>) {
@@ -322,6 +323,70 @@ export function useFindingStatus() {
     mutationFn: ({ id, status, note, assignee }: { id: string; status: FindingStatus; note?: string; assignee?: string }) =>
       api<FindingView>(`/findings/${id}/status`, { method: 'POST', body: JSON.stringify({ status, note, assignee }) }),
     onSuccess: invalidate,
+  });
+}
+
+export interface BulkResult {
+  done: { label: string; who?: string }[];
+  failed: { label: string; reason: string }[];
+}
+
+/**
+ * Triage or assign several findings, one after another. Each assignment goes to whoever is nearest, qualified and free
+ * at that moment, so nearby jobs line up behind one technician the way they would if assigned by hand.
+ */
+export function useBulkFindings() {
+  const api = useFetcher();
+  const invalidate = useInvalidate();
+  const post = (id: string, status: FindingStatus, assignee?: string) =>
+    api<FindingView>(`/findings/${id}/status`, { method: 'POST', body: JSON.stringify({ status, assignee }) });
+  const run = async (findings: FindingView[], one: (f: FindingView) => Promise<string | undefined>, onProgress?: (done: number) => void) => {
+    const result: BulkResult = { done: [], failed: [] };
+    try {
+      for (const [i, f] of findings.entries()) {
+        onProgress?.(i);
+        try {
+          result.done.push({ label: f.finding.structureLabel, who: await one(f) });
+        } catch (err) {
+          result.failed.push({ label: f.finding.structureLabel, reason: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    } finally {
+      await invalidate();
+    }
+    return result;
+  };
+  return {
+    triage: (findings: FindingView[], onProgress?: (done: number) => void) =>
+      run(findings.filter((f) => f.finding.status === 'New'), async (f) => { await post(f.finding.id, 'Triaged'); return undefined; }, onProgress),
+    /** Worst first, so the most urgent jobs get the nearest technicians; untriaged ones are triaged on the way. */
+    assignNearest: (findings: FindingView[], onProgress?: (done: number) => void) =>
+      run([...findings].sort((a, b) => b.finding.severity - a.finding.severity), async (f) => {
+        if (f.finding.status === 'New') await post(f.finding.id, 'Triaged');
+        const options = await api<AssigneeOption[]>(`/findings/${f.finding.id}/assignees`);
+        const pick = options.find(canTake);
+        if (!pick) throw new Error('nobody qualified is free (out, resting or out of hours)');
+        await post(f.finding.id, 'Assigned', pick.label);
+        return pick.member ?? pick.crewName;
+      }, onProgress),
+  };
+}
+
+/** Whose report to show: a drone's or pilot's flight log, or a technician's shifts. */
+export type ReportTarget =
+  | { kind: 'drone'; id: string }
+  | { kind: 'pilot'; crewId: string; member: string }
+  | { kind: 'technician'; crewId: string; member: string };
+
+export function useReport(target: ReportTarget) {
+  const api = useFetcher();
+  const e = encodeURIComponent;
+  const path = target.kind === 'drone' ? `/resources/drones/${e(target.id)}/report`
+    : `/resources/${target.kind === 'pilot' ? 'flight-crews' : 'ground-crews'}/${e(target.crewId)}/members/${e(target.member)}/report`;
+  return useQuery({
+    queryKey: ['report', path],
+    queryFn: () => api<TechnicianReport | DroneReport | PilotReport>(path),
+    refetchInterval: 10_000,
   });
 }
 

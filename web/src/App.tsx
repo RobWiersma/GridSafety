@@ -108,7 +108,7 @@ export function App() {
         )}
         <StatsBar onOpenFindings={() => go('findings')} />
         {tab === 'ops' && (
-          <OpsView onOpenFinding={setFindingId} onOpenMission={openMission}
+          <OpsView onOpenFinding={setFindingId} onToast={setToast} onOpenMission={openMission}
             onOpenTriageQueue={() => { setFindingsFilter('New'); go('findings'); window.scrollTo(0, 0); }} />
         )}
         {tab === 'findings' && (

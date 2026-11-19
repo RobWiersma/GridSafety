@@ -36,11 +36,15 @@ public sealed record Depot(string Id, string Name, GeoPoint Location);
 /// <remarks>
 /// <see cref="After"/> is set when they're already out nearby and would come here after their last job lined up; the
 /// distance is then from that job. <see cref="BusyUntil"/> is set when they're out elsewhere and can't take this one.
+/// <see cref="Shift"/> (when hours are tracked) says how much of their shift is left; <see cref="JobTime"/> is roughly how
+/// much of it this job would take. Someone resting, or without enough hours left for the job, can't take it.
 /// </remarks>
 public sealed record AssignCandidate(Crew Crew, CrewMember? Member, Depot? Depot, double? DistanceKm, DateTimeOffset? BusyUntil = null,
-    FieldDispatch? After = null)
+    FieldDispatch? After = null, ShiftState? Shift = null, TimeSpan? JobTime = null)
 {
-    public bool Available => BusyUntil is null;
+    public bool Resting => Shift?.RestingUntil is not null;
+    public bool OutOfHours => !Resting && Shift is { } s && JobTime is { } job && job > s.Left;
+    public bool Available => BusyUntil is null && !Resting && !OutOfHours;
 
     public string Label => new CrewAssignee(Crew, Member).Label;
 }
@@ -122,7 +126,7 @@ public static class CrewRoster
     /// measured from their last job; otherwise they're listed after everyone available, marked busy.
     /// </summary>
     public static IReadOnlyList<AssignCandidate> Candidates(IReadOnlyList<Crew> crews, IReadOnlyList<Depot> depots, FindingType type, GeoPoint site,
-        IReadOnlyList<FieldDispatch>? active = null)
+        IReadOnlyList<FieldDispatch>? active = null, FieldHours? hours = null)
     {
         AssignCandidate Make(Crew c, CrewMember? m)
         {
@@ -131,7 +135,9 @@ public static class CrewRoster
             var busy = active is null ? null : FieldWork.BusyUntil(active, c.Id, m?.Name);
             var after = busy is not null && FieldWork.CanChain(active!, label, site) ? FieldWork.Tail(active!, label) : null;
             GeoPoint? start = after?.Site ?? depot?.Location;
-            return new(c, m, depot, start is { } p ? Math.Round(Geo.DistanceMeters(p, site) / 1000, 1) : null, after is null ? busy : null, after);
+            var shift = hours?.Of(c, m);
+            var job = hours is not null && start is { } from && depot is not null ? Shifts.Estimate(from, site, depot.Location, hours.Severity, after) : (TimeSpan?)null;
+            return new(c, m, depot, start is { } p ? Math.Round(Geo.DistanceMeters(p, site) / 1000, 1) : null, after is null ? busy : null, after, shift, job);
         }
         static IEnumerable<AssignCandidate> Nearest(IEnumerable<AssignCandidate> xs) =>
             xs.OrderBy(x => !x.Available).ThenBy(x => x.DistanceKm ?? double.MaxValue).ThenBy(x => x.Crew.Name).ThenBy(x => x.Member?.Name);

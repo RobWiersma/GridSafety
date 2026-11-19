@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useContext, useEffect, useState } from 'react';
 import { FetcherContext, useAssignees, useFindingAerial, useFindingImage, useFindingStatus } from '../api';
-import { countdown, dispatchName, phaseAt, statusText } from '../lib/field';
+import { SHIFT_HOURS, canTake, countdown, dispatchName, phaseAt, statusText } from '../lib/field';
 import { ACTION_LABEL, FINDING_TYPE_LABEL, relativeTime, slaText } from '../lib/format';
 import type { AssigneeOption, FindingStatus, FindingView } from '../types';
 import { PhotoZoom } from './PhotoZoom';
@@ -35,14 +35,19 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
   const [assignee, setAssignee] = useState('');
 
   // Start the picker on the nearest qualified technician; drop a pick that is no longer on the list.
-  const nearest = options.data?.find((o) => !o.busyUntil)?.label;
+  const nearest = options.data?.find(canTake)?.label;
   useEffect(() => {
     if (!options.data) return;
-    setAssignee((a) => (a && options.data.some((o) => o.label === a && !o.busyUntil) ? a : nearest ?? ''));
+    setAssignee((a) => (a && options.data.some((o) => o.label === a && canTake(o)) ? a : nearest ?? ''));
   }, [options.data, nearest]);
-  const technicians = options.data?.filter((o) => o.member && !o.busyUntil) ?? [];
-  const wholeCrews = options.data?.filter((o) => !o.member && !o.busyUntil) ?? [];
-  const busy = options.data?.filter((o) => o.busyUntil) ?? [];
+  const technicians = options.data?.filter((o) => o.member && canTake(o)) ?? [];
+  const wholeCrews = options.data?.filter((o) => !o.member && canTake(o)) ?? [];
+  const busy = options.data?.filter((o) => !canTake(o)) ?? [];
+  const hoursFor = (o: AssigneeOption) => (o.hoursLeft != null ? ` · ${o.hoursLeft} h left` : '');
+  const whyNot = (o: AssigneeOption) =>
+    o.busyUntil ? `out elsewhere, free in ${countdown(Date.parse(o.busyUntil), now)}`
+    : o.restingUntil ? `resting after a full shift, back in ${countdown(Date.parse(o.restingUntil), now)}`
+    : `needs ~${o.jobHours} h, ${o.hoursLeft} h left`;
   const afterFor = (o: AssigneeOption) => (o.afterJob ? ` · after ${o.afterJob}` : '');
   const [now, setNow] = useState(() => Date.now());
   const dispatch = data?.finding.dispatch;
@@ -61,7 +66,7 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
 
   const act = (status: FindingStatus) => {
     if (status === 'Assigned' && !assignee.trim()) {
-      onToast({ kind: 'error', text: !nearest ? 'Nobody qualified is free right now. Check Resources, or wait for a crew to get back.' : 'Pick a technician or crew to assign.' });
+      onToast({ kind: 'error', text: !nearest ? 'Nobody qualified is free right now (out, resting or out of hours). Check Resources, or wait for a crew to get back.' : 'Pick a technician or crew to assign.' });
       return;
     }
     change.mutate(
@@ -186,16 +191,16 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
                   {data.nextStatuses.includes('Assigned') && (
                     <label className="assign-field">
                       <span className="muted small">
-                        Assign to · only on-duty people qualified for {FINDING_TYPE_LABEL[f.type].toLowerCase()}, nearest depot first
+                        Assign to · only on-duty people qualified for {FINDING_TYPE_LABEL[f.type].toLowerCase()} with hours left in their {SHIFT_HOURS} h shift, nearest first
                       </span>
                       <select className="input" value={assignee} onChange={(e) => setAssignee(e.target.value)} disabled={!options.data?.length}>
                         {options.isPending && <option value="">Finding qualified technicians…</option>}
-                        {options.data && !nearest && <option value="">{busy.length ? 'Everyone qualified is out on a job' : 'Nobody on duty is qualified for this'}</option>}
+                        {options.data && !nearest && <option value="">{busy.length ? 'Everyone qualified is out, resting or out of hours' : 'Nobody on duty is qualified for this'}</option>}
                         {technicians.length > 0 && (
                           <optgroup label="Technicians, nearest first">
                             {technicians.map((o, i) => (
                               <option key={o.label} value={o.label}>
-                                {o.member} · {distance(o)}{afterFor(o)} · {o.role}, {o.crewName}{i === 0 ? ' ★ nearest' : ''}
+                                {o.member} · {distance(o)}{afterFor(o)}{hoursFor(o)} · {o.role}, {o.crewName}{i === 0 ? ' ★ nearest' : ''}
                               </option>
                             ))}
                           </optgroup>
@@ -203,15 +208,15 @@ export function FindingDrawer({ id, isSupervisor, onClose, onToast }: Props) {
                         {wholeCrews.length > 0 && (
                           <optgroup label="Whole crews">
                             {wholeCrews.map((o) => (
-                              <option key={o.label} value={o.label}>{o.crewName} · {distance(o)}{afterFor(o)} · {o.crewOpenWorkOrders} open</option>
+                              <option key={o.label} value={o.label}>{o.crewName} · {distance(o)}{afterFor(o)}{hoursFor(o)} · {o.crewOpenWorkOrders} open</option>
                             ))}
                           </optgroup>
                         )}
                         {busy.length > 0 && (
-                          <optgroup label="Out on another job">
+                          <optgroup label="Not available">
                             {busy.map((o) => (
                               <option key={o.label} value={o.label} disabled>
-                                {o.member ?? `${o.crewName} (whole crew)`} · free in {countdown(Date.parse(o.busyUntil!), now)}
+                                {o.member ?? `${o.crewName} (whole crew)`} · {whyNot(o)}
                               </option>
                             ))}
                           </optgroup>

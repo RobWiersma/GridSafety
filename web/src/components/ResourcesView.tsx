@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { ApiError, useMe, useResources, useSaveResource, type ResourceKind } from '../api';
+import { ApiError, useMe, useResources, useSaveResource, type ReportTarget, type ResourceKind } from '../api';
+import { ReportDialog } from './ReportDialog';
 import { FINDING_TYPE_LABEL, miles, relativeTime } from '../lib/format';
 import { useSession } from '../session';
 import { involves } from '../lib/field';
-import { OutBadge } from './CrewsPanel';
+import { OutBadge, ShiftMeter } from './CrewsPanel';
 import type { Crew, CrewMember, CrewStatus, Depot, DroneAsset, DroneAssetStatus, FindingType, FlightCrew } from '../types';
 import type { ToastMessage } from './Toast';
 
@@ -37,6 +38,7 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
   const canEdit = !guest && Boolean(me.data?.isSupervisor);
   const [section, setSection] = useState<Section>(rememberedSection);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [report, setReport] = useState<ReportTarget | null>(null);
 
   const pick = (s: Section) => {
     setSection(s);
@@ -100,6 +102,7 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
                     <td>
                       <strong className="mono">{d.drone.id}</strong>
                       <div className="muted small">{d.drone.model}</div>
+                      <button className="link-button small" onClick={() => setReport({ kind: 'drone', id: d.drone.id })}>Flight log</button>
                       {d.drone.notes && <div className="muted small resource-note">{d.drone.notes}</div>}
                     </td>
                     <td>{d.drone.homeBase}</td>
@@ -140,6 +143,8 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
               status={crew.status}
               badge={activeMissions > 0 ? `${activeMissions} flying` : undefined}
               members={crew.members}
+              onMemberReport={(m) => setReport({ kind: 'pilot', crewId: crew.id, member: m.name })}
+              memberReportLabel="Flight log"
               footer={`${missions} mission${missions === 1 ? '' : 's'}${lastFlight ? ` · last ${relativeTime(lastFlight)}` : ''}`}
               onEdit={canEdit ? () => setEditing({ kind: 'flight-crews', record: crew }) : undefined}
               onRemove={canEdit ? () => remove('flight-crews', crew.id, crew.name) : undefined}
@@ -150,7 +155,7 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
 
       {data && section === 'ground-crews' && (
         <CardGrid empty="No ground crews yet.">
-          {data.groundCrews.map(({ crew, openWorkOrders, inField = [] }) => (
+          {data.groundCrews.map(({ crew, openWorkOrders, inField = [], shifts = [] }) => (
             <ResourceCard
               key={crew.id}
               title={crew.name}
@@ -159,9 +164,12 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
               badge={`${openWorkOrders} open`}
               badgeBusy={openWorkOrders > 0}
               members={crew.members}
+              onMemberReport={(m) => setReport({ kind: 'technician', crewId: crew.id, member: m.name })}
+              memberReportLabel="Shift report"
               memberDetail={(m) => (
                 <>
                   <OutBadge jobs={inField.filter((d) => involves(d, crew.id, m.name))} />
+                  {crew.status !== 'OffDuty' && <ShiftMeter shift={shifts.find((s) => s.member === m.name)} />}
                   {m.depotId && m.depotId !== crew.depotId && <span className="muted small"> · departs {depotName(m.depotId)}</span>}
                   <span className="skill-tags">
                     {(m.skills ?? crew.handles).map((t) => <span key={t} className="skill-tag">{FINDING_TYPE_LABEL[t]}</span>)}
@@ -214,6 +222,8 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
         )
       )}
 
+      {report && <ReportDialog key={JSON.stringify(report)} target={report} onClose={() => setReport(null)} />}
+
       {editing && (
         <ResourceDialog
           editing={editing}
@@ -237,7 +247,7 @@ function CardGrid({ empty, children }: { empty: string; children: ReactNode[] })
   return children.length === 0 ? <p className="empty-row muted">{empty}</p> : <div className="crew-grid resource-grid">{children}</div>;
 }
 
-function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memberDetail, footer, onEdit, onRemove }: {
+function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memberDetail, onMemberReport, memberReportLabel, footer, onEdit, onRemove }: {
   title: string;
   subtitle: string;
   status: CrewStatus;
@@ -245,6 +255,9 @@ function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memb
   badgeBusy?: boolean;
   members: CrewMember[];
   memberDetail?(m: CrewMember): ReactNode;
+  /** Makes each name open that person's report. */
+  onMemberReport?(m: CrewMember): void;
+  memberReportLabel?: string;
   footer: string;
   onEdit?(): void;
   onRemove?(): void;
@@ -265,7 +278,12 @@ function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memb
         {members.map((m) => (
           <li key={m.name}>
             <span className="crew-avatar" aria-hidden="true">{m.name.split(' ').map((p) => p[0]).join('').slice(0, 2)}</span>
-            <span>{m.name}<span className="muted small"> · {m.role}</span>{memberDetail?.(m)}</span>
+            <span>
+              {onMemberReport
+                ? <button className="link-button member-link" onClick={() => onMemberReport(m)} title={`${memberReportLabel ?? 'Report'} for ${m.name}`}>{m.name}</button>
+                : m.name}
+              <span className="muted small"> · {m.role}</span>{memberDetail?.(m)}
+            </span>
           </li>
         ))}
       </ul>

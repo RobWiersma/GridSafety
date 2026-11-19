@@ -159,7 +159,23 @@ public static class DemoFlight
 {
     /// <summary>The drone the console's "Demo flight" button uses.</summary>
     public const string DroneId = "DEMO-01";
+    /// <summary>Flies the demo when no remote pilot is on duty.</summary>
     public const string Pilot = "Demo autopilot";
+
+    /// <summary>
+    /// The remote pilot (PIC) to fly a demo: on an on-duty flight crew, not flying another mission right now, and the one
+    /// who has gone longest without flying, so the work rotates. Falls back to <see cref="Pilot"/> when nobody is free.
+    /// </summary>
+    public static string PickPilot(IEnumerable<FlightCrew> crews, IReadOnlyList<Mission> recent)
+    {
+        bool Flies(Mission m, CrewMember p) => m.Pilot.StartsWith(p.Name, StringComparison.OrdinalIgnoreCase);
+        return crews.Where(c => c.Status == CrewStatus.Available)
+            .SelectMany(c => c.Pilots)
+            .Where(p => !recent.Any(m => !Mission.Workflow.IsTerminal(m.Status) && Flies(m, p)))
+            .OrderBy(p => recent.Where(m => Flies(m, p)).Max(m => (DateTimeOffset?)(m.StartedAt ?? m.CreatedAt)) ?? DateTimeOffset.MinValue)
+            .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault()?.Name ?? Pilot;
+    }
 
     /// <summary>A demo mission with no progress for this long is treated as abandoned (e.g. the flight crashed).</summary>
     public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(10);

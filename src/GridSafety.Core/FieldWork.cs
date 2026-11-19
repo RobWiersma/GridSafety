@@ -86,13 +86,16 @@ public static class FieldWork
     /// <summary>At most this many jobs lined up for one technician (the current one included).</summary>
     public const int MaxStops = 4;
 
-    /// <summary>Drive time, sped up: about 3 seconds per road km, 15 seconds to 3 minutes.</summary>
+    /// <summary>Drive time, sped up (a second stands for a minute, see <see cref="Shifts.DemoSpeed"/>): about 3 seconds per road km, 15 seconds to 3 minutes.</summary>
     public static TimeSpan TravelTime(double km) => TimeSpan.FromSeconds(Math.Clamp(15 + km * 3, 15, 180));
 
     /// <summary>Time on site, sped up: worse defects take longer.</summary>
     public static TimeSpan RepairTime(int severity) => TimeSpan.FromSeconds(40 + 15 * Math.Clamp(severity, 1, 5));
 
     public const string RepairedNote = "Repaired on site (simulated field crew).";
+
+    /// <summary>Every truck roll on record, finished ones included (for hours worked).</summary>
+    public static IReadOnlyList<FieldDispatch> History(IEnumerable<Finding> findings) => [.. findings.Select(f => f.Dispatch).OfType<FieldDispatch>()];
 
     /// <summary>Jobs that still tie someone up (driving, repairing, driving back, or lined up).</summary>
     public static IReadOnlyList<FieldDispatch> Active(IEnumerable<Finding> findings, DateTimeOffset now) =>

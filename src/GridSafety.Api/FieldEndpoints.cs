@@ -9,6 +9,10 @@ public sealed record FieldJobView(string FindingId, string StructureLabel, Findi
 /// <summary>Jobs still out or just back, with the server's clock so the map can animate trucks without drifting.</summary>
 public sealed record FieldJobsView(DateTimeOffset Now, IReadOnlyList<FieldJobView> Jobs);
 
+/// <summary>A technician's shift reports, newest first, with where their current shift stands.</summary>
+public sealed record MemberShiftReports(string CrewId, string CrewName, string Member, string Role, string? DepotName, MemberShift Current,
+    IReadOnlyList<ShiftReport> Shifts, DateTimeOffset Now);
+
 /// <summary>Simulated field work: trucks driving to defects, repairing them and driving back.</summary>
 public static partial class Endpoints
 {
@@ -16,6 +20,22 @@ public static partial class Endpoints
     private static readonly TimeSpan ShowBackFor = TimeSpan.FromSeconds(20);
 
     private static void MapFieldJobs(RouteGroupBuilder group) => group.MapGet("/field-jobs", ListFieldJobs);
+
+    /// <summary>Every shift a ground-crew technician has worked: hours, jobs, rests.</summary>
+    private static async Task<Results<Ok<MemberShiftReports>, NotFound>> GetShiftReports(
+        string crewId, string member, IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var catalog = await resources.GetAsync(ct);
+        if (catalog.GroundCrews.FirstOrDefault(c => c.Id == crewId) is not { } crew
+            || crew.Members.FirstOrDefault(m => string.Equals(m.Name, member, StringComparison.OrdinalIgnoreCase)) is not { } m)
+            return TypedResults.NotFound();
+        var findings = await ListSettledFindingsAsync(repo, now, ct);
+        var hours = new FieldHours(FieldWork.History(findings), now);
+        var current = MemberShifts(crew, hours).Single(s => s.Member == m.Name);
+        return TypedResults.Ok(new MemberShiftReports(crew.Id, crew.Name, m.Name, m.Role, catalog.FindDepot(crew.DepotOf(m))?.Name, current,
+            Shifts.Reports(findings, crew.Id, m.Name, now), now));
+    }
 
     private static async Task<Ok<FieldJobsView>> ListFieldJobs(IGridRepository repo, TimeProvider clock, CancellationToken ct)
     {

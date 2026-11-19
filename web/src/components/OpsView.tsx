@@ -1,19 +1,22 @@
-import { useMemo, useState } from 'react';
-import { useAcknowledgeAlerts, useCircuits, useDrones, useFieldJobs, useFindings, useMissions, useResources, useTrack } from '../api';
-import { dispatchName, phaseAt, positionAt, roadAhead, statusText, useServerClock } from '../lib/field';
+import { useEffect, useMemo, useState } from 'react';
+import { useAcknowledgeAlerts, useBulkFindings, type BulkResult, useCircuits, useDrones, useFieldJobs, useFindings, useMissions, useResources, useTrack } from '../api';
+import { REST_HOURS, SHIFT_HOURS, dispatchName, phaseAt, positionAt, roadAhead, statusText, useServerClock } from '../lib/field';
+import { ShiftMeter } from './CrewsPanel';
 import { FINDING_TYPE_LABEL, miles, pct, relativeTime } from '../lib/format';
 import type { DroneAlert, MissionView } from '../types';
-import { OpsMap, type DepotPin, type TruckPin } from './OpsMap';
+import { OpsMap, pickable, type DepotPin, type TruckPin } from './OpsMap';
+import type { ToastMessage } from './Toast';
 import { SeverityBadge } from './SeverityBadge';
 import { SeverityFilter, useSeverityFilter } from './SeverityFilter';
 import { SidePanel } from './SidePanel';
 import { useSession } from '../session';
 import { SignalBars } from './SignalBars';
 
-export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
+export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue, onToast }: {
   onOpenFinding(id: string): void;
   onOpenMission(id: string): void;
   onOpenTriageQueue(): void;
+  onToast(t: ToastMessage): void;
 }) {
   const circuits = useCircuits();
   const drones = useDrones();
@@ -82,6 +85,17 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
     return { who, now: jobs.find((tr) => tr.phase !== 'Queued') ?? jobs[0], next: jobs.filter((tr) => tr.phase === 'Queued') };
   });
 
+  // Hours of service: who's working a shift, who's resting before their next one.
+  const shiftBoard = useMemo(() => {
+    const rows = (resources.data?.groundCrews ?? []).filter(({ crew }) => crew.status !== 'OffDuty')
+      .flatMap(({ crew, shifts = [] }) => shifts.map((s) => ({ ...s, crewName: crew.name })));
+    return {
+      resting: rows.filter((s) => s.restingUntil).sort((a, b) => a.restingUntil!.localeCompare(b.restingUntil!)),
+      working: rows.filter((s) => !s.restingUntil && s.bookedHours > 0).sort((a, b) => b.bookedHours - a.bookedHours),
+      fresh: rows.filter((s) => !s.restingUntil && s.bookedHours === 0).length,
+    };
+  }, [resources.data]);
+
   // The severity chips filter both the map and the triage panel, so the two always agree.
   const severity = useSeverityFilter();
   const allOpen = findings.data ?? [];
@@ -96,6 +110,49 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
   const untriaged = visible.filter((f) => f.finding.status === 'New');
   const urgent = untriaged.slice(0, 5);
 
+  // Picking several findings on the map to triage or assign together (signed-in users only).
+  const session = useSession();
+  const [selectMode, setSelectMode] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const selected = visible.filter((f) => picked.has(f.finding.id) && pickable(f));
+  const selectedIds = useMemo(() => new Set(selected.map((f) => f.finding.id)), [selected.map((f) => f.finding.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onSelect = (ids: string[], how: 'toggle' | 'add') =>
+    setPicked((cur) => {
+      const next = new Set([...cur].filter((id) => selectedIds.has(id)));
+      for (const id of ids) {
+        if (how === 'toggle' && next.has(id)) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  const clearSelection = () => { setPicked(new Set()); setSelectMode(false); };
+  useEffect(() => {
+    if (!selectMode && picked.size === 0) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && clearSelection();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectMode, picked.size]);
+  const bulk = useBulkFindings();
+  const [working, setWorking] = useState<string | null>(null);
+  const runBulk = async (verb: string, action: typeof bulk.triage, items = selected) => {
+    setWorking(`${verb} 1 of ${items.length}…`);
+    const report = (r: BulkResult) => {
+      const who = Object.entries(r.done.reduce<Record<string, number>>((acc, d) => (d.who ? { ...acc, [d.who]: (acc[d.who] ?? 0) + 1 } : acc), {}))
+        .map(([name, n]) => (n > 1 ? `${name} ×${n}` : name)).join(', ');
+      const ok = r.done.length ? `${verb === 'Assigning' ? 'Assigned' : 'Triaged'} ${r.done.length}${who ? `: ${who}` : ''}.` : '';
+      const bad = r.failed.map((x) => `${x.label}: ${x.reason}`).join('; ');
+      onToast({ kind: r.failed.length && !r.done.length ? 'error' : 'success', text: [ok, bad && `Not done: ${bad}`].filter(Boolean).join(' ') });
+    };
+    try {
+      const r = await action(items, (i) => setWorking(`${verb} ${i + 1} of ${items.length}…`));
+      report(r);
+      // Assigned ones drop out of the selection by themselves (no longer pickable); triaged ones stay, ready to assign.
+    } finally {
+      setWorking(null);
+    }
+  };
+  const newCount = selected.filter((f) => f.finding.status === 'New').length;
+
   return (
     <div className="ops">
       <div className="map-wrap">
@@ -109,7 +166,38 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
           track={track.data ?? []}
           focus={focus ? circuits.data?.find((c) => c.id === focus.mission.circuitId) : null}
           onOpenFinding={onOpenFinding}
+          selected={selectedIds}
+          selectMode={selectMode}
+          onSelect={session.guest ? undefined : onSelect}
         />
+        {!session.guest && (
+          <div className={`select-bar ${selected.length ? 'select-bar-open' : ''}`} role="toolbar" aria-label="Bulk actions on selected findings">
+            <button className={`btn btn-xs ${selectMode ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={selectMode}
+              onClick={() => setSelectMode((on) => !on)}
+              title="Select mode: click findings to pick them, or drag a box. Without it, Shift/Ctrl-click or Shift-drag.">
+              {selectMode ? 'Selecting' : 'Select'}
+            </button>
+            {selected.length > 0 && (
+              <>
+                <span className="small"><strong>{selected.length}</strong> selected</span>
+                {working ? <span className="muted small">{working}</span> : (
+                  <>
+                    <button className="btn btn-secondary btn-xs" disabled={!newCount} onClick={() => runBulk('Triaging', bulk.triage)}
+                      title={newCount ? 'Mark the untriaged ones as triaged' : 'All selected findings are already triaged'}>
+                      Triage{newCount ? ` ${newCount}` : ''}
+                    </button>
+                    <button className="btn btn-primary btn-xs" onClick={() => runBulk('Assigning', bulk.assignNearest)}
+                      title="Worst first, each to the nearest qualified technician who's free; nearby jobs line up behind one truck">
+                      Assign nearest
+                    </button>
+                  </>
+                )}
+                <button className="btn btn-ghost btn-xs" onClick={clearSelection} disabled={Boolean(working)}>Clear</button>
+              </>
+            )}
+            {selectMode && !selected.length && <span className="muted small">Click findings or drag a box</span>}
+          </div>
+        )}
         <SeverityFilter counts={sevCounts} shown={severity.shown} onToggle={severity.toggle} onOnly={severity.only} onAll={severity.all} />
         <div className="map-legend">
           <span><i style={{ background: '#14b8a6' }} />60 kV &amp; below</span>
@@ -151,6 +239,27 @@ export function OpsView({ onOpenFinding, onOpenMission, onOpenTriageQueue }: {
             </button>
           ))}
           {out.length > 0 && <p className="muted small field-note">Simulated and sped up: a real truck roll takes hours.</p>}
+        </SidePanel>
+
+        <SidePanel id="shifts" title="Crew shifts" count={shiftBoard.working.length + shiftBoard.resting.length}>
+          {shiftBoard.working.length + shiftBoard.resting.length === 0 && (
+            <p className="muted small">Everyone is fresh. Each technician works up to {SHIFT_HOURS} h of driving and repairs, then rests {REST_HOURS} h.</p>
+          )}
+          {shiftBoard.working.map((s) => (
+            <div key={`${s.crewName}/${s.member}`} className="shift-row">
+              <span className="grow">{s.member}<span className="muted small"> · {s.crewName}</span></span>
+              <ShiftMeter shift={s} now={fieldNow} />
+            </div>
+          ))}
+          {shiftBoard.resting.map((s) => (
+            <div key={`${s.crewName}/${s.member}`} className="shift-row muted">
+              <span className="grow">{s.member}<span className="small"> · {s.crewName}</span></span>
+              <ShiftMeter shift={s} now={fieldNow} />
+            </div>
+          ))}
+          {shiftBoard.working.length + shiftBoard.resting.length > 0 && (
+            <p className="muted small field-note">{shiftBoard.fresh} more fresh and ready. Shifts are {SHIFT_HOURS} h of driving and repairs, then {REST_HOURS} h off (sped up: 1 s = 1 min).</p>
+          )}
         </SidePanel>
 
         <SidePanel id="alerts" title="Flight alerts" count={open.length}>

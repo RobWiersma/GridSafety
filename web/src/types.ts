@@ -212,6 +212,11 @@ export interface AssigneeOption {
   busyUntil?: string;
   /** Already out nearby: would come here after this job (structure label); distance is from there. */
   afterJob?: string;
+  /** Simulated hours of their shift still free, and roughly how many this job would take. */
+  hoursLeft?: number;
+  jobHours?: number;
+  /** Off, resting after a full shift, until then. */
+  restingUntil?: string;
 }
 
 export type CrewStatus = 'Available' | 'OffDuty';
@@ -275,6 +280,21 @@ export interface CrewView {
   openWorkOrders: number;
   /** Jobs this crew's people are out on right now. */
   inField?: FieldDispatch[];
+  /** Each member's hours this shift. */
+  shifts?: MemberShift[];
+}
+
+/** One technician's shift, in simulated hours (a shift is SHIFT_HOURS of driving and repairs). */
+export interface MemberShift {
+  member: string;
+  /** Up to now. */
+  workedHours: number;
+  /** Including the jobs already lined up. */
+  bookedHours: number;
+  leftHours: number;
+  startedAt?: string;
+  /** Off, resting after a full shift, until then. */
+  restingUntil?: string;
 }
 
 export interface DroneState {
@@ -356,3 +376,92 @@ export interface AlertSettingsView {
   emailEnabled: boolean;
   warning?: string;
 }
+
+// ---- Reports: technicians' shifts, drones' and pilots' flight logs ----
+
+export type ShiftStatus = 'Working' | 'OnCall' | 'Resting' | 'Done';
+export type JobOutcome = 'Repaired' | 'CalledBack' | 'InProgress' | 'LinedUp';
+
+/** One job in a shift; hours are simulated. */
+export interface ShiftJob {
+  findingId: string;
+  structureLabel: string;
+  type: FindingType;
+  severity: number;
+  assignee: string;
+  fromLabel: string;
+  departedAt: string;
+  arrivesAt: string;
+  endsAt: string;
+  driveHours: number;
+  repairHours: number;
+  outcome: JobOutcome;
+  nextSiteLabel?: string;
+  onRoads: boolean;
+}
+
+export interface ShiftReport {
+  startedAt: string;
+  endsAt: string;
+  status: ShiftStatus;
+  workedHours: number;
+  bookedHours: number;
+  driveHours: number;
+  repairHours: number;
+  repaired: number;
+  /** The break before their next shift, once there is one. */
+  restHours?: number;
+  limitHours: number;
+  jobs: ShiftJob[];
+}
+
+export interface TechnicianReport {
+  crewId: string;
+  crewName: string;
+  member: string;
+  role: string;
+  depotName?: string;
+  current: MemberShift;
+  shifts: ShiftReport[];
+  now: string;
+}
+
+export interface FlightLogEntry {
+  missionId: string;
+  name?: string;
+  circuitId: string;
+  circuitName: string;
+  droneId: string;
+  pilot: string;
+  status: MissionStatus;
+  plannedAt: string;
+  startedAt?: string;
+  endedAt?: string;
+  flightMinutes: number;
+  distanceMeters: number;
+  coverage: number;
+  structuresInspected: number;
+  findings: number;
+  alerts: number;
+  criticalAlerts: number;
+  endBatteryPct?: number;
+}
+
+export interface FlightReport {
+  totals: {
+    missions: number;
+    completed: number;
+    aborted: number;
+    flightHours: number;
+    distanceMeters: number;
+    structuresInspected: number;
+    findings: number;
+    alertsByKind: Partial<Record<AlertKind, number>>;
+    firstFlight?: string;
+    lastFlight?: string;
+  };
+  flights: FlightLogEntry[];
+}
+
+export interface DroneReport { drone: DroneAsset; report: FlightReport; now: string }
+export interface PilotReport { crewId: string; crewName: string; member: string; role: string; report: FlightReport; now: string }

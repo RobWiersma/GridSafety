@@ -82,6 +82,14 @@ export function phaseEndsAt(d: FieldDispatch, now: number): number {
   }
 }
 
+/** Hours of driving and repairs per shift, then a rest (mirrors Shifts on the server). */
+export const SHIFT_HOURS = 8;
+export const REST_HOURS = 10;
+
+/** Whether this option can take the job now: not out elsewhere, not resting, enough hours left. */
+export const canTake = (o: { busyUntil?: string; restingUntil?: string; hoursLeft?: number; jobHours?: number }) =>
+  !o.busyUntil && !o.restingUntil && !(o.hoursLeft != null && o.jobHours != null && o.jobHours > o.hoursLeft);
+
 export const PHASE_LABEL: Record<FieldPhase, string> = {
   Queued: 'Next up',
   EnRoute: 'Driving to site',

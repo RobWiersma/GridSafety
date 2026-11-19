@@ -1,7 +1,30 @@
 import { useCrews, useResources } from '../api';
-import type { FieldDispatch } from '../types';
-import { PHASE_LABEL, involves, phaseAt } from '../lib/field';
+import type { FieldDispatch, MemberShift } from '../types';
+import { PHASE_LABEL, SHIFT_HOURS, countdown, involves, phaseAt } from '../lib/field';
 import { FINDING_TYPE_LABEL } from '../lib/format';
+
+/** Hours worked this shift as a small bar (worked, then booked ahead), or the rest countdown when they're off. */
+export function ShiftMeter({ shift, now = Date.now() }: { shift?: MemberShift; now?: number }) {
+  if (!shift) return null;
+  if (shift.restingUntil) {
+    return (
+      <span className="shift-meter shift-resting" title={`Worked a full shift; resting until ${new Date(shift.restingUntil).toLocaleTimeString()}`}>
+        Resting · back in {countdown(Date.parse(shift.restingUntil), now)}
+      </span>
+    );
+  }
+  const pct = (h: number) => `${Math.min(100, (h / SHIFT_HOURS) * 100)}%`;
+  const tight = shift.leftHours < 2;
+  return (
+    <span className="shift-meter" title={`${shift.workedHours} h worked, ${shift.bookedHours} h booked of a ${SHIFT_HOURS} h shift`}>
+      <span className="shift-bar" aria-hidden="true">
+        <i className="shift-booked" style={{ width: pct(shift.bookedHours) }} />
+        <i className={`shift-worked ${tight ? 'shift-tight' : ''}`} style={{ width: pct(shift.workedHours) }} />
+      </span>
+      {shift.bookedHours === 0 ? `${SHIFT_HOURS} h free` : `${shift.workedHours} / ${SHIFT_HOURS} h`}
+    </span>
+  );
+}
 
 /** "Driving to site", "Repairing"… for someone out on a job; nothing when they're free. */
 export function OutBadge({ jobs }: { jobs: FieldDispatch[] }) {

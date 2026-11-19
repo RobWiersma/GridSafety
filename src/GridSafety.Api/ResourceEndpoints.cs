@@ -11,6 +11,12 @@ public sealed record DroneResourceView(
 /// <summary>A flight crew with the missions flown by its pilots.</summary>
 public sealed record FlightCrewView(FlightCrew Crew, int Missions, int ActiveMissions, DateTimeOffset? LastFlight);
 
+/// <summary>A drone's flight log: every mission it flew, newest first, with totals.</summary>
+public sealed record DroneReportView(DroneAsset Drone, FlightReport Report, DateTimeOffset Now);
+
+/// <summary>A remote pilot's flight log (missions where they were pilot in command).</summary>
+public sealed record PilotReportView(string CrewId, string CrewName, string Member, string Role, FlightReport Report, DateTimeOffset Now);
+
 public sealed record ResourcesView(IReadOnlyList<DroneResourceView> Drones, IReadOnlyList<FlightCrewView> FlightCrews, IReadOnlyList<CrewView> GroundCrews, IReadOnlyList<Depot> Depots);
 
 /// <summary>Drones, flight crews and ground crews. Everyone can see them; supervisors add, edit and remove them.</summary>
@@ -25,6 +31,32 @@ public static partial class Endpoints
         secured.MapDelete("/resources/flight-crews/{id}", DeleteFlightCrew);
         secured.MapPut("/resources/ground-crews/{id}", PutGroundCrew);
         secured.MapDelete("/resources/ground-crews/{id}", DeleteGroundCrew);
+
+        // Reports: a drone's and a pilot's flight log, a technician's shifts.
+        secured.MapGet("/resources/drones/{id}/report", GetDroneReport);
+        secured.MapGet("/resources/flight-crews/{crewId}/members/{member}/report", GetPilotReport);
+        secured.MapGet("/resources/ground-crews/{crewId}/members/{member}/report", GetShiftReports);
+    }
+
+    private static async Task<Results<Ok<DroneReportView>, NotFound>> GetDroneReport(
+        string id, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
+    {
+        var catalog = await resources.GetAsync(ct);
+        if (catalog.Drones.FirstOrDefault(d => d.Id.Equals(id, StringComparison.OrdinalIgnoreCase)) is not { } drone) return TypedResults.NotFound();
+        var missions = (await repo.ListMissionsAsync(1000, ct)).Where(m => m.DroneId.Equals(drone.Id, StringComparison.OrdinalIgnoreCase));
+        return TypedResults.Ok(new DroneReportView(drone, FlightReports.Of(missions, circuits.Find), clock.GetUtcNow()));
+    }
+
+    private static async Task<Results<Ok<PilotReportView>, NotFound>> GetPilotReport(
+        string crewId, string member, IGridRepository repo, IResourceStore resources, ICircuitCatalog circuits, TimeProvider clock, CancellationToken ct)
+    {
+        var catalog = await resources.GetAsync(ct);
+        if (catalog.FlightCrews.FirstOrDefault(c => c.Id == crewId) is not { } crew
+            || crew.Members.FirstOrDefault(m => string.Equals(m.Name, member, StringComparison.OrdinalIgnoreCase)) is not { } m)
+            return TypedResults.NotFound();
+        // Missions record the pilot in command only; visual observers get an empty log.
+        var missions = m.Role == FlightCrew.PilotRole ? (await repo.ListMissionsAsync(1000, ct)).Where(x => FlownBy(x, m)) : [];
+        return TypedResults.Ok(new PilotReportView(crew.Id, crew.Name, m.Name, m.Role, FlightReports.Of(missions, circuits.Find), clock.GetUtcNow()));
     }
 
     private static async Task<Ok<ResourcesView>> ListResources(IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct)
@@ -52,8 +84,10 @@ public static partial class Endpoints
 
         var findings = await ListSettledFindingsAsync(repo, now, ct);
         var open = OpenWorkOrders(findings, catalog.GroundCrews);
+        var hours = new FieldHours(FieldWork.History(findings), now);
         var active = FieldWork.Active(findings, now);
-        var groundCrews = catalog.GroundCrews.Select(c => new CrewView(c, open.GetValueOrDefault(c.Id), [.. active.Where(d => d.CrewId == c.Id)])).ToList();
+        var groundCrews = catalog.GroundCrews
+            .Select(c => new CrewView(c, open.GetValueOrDefault(c.Id), [.. active.Where(d => d.CrewId == c.Id)], MemberShifts(c, hours))).ToList();
         return TypedResults.Ok(new ResourcesView(drones, flightCrews, groundCrews, catalog.Depots));
     }
 

@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleMarker, MapContainer, Marker, Pane, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import { FINDING_TYPE_LABEL, TOWER_ZOOM, minKvForZoom, severityHex, voltageHex } from '../lib/format';
 import type { Circuit, Depot, DroneState, FieldDispatch, FieldPhase, FindingView, GeoPoint, TelemetryPoint } from '../types';
@@ -37,7 +37,15 @@ interface Props {
   /** Field crews out on jobs. */
   trucks?: TruckPin[];
   onOpenFinding(id: string): void;
+  /** Findings picked for a bulk action; omit onSelect to turn picking off (guests). */
+  selected?: ReadonlySet<string>;
+  /** Select mode: a click picks instead of opening, and dragging draws a box instead of panning (works without a keyboard). */
+  selectMode?: boolean;
+  onSelect?(ids: string[], how: 'toggle' | 'add'): void;
 }
+
+/** Only findings still waiting for triage or a crew can be picked for a bulk action. */
+export const pickable = (f: FindingView) => f.finding.status === 'New' || f.finding.status === 'Triaged';
 
 const truckIcon = (phase: FieldPhase) =>
   L.divIcon({
@@ -66,10 +74,17 @@ const droneIcon = (d: DroneState) =>
            </div>`,
   });
 
-export function OpsMap({ circuits, drones, findings, track, focus, flightNames = {}, depots = [], trucks = [], onOpenFinding }: Props) {
+export function OpsMap({ circuits, drones, findings, track, focus, flightNames = {}, depots = [], trucks = [], onOpenFinding,
+  selected, selectMode = false, onSelect }: Props) {
   // SVG, not the map's shared canvas: a canvas in its own pane would cover the whole map and swallow
-  // hover and clicks meant for the lines and parked drones underneath. There are only tens of findings.
+  // hover and clicks meant for everything underneath (findings, lines, parked drones). There are only tens of each.
   const findingsRenderer = useMemo(() => L.svg({ pane: 'findings' }), []);
+  const trucksRenderer = useMemo(() => L.svg({ pane: 'trucks' }), []);
+  const clickFinding = (f: FindingView, e: L.LeafletMouseEvent) => {
+    const k = e.originalEvent;
+    if (onSelect && pickable(f) && (selectMode || k.shiftKey || k.ctrlKey || k.metaKey)) onSelect([f.finding.id], 'toggle');
+    else onOpenFinding(f.finding.id);
+  };
   const bounds = useMemo(() => {
     const pts = (focus ? [focus] : circuits).flatMap((c) => c.structures.map((s) => [s.location.lat, s.location.lon] as [number, number]));
     return pts.length ? L.latLngBounds(pts) : null;
@@ -115,7 +130,7 @@ export function OpsMap({ circuits, drones, findings, track, focus, flightNames =
       {/* Field trucks: the route they're driving, and the truck itself, above depots and findings but under flying drones. */}
       <Pane name="trucks" style={{ zIndex: 597 }} />
       {trucks.filter((tr) => tr.ahead.length > 1).map((tr) => (
-        <Polyline key={`route-${tr.findingId}`} pane="trucks" positions={tr.ahead.map((p) => [p.lat, p.lon] as L.LatLngTuple)} interactive={false}
+        <Polyline key={`route-${tr.findingId}`} pane="trucks" renderer={trucksRenderer} positions={tr.ahead.map((p) => [p.lat, p.lon] as L.LatLngTuple)} interactive={false}
           pathOptions={{ color: tr.phase === 'Returning' ? '#94a3b8' : '#f5b224', weight: 3, dashArray: tr.dispatch.onRoads ? undefined : '2 6', opacity: 0.85 }} />
       ))}
       {trucks.filter((tr) => tr.phase !== 'Queued' && tr.phase !== 'MovedOn').map((tr) => (
@@ -128,18 +143,22 @@ export function OpsMap({ circuits, drones, findings, track, focus, flightNames =
       ))}
       <Pane name="parked-drones" style={{ zIndex: 590 }} />
       <Pane name="findings" style={{ zIndex: 595 }}>
-      {[...findings].sort((a, b) => a.finding.severity - b.finding.severity).map((f) => (
+      {[...findings].sort((a, b) => a.finding.severity - b.finding.severity).map((f) => {
+        const picked = selected?.has(f.finding.id) ?? false;
+        return (
         <CircleMarker key={f.finding.id} pane="findings" renderer={findingsRenderer} center={[f.finding.location.lat, f.finding.location.lon]}
           radius={6 + f.finding.severity * 1.5}
-          pathOptions={{ color: '#fff', weight: 2, fillColor: severityHex(f.finding.severity), fillOpacity: 0.9 }}
-          eventHandlers={{ click: () => onOpenFinding(f.finding.id) }}>
+          pathOptions={{ color: picked ? SELECTED : '#fff', weight: picked ? 4 : 2, fillColor: severityHex(f.finding.severity), fillOpacity: 0.9 }}
+          eventHandlers={{ click: (e) => clickFinding(f, e) }}>
           <Tooltip>
             <strong>Sev {f.finding.severity}</strong> · {FINDING_TYPE_LABEL[f.finding.type]}<br />
-            {f.finding.structureLabel} · {f.finding.status}
+            {f.finding.structureLabel} · {f.finding.status}{picked ? ' · selected' : ''}
           </Tooltip>
         </CircleMarker>
-      ))}
+        );
+      })}
       </Pane>
+      {onSelect && <BoxSelect findings={findings} always={selectMode} onSelect={onSelect} />}
 
       {drones.map((d) => (
         <Marker key={d.droneId} position={[d.position.lat, d.position.lon]} icon={droneIcon(d)}
@@ -200,6 +219,76 @@ function CircuitLayer({ circuits, focus }: { circuits: Circuit[]; focus?: Circui
         ))}
     </>
   );
+}
+
+const SELECTED = '#38bdf8';
+
+/**
+ * Shift-drag (or any drag in select mode, mouse or touch) draws a box and picks the open findings inside it, in place of
+ * Leaflet's shift-drag box zoom. Plain DOM pointer events on the container, caught before Leaflet's own drag handler;
+ * a press that barely moves stays a click.
+ */
+function BoxSelect({ findings, always, onSelect }: { findings: FindingView[]; always: boolean; onSelect(ids: string[], how: 'add'): void }) {
+  const map = useMap();
+  const latest = useRef({ findings, onSelect });
+  latest.current = { findings, onSelect };
+  useEffect(() => {
+    const el = map.getContainer();
+    map.boxZoom.disable();
+    if (always) map.dragging.disable();
+    el.classList.toggle('map-selecting', always);
+    let start: { x: number; y: number; id: number } | null = null;
+    let box: HTMLDivElement | null = null;
+    const at = (e: PointerEvent) => { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    const down = (e: PointerEvent) => {
+      if (start || e.button !== 0 || !(always || e.shiftKey) || (e.target as Element).closest('.leaflet-control')) return;
+      start = { ...at(e), id: e.pointerId };
+      map.dragging.disable();
+    };
+    const move = (e: PointerEvent) => {
+      if (!start || e.pointerId !== start.id) return;
+      const p = at(e);
+      if (!box) {
+        if (Math.hypot(p.x - start.x, p.y - start.y) < 6) return;
+        box = document.createElement('div');
+        box.className = 'select-box';
+        el.appendChild(box);
+        el.setPointerCapture(e.pointerId); // keep the box following outside the map; only once it's a drag, so clicks still land
+      }
+      Object.assign(box.style, {
+        left: `${Math.min(p.x, start.x)}px`, top: `${Math.min(p.y, start.y)}px`,
+        width: `${Math.abs(p.x - start.x)}px`, height: `${Math.abs(p.y - start.y)}px`,
+      });
+    };
+    const up = (e: PointerEvent) => {
+      if (!start || e.pointerId !== start.id) return;
+      if (box) {
+        const p = at(e);
+        const bounds = L.latLngBounds(map.containerPointToLatLng([start.x, start.y]), map.containerPointToLatLng([p.x, p.y]));
+        box.remove();
+        box = null;
+        const ids = latest.current.findings.filter((f) => pickable(f) && bounds.contains([f.finding.location.lat, f.finding.location.lon])).map((f) => f.finding.id);
+        if (ids.length) latest.current.onSelect(ids, 'add');
+      }
+      start = null;
+      if (!always) map.dragging.enable();
+    };
+    el.addEventListener('pointerdown', down, true);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    return () => {
+      el.removeEventListener('pointerdown', down, true);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+      box?.remove();
+      map.boxZoom.enable();
+      map.dragging.enable();
+      el.classList.remove('map-selecting');
+    };
+  }, [map, always]);
+  return null;
 }
 
 function FitBounds({ bounds }: { bounds: L.LatLngBounds }) {
