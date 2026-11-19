@@ -22,11 +22,11 @@
 
 </div>
 
-**Drone power-line inspection platform on AWS.** Drones fly distribution and transmission circuits, stream telemetry over MQTT, and report defects (vegetation encroachment, damaged insulators, thermal hotspots…). GridSafety turns that stream into a live ops map, safety alerts, a triage queue with SLA escalation, and an inspection report for every mission.
+**Drone power-line inspection platform on AWS: a proof of concept for a SaaS product** (see [Project scope](#project-scope-a-saas-proof-of-concept)). Drones fly distribution and transmission circuits, stream telemetry over MQTT, and report defects (vegetation encroachment, damaged insulators, thermal hotspots…). GridSafety turns that stream into a live ops map, safety alerts, a triage queue with SLA escalation, and an inspection report for every mission.
 
 Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · DynamoDB · EventBridge (+ Scheduler) · SQS · SNS · S3 · Cognito · CloudFront · AWS CDK (C#) · React 19 + TypeScript + Leaflet**.
 
-> **Real map data:** the transmission lines and towers are real, public [OpenStreetMap](https://www.openstreetmap.org/copyright) data for Contra Costa County, CA (181 lines from 12 to 500 kV, such as *Pittsburg - Martinez 115 kV* and *Table Mountain - Tesla 500 kV*), imported by `tools/GridSafety.CircuitImport`. Drones, missions and defects are simulated. No non-public utility data is used.
+> **Real map data:** the transmission lines and towers are real, public [OpenStreetMap](https://www.openstreetmap.org/copyright) data for Contra Costa, Alameda and Solano counties, CA (878 lines and about 19,700 towers from 12 to 500 kV, such as *Pittsburg - Martinez 115 kV* and *Table Mountain - Tesla 500 kV*), imported by `tools/GridSafety.CircuitImport`. Drones, missions and defects are simulated. No non-public utility data is used.
 
 ![Live ops map: a demo drone flying the Lakewood–Clayton 115 kV line with a corridor alert](docs/screenshots/ops-live.png)
 
@@ -49,6 +49,46 @@ Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · D
 </details>
 
 ---
+
+## Project scope: a SaaS proof of concept
+
+GridSafety is a **proof of concept for a software-as-a-service product**: one hosted platform that utilities and drone inspection contractors would subscribe to, instead of each building their own pipeline from drone to defect to repair. This repository is the first working slice. It runs as a single demo deployment with real public map data and simulated drones, defects and field crews, and it is built so the parts a paying customer would rely on (the event pipeline, the workflow rules, security and cost) are real rather than mocked.
+
+**Who it's for:** utility asset-inspection and vegetation-management teams, drone service providers who inspect lines for several utilities, and smaller co-ops and municipal utilities without their own engineering team.
+
+**The problem:** drone programs collect far more imagery than teams can review, and defects get lost between the inspection, the triage decision and the crew that fixes them. GridSafety covers that whole loop in one place: fly → detect → alert → triage on an SLA → dispatch the nearest qualified crew → repair → report.
+
+### What the proof of concept shows
+
+| Question a buyer would ask | What's here |
+|---|---|
+| Can it take live drone data at scale? | MQTT telemetry through AWS IoT Core into an event-driven, serverless pipeline, with per-device identity, idempotent processing and out-of-order tolerance |
+| Does it fit how operations actually work? | Flight-safety alerts, a triage queue with severity-based SLAs and escalation, work orders that go only to qualified, on-shift technicians nearest first, crew hours of service, and an audit trail on every decision |
+| Can managers see what happened? | Live ops map, KPIs, a mission overview and downloadable report per flight, flight logs per drone and pilot, shift reports per technician (CSV) |
+| Is it secure? | Cognito sign-in with role-based rights enforced by the API, a read-only guest view with names removed, least-privilege IAM per function, CI/CD through OIDC with no long-lived keys |
+| What does it cost to run? | Pay-per-use AWS services only: an idle deployment costs close to nothing, and a budget alert watches spend (default $5/month) |
+| Can it be operated? | Structured logs, business metrics, a CloudWatch dashboard, alarms on every failure path and dead-letter queue |
+
+### Real vs. simulated
+
+| Real | Simulated |
+|---|---|
+| Power lines and towers (public OpenStreetMap data, operator and owner tags removed) | Drones and their flights (the same pipeline a real drone would use) |
+| Aerial photos of each structure (USDA NAIP, public domain) | Defect detection and the drone captures (badged **SIMULATED**) |
+| Road routes for crew trucks (public OSRM routing) | Field crews, truck rolls and repairs (sped up: 1 s = 1 simulated minute) |
+| The AWS architecture, security, alerting and CI/CD | People: every pilot and technician is fictional |
+
+No non-public utility data is used anywhere in the project.
+
+### What a production SaaS would add (out of scope here)
+
+- **Multi-tenancy:** an organization per customer, with tenant-scoped data keys, sign-in, settings and storage, and per-tenant limits.
+- **Customer onboarding:** importing each customer's own line and asset data (GIS exports) in place of OpenStreetMap, and their crews, yards and drone fleet.
+- **Real drones and detection:** integration with drone vendors' fleet APIs, photo and video upload to S3, and a trained defect-detection model with a human review loop.
+- **Integrations:** pushing work orders to the customer's work-management or EAM system, and enterprise single sign-on (SAML/OIDC).
+- **Field app:** a mobile app for crews to accept jobs, navigate, record repairs and close work orders offline.
+- **Compliance:** security certification (for example SOC 2), handling of critical-infrastructure data rules, and record-keeping for FAA drone operations.
+- **Billing:** subscription plans and usage metering (for example by line miles inspected or by seat).
 
 ## What it does
 
@@ -157,7 +197,7 @@ It queries the Overpass API for `power=line|minor_line` and town names inside a 
 4. names circuits from the OSM `name`/`ref` tags (a voltage already in the name, like *500KV*, is normalized). Unnamed lines are named after the nearest town (*Vine Hill 60 kV line A*, id `VH-60-A`). It also sets the inspection corridor by voltage (60 / 75 / 100 m for 60 / 115 / 230+ kV);
 5. keeps the OSM way and node ids on every circuit and structure, so each tower traces back to its source.
 
-The current dataset has **181 circuits, about 1,019 km of line and 4,848 structures** (about 1.1 MB): 5 at 500 kV (the *Table Mountain*, *Olinda* and *Vaca Dixon - Tesla* backbone), 68 at 230 kV, 52 at 115 kV, 21 at 60/69 kV, 3 tagged 12 kV feeders, and 32 with no voltage tag. Use `--max <n>` to keep only the longest lines.
+The current dataset has **878 circuits, about 3,079 km of line and 19,681 structures** (about 4.5 MB): 21 at 500 kV, 170 at 230 kV, 135 at 115 kV, 52 at 60/69 kV, 7 tagged 12/21 kV feeders, and 493 with no voltage tag. Use `--max <n>` to keep only the longest lines.
 
 The operations map stays responsive at county scale by drawing on a canvas and filtering by zoom: zoomed out it shows only the 230/500 kV backbone, 115 kV appears from zoom 11, everything else from zoom 13, and tower dots from zoom 14. Only lines inside the view are drawn, and the circuit a drone is flying is always shown with its towers.
 
@@ -165,6 +205,12 @@ Public Overpass servers are often busy, so a snapshot of the response is committ
 
 ```bash
 dotnet run --project tools/GridSafety.CircuitImport -- --input tools/GridSafety.CircuitImport/data/contra-costa-overpass.json
+```
+
+The live dataset covers three counties (`--area` takes several, separated by commas). Their snapshot was fetched one county at a time and merged, since the public servers time out on the combined query:
+
+```bash
+dotnet run --project tools/GridSafety.CircuitImport -- --input tools/GridSafety.CircuitImport/data/east-bay-overpass.json --area "Contra Costa County,Alameda County,Solano County" --bbox 37.44,-122.45,38.55,-121.46
 ```
 
 Data © OpenStreetMap contributors, available under the ODbL. The map credits it.
@@ -234,4 +280,4 @@ I've spent the last couple of years supporting grid operations software (ADMS on
 | Infrastructure as code | `infra/GridSafetyStack.cs` (CDK in C#) |
 | Secure CI/CD | GitHub Actions with OIDC, no long-lived keys |
 | RBAC / identity | Cognito groups → JWT authorizer → API-enforced Supervisor rights |
-| Automation and testing | Simulator with scripted incidents; 76 .NET tests + frontend tests |
+| Automation and testing | Simulator with scripted incidents; 187 .NET tests + frontend tests |

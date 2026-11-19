@@ -48,7 +48,8 @@ public class CrewRosterTests
         Assert.All(options, o => Assert.True(o.Crew.CanFix(FindingType.CrossarmDamage, o.Member)));
         Assert.DoesNotContain(options, o => o.Crew.Id == "sector-7g");
         var technicians = options.TakeWhile(o => o.Member is not null).ToList();
-        Assert.Equal(["Barney Grumble"], technicians.Select(o => o.Member!.Name)); // the only on-duty tech cross-trained on crossarms
+        Assert.Equal("Barney Grumble", technicians[0].Member!.Name); // the nearest on-duty tech cross-trained on crossarms
+        Assert.Equal(technicians.Select(o => o.DistanceKm).Order(), technicians.Select(o => o.DistanceKm));
         Assert.All(options.Skip(technicians.Count), o => Assert.Null(o.Member));
     }
 

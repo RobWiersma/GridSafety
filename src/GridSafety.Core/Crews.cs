@@ -72,6 +72,15 @@ public static class CrewRoster
         new("antioch", "Antioch yard", new(38.0049, -121.8058)),
         new("san-ramon", "San Ramon yard", new(37.7799, -121.9780)),
         new("richmond", "Richmond yard", new(37.9358, -122.3478)),
+        // Alameda County
+        new("oakland", "Oakland yard", new(37.8044, -122.2712)),
+        new("hayward", "Hayward yard", new(37.6688, -122.0808)),
+        new("fremont", "Fremont yard", new(37.5485, -121.9886)),
+        new("livermore", "Livermore yard", new(37.6819, -121.7680)),
+        // Solano County
+        new("vallejo", "Vallejo yard", new(38.1041, -122.2566)),
+        new("fairfield", "Fairfield yard", new(38.2494, -122.0400)),
+        new("vacaville", "Vacaville yard", new(38.3566, -121.9877)),
     ];
 
     public static readonly IReadOnlyList<Crew> All =
@@ -108,6 +117,25 @@ public static class CrewRoster
                 new("Marjorie Bouvay", "Hot-stick lineman", DepotId: "richmond"),
             ],
             DepotId: "antioch"),
+        new("capital-city", "Capital City District Crew", "Alameda County line work",
+            [FindingType.ConductorDamage, FindingType.CrossarmDamage, FindingType.DamagedInsulator, FindingType.MissingHardware],
+            [
+                new("Lou Kowalski", "Foreman"),
+                new("Eddie Lindqvist", "Journeyman lineman", [FindingType.ConductorDamage, FindingType.CrossarmDamage, FindingType.MissingHardware], "oakland"),
+                new("Gil Gunderson", "Lineman", [FindingType.DamagedInsulator, FindingType.MissingHardware], "fremont"),
+                new("Luann Van Houten", "Thermographer", [FindingType.ThermalHotspot], "livermore"),
+                new("Sideshow Mel", "Arborist", [FindingType.VegetationEncroachment], "fremont"),
+            ],
+            DepotId: "hayward"),
+        new("ogdenville", "Ogdenville District Crew", "Solano County line work",
+            [FindingType.ConductorDamage, FindingType.CrossarmDamage, FindingType.DamagedInsulator, FindingType.MissingHardware],
+            [
+                new("Cookie Kwan", "Foreman", DepotId: "vallejo"),
+                new("Disco Stu", "Journeyman lineman", [FindingType.ConductorDamage, FindingType.CrossarmDamage, FindingType.ThermalHotspot], "vacaville"),
+                new("Agnes Skinley", "Lineman", [FindingType.DamagedInsulator, FindingType.MissingHardware, FindingType.CrossarmDamage]),
+                new("Jasper Beardly", "Arborist", [FindingType.VegetationEncroachment], "vacaville"),
+            ],
+            DepotId: "fairfield"),
     ];
 
     /// <summary>The crew that normally handles this kind of defect.</summary>

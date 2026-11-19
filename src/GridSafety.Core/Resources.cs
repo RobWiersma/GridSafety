@@ -29,6 +29,13 @@ public sealed record FlightCrew(string Id, string Name, string HomeBase, IReadOn
 public sealed partial class ResourceCatalog
 {
     public long Version { get; set; }
+
+    /// <summary>Which demo additions this catalog has had (see <see cref="Normalize"/>); each is applied once, so deleting one sticks.</summary>
+    public int SeedVersion { get; set; }
+
+    /// <summary>2: Alameda and Solano County yards and crews.</summary>
+    public const int CurrentSeedVersion = 2;
+
     public List<DroneAsset> Drones { get; init; } = [];
     public List<FlightCrew> FlightCrews { get; init; } = [];
     public List<Crew> GroundCrews { get; init; } = [];
@@ -61,7 +68,11 @@ public sealed partial class ResourceCatalog
         ],
         GroundCrews = [.. CrewRoster.All],
         Depots = [.. CrewRoster.Depots],
+        SeedVersion = CurrentSeedVersion,
     };
+
+    /// <summary>Crews added with seed version 2, for the Alameda and Solano County lines.</summary>
+    private static readonly string[] Seed2Crews = ["capital-city", "ogdenville"];
 
     /// <summary>
     /// Brings a catalog saved before depots and technician skills existed up to date: adds the demo depots, and gives
@@ -70,6 +81,13 @@ public sealed partial class ResourceCatalog
     public ResourceCatalog Normalize()
     {
         if (Depots.Count == 0) Depots.AddRange(CrewRoster.Depots);
+        if (SeedVersion < 2)
+        {
+            // The map grew to Alameda and Solano counties: their yards, and a crew for each. Applied once.
+            Depots.AddRange(CrewRoster.Depots.Where(d => Depots.All(x => x.Id != d.Id)));
+            GroundCrews.AddRange(CrewRoster.All.Where(c => Seed2Crews.Contains(c.Id) && GroundCrews.All(x => x.Id != c.Id)));
+            SeedVersion = 2;
+        }
         for (var i = 0; i < GroundCrews.Count; i++)
         {
             var crew = GroundCrews[i];

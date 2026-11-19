@@ -18,7 +18,8 @@ if (argList.Contains("--help"))
 {
     Console.WriteLine("""
         Options:
-          --area <name>    Import lines inside an administrative boundary, e.g. "Contra Costa County" (default).
+          --area <names>   Import lines inside administrative boundaries, e.g. "Contra Costa County" (default), or several
+                           separated by commas: "Contra Costa County,Alameda County,Solano County".
                            Lines crossing the boundary are clipped to --bbox.
           --bbox s,w,n,e   Clip box, or the whole area to import with --area none
                            (default: Contra Costa County, CA 37.71,-122.44,38.10,-121.53)

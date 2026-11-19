@@ -24,13 +24,16 @@ namespace GridSafety.CircuitImport
             var box = string.Create(CultureInfo.InvariantCulture, $"{b[0]},{b[1]},{b[2]},{b[3]}");
             if (area is null)
                 return $"[out:json][timeout:90];(way[\"power\"~\"^(line|minor_line)$\"]({box});node[\"place\"~\"^(city|town|village)$\"]({box}););out body;>;out body qt;";
-            var name = area.Replace("\"", "", StringComparison.Ordinal);
-            return $"[out:json][timeout:180];area[\"name\"=\"{name}\"][\"boundary\"=\"administrative\"]->.a;(way[\"power\"~\"^(line|minor_line)$\"](area.a);node[\"place\"~\"^(city|town|village)$\"](area.a););out body;>;out body qt;";
+            // One boundary, or several separated by commas ("Contra Costa County,Alameda County"), matched by exact name.
+            var names = area.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(n => new string([.. n.Where(ch => char.IsLetter(ch) || ch is ' ' or '-')])); // plain names only: nothing to escape
+            var pattern = $"^({string.Join('|', names)})$";
+            return $"[out:json][timeout:240];area[\"name\"~\"{pattern}\"][\"boundary\"=\"administrative\"]->.a;(way[\"power\"~\"^(line|minor_line)$\"](area.a);node[\"place\"~\"^(city|town|village)$\"](area.a););out body;>;out body qt;";
         }
 
         public static async Task<string> FetchAsync(double[] bbox, string? area = null)
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(200) };
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(260) };
             http.DefaultRequestHeaders.UserAgent.ParseAdd("GridSafety-CircuitImport/1.0");
             foreach (var url in Endpoints)
             {
@@ -56,8 +59,9 @@ namespace GridSafety.CircuitImport
     /// </summary>
     internal static class OsmScrub
     {
+        /// <summary>Any key with an operator/owner part, including prefixed forms such as <c>not:operator:wikidata</c>.</summary>
         public static bool IsOwnershipTag(string key) =>
-            key.StartsWith("operator", StringComparison.Ordinal) || key.StartsWith("owner", StringComparison.Ordinal);
+            key.Split(':').Any(part => part.StartsWith("operator", StringComparison.Ordinal) || part.StartsWith("owner", StringComparison.Ordinal));
 
         public static string RemoveOwnershipTags(string overpassJson)
         {
