@@ -97,13 +97,14 @@ export function ReportsView({ selected, onSelect }: { selected: string | null; o
             <summary className="small">Rates behind the costs</summary>
             <dl className="small">
               <dt>Technician labor</dt><dd>{money(rates.laborPerPersonHour)} a person-hour</dd>
-              <dt>Flight crew (pilot + observer)</dt><dd>{money(rates.flightCrewPerHour)} a flight hour</dd>
+              <dt>Flight crew</dt><dd>{money(rates.flightCrewPerHour)} a flight hour: pilot {money(rates.pilotPerHour)}, observer {money(rates.observerPerHour)}</dd>
               <dt>Fuel</dt><dd>{money(rates.gasPerGallon)} a gallon</dd>
               <dt>Truck service</dt><dd>{money(rates.truckService)}</dd>
               <dt>Drone inspection</dt><dd>{money(rates.droneInspection)}</dd>
               <dt>Battery pack</dt><dd>{money(rates.batteryPack)}</dd>
               <dt>Repairs</dt><dd>as logged; otherwise {money(rates.truckRepairDefault)} a truck, {money(rates.droneRepairDefault)} a drone</dd>
             </dl>
+            <p className="muted small">Labor and flight crew rates are the standard ones; a supervisor can set someone's own rate on Resources, and their hours are costed at it.</p>
           </details>
         )}
       </aside>

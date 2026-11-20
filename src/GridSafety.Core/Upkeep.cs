@@ -151,13 +151,13 @@ public static class Upkeep
             {
                 pack.InUse = true;
                 pack.LastCharge = m.BatteryPct ?? startCharge;
-                flown += (now - start).TotalHours;
+                flown += FlightReports.Hours(m);
                 continue;
             }
 
             var end = Math.Clamp(m.BatteryPct ?? startCharge - 40, 0, startCharge);
             pack.Cycles += (startCharge - end) / 100;
-            var air = Math.Max(0, (landed.Value - start).TotalHours);
+            var air = FlightReports.Hours(m); // time in the air, not the faster demo playback
             flown += air;
             hours += air;
             if (100 - pack.Cycles * HealthPerCycle < ReplaceUnderHealthPct)

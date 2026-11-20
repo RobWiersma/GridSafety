@@ -7,8 +7,8 @@ namespace GridSafety.Core;
 /// </summary>
 public sealed record WorkTotals(int Trips, int Jobs, int Repaired, int CalledBack, double DriveHours, double RepairHours, double PersonHours)
 {
-    /// <summary>Person-hours at the labor rate (see <see cref="Costs"/>).</summary>
-    public double LaborCost => Costs.Money(PersonHours * Costs.LaborPerPersonHour);
+    /// <summary>Each person's hours at their own rate (see <see cref="PayRates"/>).</summary>
+    public double LaborCost { get; init; }
 }
 
 /// <summary>One line of a report's breakdown: a person, or a truck, with the jobs they were on and their time on them.</summary>
@@ -26,7 +26,7 @@ public sealed record WorkReport(WorkTotals Totals, IReadOnlyList<WorkBreakdown> 
 /// </summary>
 public sealed record WorkDay(DateOnly Day, int Trips, int Jobs, int Repaired, int CalledBack, double DriveHours, double RepairHours, double PersonHours)
 {
-    public double LaborCost => Costs.Money(PersonHours * Costs.LaborPerPersonHour);
+    public double LaborCost { get; init; }
 }
 
 /// <summary>Builds work reports from the truck rolls on record.</summary>
@@ -38,8 +38,11 @@ public static class WorkReports
     /// with a detail line each.
     /// </summary>
     public static WorkReport Of(IEnumerable<Finding> findings, Func<FieldDispatch, bool> include, Func<FieldDispatch, IEnumerable<string>> keysOf,
-        DateTimeOffset now, IReadOnlyList<(string Name, string? Detail)>? always = null, int max = 200)
+        DateTimeOffset now, IReadOnlyList<(string Name, string? Detail)>? always = null, int max = 200, PayRates? rates = null)
     {
+        rates ??= PayRates.Standard;
+        // Labor: the job's simulated hours for everyone in the truck, each at their own rate.
+        double Labor(IEnumerable<Finding> fs) => Costs.Money(fs.Sum(f => Shifts.DemoSpeed * Spent(f.Dispatch!, now).TotalHours * rates.Truck(f.Dispatch!)));
         var all = findings.Where(f => f.Dispatch is not null).ToList();
         var picked = all.Where(f => include(f.Dispatch!)).OrderByDescending(f => f.Dispatch!.DepartedAt).ToList();
         // A job that another one handed over to isn't a new trip.
@@ -63,7 +66,7 @@ public static class WorkReports
         var totals = new WorkTotals(
             picked.Count(f => !handedOver.Contains(f.Id)), jobs.Count,
             jobs.Count(j => j.Outcome == JobOutcome.Repaired), jobs.Count(j => j.Outcome == JobOutcome.CalledBack),
-            Math.Round(jobs.Sum(j => j.DriveHours), 1), Math.Round(jobs.Sum(j => j.RepairHours), 1), Shifts.Hours(personTime));
+            Math.Round(jobs.Sum(j => j.DriveHours), 1), Math.Round(jobs.Sum(j => j.RepairHours), 1), Shifts.Hours(personTime)) { LaborCost = Labor(picked) };
         var breakdown = lines.Select(kv => new WorkBreakdown(kv.Key, kv.Value.Detail, kv.Value.Jobs, kv.Value.Repaired, Shifts.Hours(kv.Value.Time)))
             .OrderByDescending(b => b.Hours).ThenBy(b => b.Name, StringComparer.Ordinal).ToList();
         var days = picked.Zip(jobs).GroupBy(x => Periods.DayOf(x.First.Dispatch!.DepartedAt)).OrderBy(g => g.Key)
@@ -71,7 +74,8 @@ public static class WorkReports
                 g.Count(x => !handedOver.Contains(x.First.Id)), g.Count(),
                 g.Count(x => x.Second.Outcome == JobOutcome.Repaired), g.Count(x => x.Second.Outcome == JobOutcome.CalledBack),
                 Math.Round(g.Sum(x => x.Second.DriveHours), 1), Math.Round(g.Sum(x => x.Second.RepairHours), 1),
-                Shifts.Hours(g.Aggregate(TimeSpan.Zero, (t, x) => t + Spent(x.First.Dispatch!, now) * People(x.First.Dispatch!)))))
+                Shifts.Hours(g.Aggregate(TimeSpan.Zero, (t, x) => t + Spent(x.First.Dispatch!, now) * People(x.First.Dispatch!))))
+            { LaborCost = Labor(g.Select(x => x.First)) })
             .ToList();
         return new WorkReport(totals, breakdown, [.. jobs.Take(max)], days);
     }

@@ -11,8 +11,8 @@ public sealed record FlightTotals(
     int Missions, int Completed, int Aborted, double FlightHours, double DistanceMeters, int StructuresInspected, int Findings,
     IReadOnlyDictionary<AlertKind, int> AlertsByKind, DateTimeOffset? FirstFlight, DateTimeOffset? LastFlight)
 {
-    /// <summary>Flight hours at the flight crew rate (pilot plus observer, see <see cref="Costs"/>).</summary>
-    public double CrewCost => Costs.Money(FlightHours * Costs.FlightCrewPerHour);
+    /// <summary>Flight hours for the pilot and an observer, each at their own rate (see <see cref="PayRates"/>).</summary>
+    public double CrewCost { get; init; }
 }
 
 public sealed record FlightReport(FlightTotals Totals, IReadOnlyList<FlightLogEntry> Flights, IReadOnlyList<FlightDay> Days);
@@ -21,7 +21,7 @@ public sealed record FlightReport(FlightTotals Totals, IReadOnlyList<FlightLogEn
 public sealed record FlightDay(DateOnly Day, int Missions, int Completed, int Aborted, double FlightHours, double DistanceMeters,
     int StructuresInspected, int Findings, int Alerts)
 {
-    public double CrewCost => Costs.Money(FlightHours * Costs.FlightCrewPerHour);
+    public double CrewCost { get; init; }
 }
 
 /// <summary>Flight logs for drones and pilots, from their missions (newest first).</summary>
@@ -29,13 +29,15 @@ public static class FlightReports
 {
     /// <param name="missions">The missions to report on, already picked for the drone or pilot.</param>
     /// <param name="findCircuit">Looks up a circuit for its name and coverage; null when it's gone.</param>
-    public static FlightReport Of(IEnumerable<Mission> missions, Func<string, Circuit?> findCircuit, int max = 100)
+    public static FlightReport Of(IEnumerable<Mission> missions, Func<string, Circuit?> findCircuit, int max = 100, PayRates? rates = null)
     {
+        rates ??= PayRates.Standard;
+        double Crew(IEnumerable<Mission> ms) => Costs.Money(ms.Sum(m => Hours(m) * rates.Flight(m.Pilot)));
         var all = missions.OrderByDescending(m => m.StartedAt ?? m.CreatedAt).ToList();
         var flights = all.Take(max).Select(m =>
         {
             var circuit = findCircuit(m.CircuitId);
-            var minutes = m.StartedAt is { } s ? Math.Max(0, ((m.EndedAt ?? m.UpdatedAt) - s).TotalMinutes) : 0;
+            var minutes = Hours(m) * 60;
             return new FlightLogEntry(m.Id, m.Name, m.CircuitId, circuit?.Name ?? m.CircuitId, m.DroneId, m.Pilot, m.Status,
                 m.CreatedAt, m.StartedAt, m.EndedAt, Math.Round(minutes, 1), Math.Round(m.DistanceFlownMeters), circuit is null ? 0 : m.Coverage(circuit),
                 m.StructuresInspected.Count, m.FindingCount, m.RecentAlerts.Count, m.RecentAlerts.Count(a => a.Level == AlertLevel.Critical),
@@ -46,16 +48,27 @@ public static class FlightReports
         var days = all.GroupBy(m => Periods.DayOf(m.StartedAt ?? m.CreatedAt)).OrderBy(g => g.Key)
             .Select(g => new FlightDay(g.Key, g.Count(), g.Count(m => m.Status == MissionStatus.Completed), g.Count(m => m.Status == MissionStatus.Aborted),
                 Math.Round(g.Sum(Hours), 2), Math.Round(g.Sum(m => m.DistanceFlownMeters)), g.Sum(m => m.StructuresInspected.Count),
-                g.Sum(m => m.FindingCount), g.Sum(m => m.RecentAlerts.Count)))
+                g.Sum(m => m.FindingCount), g.Sum(m => m.RecentAlerts.Count)) { CrewCost = Crew(g) })
             .ToList();
         var totals = new FlightTotals(
             all.Count, all.Count(m => m.Status == MissionStatus.Completed), all.Count(m => m.Status == MissionStatus.Aborted),
             Math.Round(flown.Sum(Hours), 2),
             Math.Round(all.Sum(m => m.DistanceFlownMeters)), all.Sum(m => m.StructuresInspected.Count), all.Sum(m => m.FindingCount),
             all.SelectMany(m => m.RecentAlerts).CountBy(a => a.Kind).ToDictionary(),
-            flown.Min(m => m.StartedAt), flown.Max(m => m.StartedAt));
+            flown.Min(m => m.StartedAt), flown.Max(m => m.StartedAt)) { CrewCost = Crew(flown) };
         return new FlightReport(totals, flights, days);
     }
 
-    private static double Hours(Mission m) => m.StartedAt is { } s ? Math.Max(0, ((m.EndedAt ?? m.UpdatedAt) - s).TotalHours) : 0;
+    /// <summary>
+    /// Time in the air: the distance flown at cruise speed, or the logged time if that's longer (hovering, a slow climb).
+    /// Demo flights play back faster than real time (a telemetry point every 0.5 s covers 2 s of flight), so their logged
+    /// time alone would undercount the flight, and the crew's pay with it.
+    /// </summary>
+    public static double Hours(Mission m)
+    {
+        ArgumentNullException.ThrowIfNull(m);
+        if (m.StartedAt is not { } s) return 0;
+        var logged = Math.Max(0, ((m.EndedAt ?? m.UpdatedAt) - s).TotalHours);
+        return Math.Max(logged, m.DistanceFlownMeters / Simulation.FlightPlan.SpeedMps / 3600);
+    }
 }

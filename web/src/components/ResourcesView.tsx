@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { ApiError, useMe, useResources, useSaveResource, type ReportTarget, type ResourceKind } from '../api';
-import { FINDING_TYPE_LABEL, miles, relativeTime } from '../lib/format';
+import { ApiError, useMe, useRates, useResources, useSaveResource, type ReportTarget, type ResourceKind } from '../api';
+import { FINDING_TYPE_LABEL, miles, money, relativeTime } from '../lib/format';
 import { useSession } from '../session';
 import { PHASE_LABEL, dispatchName, involves } from '../lib/field';
 import { OutBadge, ShiftMeter } from './CrewsPanel';
 import { BackInServiceButton, FuelGauge, MaintenanceDialog, PackBars, UpkeepPill } from './Upkeep';
+import { EmployeeDialog, type EmployeeTarget } from './EmployeeDialog';
 import type { Crew, CrewMember, CrewStatus, Depot, DroneAsset, DroneAssetStatus, FindingType, FlightCrew, Vehicle, VehicleKind, VehicleStatus } from '../types';
 import type { ToastMessage } from './Toast';
 
@@ -45,6 +46,10 @@ export function ResourcesView({ onToast, onOpenMission, onOpenReport }: {
   const me = useMe();
   const { guest } = useSession();
   const canEdit = !guest && Boolean(me.data?.isSupervisor);
+  // Pay is for signed-in users; only supervisors change it.
+  const showPay = !guest;
+  const rates = useRates().data;
+  const [employee, setEmployee] = useState<EmployeeTarget | null>(null);
   const [section, setSection] = useState<Section>(rememberedSection);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [servicing, setServicing] = useState<{ kind: 'drones' | 'vehicles'; id: string } | null>(null);
@@ -163,6 +168,9 @@ export function ResourcesView({ onToast, onOpenMission, onOpenReport }: {
               status={crew.status}
               badge={activeMissions > 0 ? `${activeMissions} flying` : undefined}
               members={crew.members}
+              payOf={showPay ? (m) => payOf(m, m.role === PILOT ? rates?.pilotPerHour : rates?.observerPerHour) : undefined}
+              onEditMember={canEdit ? (m) => setEmployee({ kind: 'flight-crews', crewId: crew.id, crewName: crew.name, member: m,
+                standard: (m.role === PILOT ? rates?.pilotPerHour : rates?.observerPerHour) ?? 0 }) : undefined}
               onMemberReport={(m) => setReport({ kind: 'pilot', crewId: crew.id, member: m.name })}
               memberReportLabel="Flight log"
               onReport={() => setReport({ kind: 'flight-crew', crewId: crew.id, name: crew.name })}
@@ -186,6 +194,9 @@ export function ResourcesView({ onToast, onOpenMission, onOpenReport }: {
               badge={`${openWorkOrders} open`}
               badgeBusy={openWorkOrders > 0}
               members={crew.members}
+              payOf={showPay ? (m) => payOf(m, rates?.laborPerPersonHour) : undefined}
+              onEditMember={canEdit ? (m) => setEmployee({ kind: 'ground-crews', crewId: crew.id, crewName: crew.name, member: m,
+                standard: rates?.laborPerPersonHour ?? 0, handles: crew.handles }) : undefined}
               onMemberReport={(m) => setReport({ kind: 'technician', crewId: crew.id, member: m.name })}
               memberReportLabel="Shift report"
               onReport={() => setReport({ kind: 'ground-crew', crewId: crew.id, name: crew.name })}
@@ -307,6 +318,8 @@ export function ResourcesView({ onToast, onOpenMission, onOpenReport }: {
       )}
 
 
+      {employee && <EmployeeDialog key={`${employee.crewId}/${employee.member.name}`} target={employee} depots={depots} onClose={() => setEmployee(null)} onDone={done} />}
+
       {servicing && <MaintenanceDialog key={servicing.id} kind={servicing.kind} id={servicing.id} onClose={() => setServicing(null)} onDone={done} />}
 
 
@@ -334,7 +347,13 @@ function CardGrid({ empty, children }: { empty: string; children: ReactNode[] })
   return children.length === 0 ? <p className="empty-row muted">{empty}</p> : <div className="crew-grid resource-grid">{children}</div>;
 }
 
-function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memberDetail, onMemberReport, memberReportLabel, onReport, reportLabel, footer, onEdit, onRemove }: {
+/** Someone's hourly rate as shown on their crew card: their own, or the standard one for their role. */
+function payOf(m: CrewMember, standard: number | undefined): { rate: number; own: boolean } | null {
+  if (m.payRate != null) return { rate: m.payRate, own: true };
+  return standard == null ? null : { rate: standard, own: false };
+}
+
+function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memberDetail, payOf: pay, onEditMember, onMemberReport, memberReportLabel, onReport, reportLabel, footer, onEdit, onRemove }: {
   title: string;
   subtitle: string;
   status: CrewStatus;
@@ -342,6 +361,10 @@ function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memb
   badgeBusy?: boolean;
   members: CrewMember[];
   memberDetail?(m: CrewMember): ReactNode;
+  /** Each person's hourly rate (signed-in users only). */
+  payOf?(m: CrewMember): { rate: number; own: boolean } | null;
+  /** Supervisors: edit one employee (details, record, pay). */
+  onEditMember?(m: CrewMember): void;
   /** Makes each name open that person's report. */
   onMemberReport?(m: CrewMember): void;
   memberReportLabel?: string;
@@ -373,7 +396,18 @@ function ResourceCard({ title, subtitle, status, badge, badgeBusy, members, memb
               {onMemberReport
                 ? <button className="link-button member-link" onClick={() => onMemberReport(m)} title={`${memberReportLabel ?? 'Report'} for ${m.name}`}>{m.name}</button>
                 : m.name}
-              <span className="muted small"> · {m.role}</span>{memberDetail?.(m)}
+              <span className="muted small"> · {m.role}</span>
+              {pay?.(m) && (() => {
+                const p = pay(m)!;
+                return (
+                  <span className={`pay small ${p.own ? 'pay-own' : 'muted'}`} title={p.own ? 'Their own rate, set by a supervisor' : 'The standard rate for their role'}>
+                    {' · '}{money(p.rate)}/h{p.own ? '' : ' std'}
+
+                  </span>
+                );
+              })()}
+              {onEditMember && <button className="link-button small member-edit" onClick={() => onEditMember(m)} aria-label={`Edit employee ${m.name}`}>Edit</button>}
+              {memberDetail?.(m)}
             </span>
           </li>
         ))}

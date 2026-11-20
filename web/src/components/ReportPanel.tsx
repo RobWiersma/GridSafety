@@ -102,7 +102,8 @@ export function ReportPanel({ target }: { target: ReportTarget }) {
   const report = useReport(target);
   const rates = useRates().data;
   const data = report.data;
-  const techRate = rates?.laborPerPersonHour ?? 0;
+  // A technician's own rate when a supervisor set one, otherwise the standard rate.
+  const techRate = (data && 'payRate' in data ? data.payRate : undefined) ?? rates?.laborPerPersonHour ?? 0;
 
   const title = titleOf(target);
   const csv = data ? toCsv(target, data) : null;
@@ -128,7 +129,7 @@ export function ReportPanel({ target }: { target: ReportTarget }) {
       {report.isError && <p className="error">Couldn't load the report: {report.error.message}</p>}
       {data && 'days' in data && !('shifts' in data) && (
         <>
-          <p className="muted small">Days are California days. Flight time is real; field hours are simulated (1 s = 1 min).</p>
+          <p className="muted small">Days are California days. Flight time is time in the air at cruise speed (demo flights play back 4× fast); field hours are simulated (1 s = 1 min).</p>
           <ActivityCosts days={data.days} />
           {data.days.length === 0 ? <p className="muted">Nothing has happened yet. Fly a demo mission to start.</p>
             : <PeriodReport days={data.days} metrics={ACTIVITY_METRICS} now={data.now} onDownload={periodCsv} />}
@@ -329,7 +330,7 @@ function WorkLog({ work, by, upkeep, children }: { work: WorkReport; by: 'person
             <tbody>
               {work.breakdown.map((b) => (
                 <tr key={b.name}>
-                  <td>{by === 'truck' ? <span className="mono">{b.name}</span> : b.name}{b.detail && <span className="muted small"> · {b.detail}</span>}</td>
+                  <td>{by === 'truck' && b.name !== 'No truck' ? <span className="mono">{b.name}</span> : b.name}{b.detail && <span className="muted small"> · {b.detail}</span>}</td>
                   <td>{b.jobs}</td>
                   <td>{b.repaired}</td>
                   <td>{b.hours} h</td>

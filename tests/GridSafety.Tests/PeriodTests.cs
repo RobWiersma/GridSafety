@@ -56,6 +56,32 @@ public class PeriodTests
     }
 
     [Fact]
+    public void A_sped_up_demo_flight_is_paid_for_its_time_in_the_air()
+    {
+        var at = At("2026-11-18T18:00:00Z");
+        // 25.2 km at cruise speed is half an hour in the air; the demo played it back in a quarter of that.
+        var demo = new Mission
+        {
+            Id = "d", CircuitId = "c1", DroneId = "D-1", Pilot = "Edna", Status = MissionStatus.Completed, CreatedAt = at,
+            StartedAt = at, EndedAt = at + TimeSpan.FromMinutes(7.5), UpdatedAt = at + TimeSpan.FromMinutes(7.5),
+            DistanceFlownMeters = GridSafety.Core.Simulation.FlightPlan.SpeedMps * 1800,
+        };
+        // Hovering over a tower: the logged time is longer than the distance needs, and counts.
+        var hover = new Mission
+        {
+            Id = "h", CircuitId = "c1", DroneId = "D-1", Pilot = "Edna", Status = MissionStatus.Completed, CreatedAt = at,
+            StartedAt = at, EndedAt = at + TimeSpan.FromHours(1), UpdatedAt = at + TimeSpan.FromHours(1), DistanceFlownMeters = 100,
+        };
+
+        Assert.Equal(0.5, FlightReports.Hours(demo), 3);
+        Assert.Equal(1, FlightReports.Hours(hover), 3);
+        var report = FlightReports.Of([demo, hover], _ => null);
+        Assert.Equal(1.5, report.Totals.FlightHours, 2);
+        Assert.Equal(1.5 * Costs.FlightCrewPerHour, report.Totals.CrewCost);
+        Assert.Equal(30, report.Flights.Single(f => f.MissionId == "d").FlightMinutes, 1);
+    }
+
+    [Fact]
     public void Flight_log_days_add_up_to_the_totals()
     {
         var day1 = At("2026-11-18T18:00:00Z");

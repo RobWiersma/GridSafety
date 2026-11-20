@@ -234,6 +234,13 @@ export interface VisitorStats {
   languages: CountView[];
 }
 
+/** An employee's record beyond their crew role. Dates are yyyy-mm-dd. */
+export interface EmployeeProfile {
+  employeeId?: string | null; hireDate?: string | null; phone?: string | null; email?: string | null; homeCity?: string | null;
+  emergencyContact?: string | null; emergencyPhone?: string | null; certification?: string | null; certificationExpires?: string | null;
+  notes?: string | null;
+}
+
 export interface CrewMember {
   name: string;
   role: string;
@@ -241,6 +248,10 @@ export interface CrewMember {
   skills?: FindingType[];
   /** Ground crews: the depot this technician departs from; absent means the crew's depot. */
   depotId?: string;
+  /** Their own hourly rate, set by a supervisor; absent means the standard rate for their role. Hidden from guests. */
+  payRate?: number | null;
+  /** Their employee record. Hidden from guests. */
+  profile?: EmployeeProfile | null;
 }
 
 /** A yard ground crews and technicians depart from. */
@@ -491,6 +502,8 @@ export interface TechnicianReport {
   /** Every job they were on, by Pacific calendar day. */
   days: WorkDay[];
   now: string;
+  /** Their hourly rate: their own, or the standard technician rate. */
+  payRate: number;
 }
 
 export interface FlightLogEntry {
@@ -566,6 +579,8 @@ export interface ActivityReport { days: ActivityDay[]; rates: RateCard; now: str
 export interface RateCard {
   laborPerPersonHour: number; flightCrewPerHour: number; gasPerGallon: number; truckService: number; droneInspection: number;
   batteryPack: number; truckRepairDefault: number; droneRepairDefault: number;
+  /** The flight crew rate's two shares. */
+  pilotPerHour: number; observerPerHour: number;
 }
 /** Upkeep spend, by kind. */
 export interface UpkeepCosts { fuel: number; service: number; batteries: number; repairs: number; total: number }

@@ -40,6 +40,14 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         return c;
     }
 
+    /// <summary>
+    /// Test flights over a long line land instantly but count their full time in the air, so the demo drone soon comes due
+    /// for its routine inspection. Logging a service first means each test flight starts fresh from one.
+    /// </summary>
+    private static async Task FreshFromInspectionAsync(HttpClient supervisor) =>
+        (await supervisor.PostAsJsonAsync($"/api/resources/drones/{DemoFlight.DroneId}/maintenance",
+            new MaintenanceRequest(MaintenanceKind.Service, null, "Test: fresh from inspection"), JsonOpts)).EnsureSuccessStatusCode();
+
     private static async Task<MissionView> PlanAsync(HttpClient c, string drone)
     {
         var res = await c.PostAsJsonAsync("/api/missions", new PlanMissionRequest("PITT-MART-115", drone, "Pat"), JsonOpts);
@@ -298,6 +306,7 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         Assert.Equal(HttpStatusCode.Forbidden, inspector.StatusCode);
 
         var sup = Client("sam", supervisor: true);
+        await FreshFromInspectionAsync(sup);
         var unknown = await sup.PostAsJsonAsync("/api/demo-flights", new DemoFlightRequest("NOPE"), JsonOpts);
         Assert.Equal(HttpStatusCode.BadRequest, unknown.StatusCode);
 
@@ -338,6 +347,7 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         var names = new List<string>();
         for (var i = 0; i < 3; i++)
         {
+            await FreshFromInspectionAsync(sup);
             var res = await sup.PostAsJsonAsync("/api/demo-flights", new DemoFlightRequest("CLAY-MEAD-115"), JsonOpts);
             Assert.Equal(HttpStatusCode.Accepted, res.StatusCode);
             var launched = await res.Content.ReadFromJsonAsync<MissionView>(JsonOpts);
@@ -368,6 +378,98 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         (await guest.GetAsync("/api/public/resources/vehicles/T-011/report")).EnsureSuccessStatusCode();
         var write = await guest.PostAsJsonAsync("/api/public/resources/vehicles/T-011/maintenance", new { kind = "Repair", hours = 1 }, JsonOpts);
         Assert.False(write.IsSuccessStatusCode);
+    }
+
+    [Fact]
+    public async Task A_yard_report_lists_trucks_and_puts_jobs_from_before_trucks_on_one_line()
+    {
+        var yard = CrewRoster.Depots[^1];
+        var at = DateTimeOffset.UtcNow.AddDays(-3);
+        var f = new Finding
+        {
+            Id = Ids.New(), MissionId = "m-old", CircuitId = "c1", StructureId = "OLD-001", StructureLabel = "OLD-001",
+            Type = FindingType.ConductorDamage, Severity = 3, Location = yard.Location, CreatedAt = at, UpdatedAt = at,
+            Status = FindingStatus.Resolved,
+            Dispatch = new FieldDispatch
+            {
+                Assignee = "Carl Carlsen (Test Crew)", CrewId = "test", Member = "Carl Carlsen", DepotId = yard.Id, DepotName = yard.Name,
+                Depot = yard.Location, Site = yard.Location, SiteLabel = "OLD-001", From = yard.Location, FromLabel = yard.Name,
+                Route = [yard.Location], ReturnRoute = [yard.Location],
+                DepartedAt = at, ArrivesAt = at.AddMinutes(1), RepairedAt = at.AddMinutes(2), ReturnsAt = at.AddMinutes(3),
+            },
+        };
+        await factory.Services.GetRequiredService<IGridRepository>().SaveFindingAsync(f);
+
+        var report = await Client().GetFromJsonAsync<DepotReportView>($"/api/resources/depots/{yard.Id}/report", JsonOpts);
+        Assert.DoesNotContain(report!.Work.Breakdown, b => b.Name == "Carl Carlsen");
+        var none = Assert.Single(report.Work.Breakdown, b => b.Name == "No truck");
+        Assert.Equal(1, none.Jobs);
+    }
+
+    [Fact]
+    public async Task Only_supervisors_set_pay_and_crew_edits_keep_it()
+    {
+        const string path = "/api/resources/ground-crews/sector-7g/members/Lenny%20Leonardo/pay";
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client("alex").PutAsJsonAsync(path, new PayRateRequest(150), JsonOpts)).StatusCode);
+
+        var sup = Client("dana", supervisor: true);
+        Assert.Equal(HttpStatusCode.BadRequest, (await sup.PutAsJsonAsync(path, new PayRateRequest(5), JsonOpts)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await sup.PutAsJsonAsync("/api/resources/ground-crews/sector-7g/members/Nobody/pay", new PayRateRequest(150), JsonOpts)).StatusCode);
+        (await sup.PutAsJsonAsync(path, new PayRateRequest(150), JsonOpts)).EnsureSuccessStatusCode();
+
+        static CrewMember? Lenny(ResourcesView? r) => r!.GroundCrews.Single(c => c.Crew.Id == "sector-7g").Crew.Members.FirstOrDefault(m => m.Name == "Lenny Leonardo");
+        var res = await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts);
+        Assert.Equal(150, Lenny(res)!.PayRate);
+        Assert.Equal(150, (await sup.GetFromJsonAsync<MemberShiftReports>("/api/resources/ground-crews/sector-7g/members/Lenny%20Leonardo/report", JsonOpts))!.PayRate);
+
+        // Editing the crew (which sends no rates) keeps it.
+        var crew = res!.GroundCrews.Single(c => c.Crew.Id == "sector-7g").Crew;
+        var edit = crew with { Members = [.. crew.Members.Select(m => m with { PayRate = null })] };
+        (await sup.PutAsJsonAsync("/api/resources/ground-crews/sector-7g", edit, JsonOpts)).EnsureSuccessStatusCode();
+        Assert.Equal(150, Lenny(await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts))!.PayRate);
+
+        // Guests don't see pay.
+        var guest = await factory.CreateClient().GetStringAsync("/api/public/resources");
+        Assert.DoesNotContain("payRate", guest, StringComparison.OrdinalIgnoreCase);
+
+        // Back to the standard rate.
+        (await sup.PutAsJsonAsync(path, new PayRateRequest(null), JsonOpts)).EnsureSuccessStatusCode();
+        Assert.Null(Lenny(await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts))!.PayRate);
+    }
+
+    [Fact]
+    public async Task Supervisors_edit_an_employee_record_and_pay_in_one_go()
+    {
+        const string path = "/api/resources/flight-crews/air-2/members/Troy%20McClaire";
+        var profile = new EmployeeProfile("E-2047", new DateOnly(2019, 4, 1), "(925) 555-0142", "troy@example.com", "Antioch",
+            "Pat McClaire (spouse)", "925-555-0199", "FAA Part 107", new DateOnly(2027, 3, 31), "Prefers early shifts");
+        var edit = new EmployeeEdit("Troy McClaire", FlightCrew.ObserverRole, null, null, profile, 62.5);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Client("alex").PutAsJsonAsync(path, edit, JsonOpts)).StatusCode);
+
+        var sup = Client("dana", supervisor: true);
+        var bad = await sup.PutAsJsonAsync(path, edit with { Profile = profile with { Email = "not an email" } }, JsonOpts);
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await sup.PutAsJsonAsync(path, edit with { PayRate = 1000 }, JsonOpts)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await sup.PutAsJsonAsync("/api/resources/flight-crews/air-2/members/Nobody", edit, JsonOpts)).StatusCode);
+
+        (await sup.PutAsJsonAsync(path, edit, JsonOpts)).EnsureSuccessStatusCode();
+        var troy = (await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts))!
+            .FlightCrews.Single(c => c.Crew.Id == "air-2").Crew.Members.Single(m => m.Name == "Troy McClaire");
+        Assert.Equal(profile, troy.Profile);
+        Assert.Equal(62.5, troy.PayRate);
+
+        var guest = await factory.CreateClient().GetStringAsync("/api/public/resources");
+        Assert.DoesNotContain("E-2047", guest, StringComparison.Ordinal);
+        Assert.DoesNotContain("profile", guest, StringComparison.OrdinalIgnoreCase);
+
+        // Back to standard pay and an empty record.
+        (await sup.PutAsJsonAsync(path, edit with { Profile = new EmployeeProfile(), PayRate = null }, JsonOpts)).EnsureSuccessStatusCode();
+        troy = (await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts))!
+            .FlightCrews.Single(c => c.Crew.Id == "air-2").Crew.Members.Single(m => m.Name == "Troy McClaire");
+        Assert.Null(troy.Profile);
+        Assert.Null(troy.PayRate);
     }
 
     [Fact]

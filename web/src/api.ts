@@ -5,7 +5,7 @@ import { canTake } from './lib/field';
 import type {
   AlertKind, AlertSettings, AlertSettingsView,
   AssigneeOption, Circuit, Crew, CrewView, FieldJobs, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint, SimulationSettings,
- DroneReport, PilotReport, TechnicianReport, Vehicle, VehicleReport, CrewWorkReport, DepotReport, FlightCrewReport, ActivityReport, RateCard,} from './types';
+ DroneReport, PilotReport, TechnicianReport, Vehicle, VehicleReport, CrewWorkReport, DepotReport, FlightCrewReport, ActivityReport, RateCard, EmployeeProfile, FindingType,} from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public fieldErrors?: Record<string, string[]>) {
@@ -172,6 +172,21 @@ export function useLogMaintenance() {
   return useMutation({
     mutationFn: (input: { kind: 'drones' | 'vehicles'; id: string; body: { kind: 'Repair' | 'Service'; hours?: number; note?: string; cost?: number } }) =>
       api<unknown>(`/resources/${input.kind}/${encodeURIComponent(input.id)}/maintenance`, { method: 'POST', body: JSON.stringify(input.body) }),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: keys.resources }), qc.invalidateQueries({ queryKey: ['report'] })]),
+  });
+}
+
+/** Supervisor-only: one employee's details, employee record and own pay rate (null: the standard rate). */
+export function useSaveEmployee() {
+  const api = useFetcher();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      kind: 'ground-crews' | 'flight-crews'; crewId: string; member: string;
+      body: { name: string; role: string; skills: FindingType[] | null; depotId: string | null; profile: EmployeeProfile; payRate: number | null };
+    }) =>
+      api<unknown>(`/resources/${input.kind}/${encodeURIComponent(input.crewId)}/members/${encodeURIComponent(input.member)}`,
+        { method: 'PUT', body: JSON.stringify(input.body) }),
     onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: keys.resources }), qc.invalidateQueries({ queryKey: ['report'] })]),
   });
 }

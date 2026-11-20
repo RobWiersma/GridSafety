@@ -3,8 +3,11 @@ namespace GridSafety.Core;
 /// <summary>
 /// One person on a crew. For ground crews, <paramref name="Skills"/> are the issue types this technician is qualified
 /// to fix (null: whatever the crew handles) and <paramref name="DepotId"/> is where they start the day (null: the crew's depot).
+/// <paramref name="PayRate"/> is their own hourly rate, set by a supervisor (null: the standard rate for their role, see
+/// <see cref="Costs"/> and <see cref="PayRates"/>). <paramref name="Profile"/> is their employee record (contact details and such).
 /// </summary>
-public sealed record CrewMember(string Name, string Role, IReadOnlyList<FindingType>? Skills = null, string? DepotId = null);
+public sealed record CrewMember(string Name, string Role, IReadOnlyList<FindingType>? Skills = null, string? DepotId = null, double? PayRate = null,
+    EmployeeProfile? Profile = null);
 
 public enum CrewStatus { Available, OffDuty }
 

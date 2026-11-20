@@ -33,10 +33,21 @@ function parseHash(): Route {
   return { tab: h === 'findings' || h === 'missions' || h === 'resources' || h === 'visitors' || h === 'settings' ? h : 'ops', mission: null };
 }
 
+/**
+ * Opening the site always starts on Operations, even when the address still has the tab you were on last. Links to one
+ * mission or one report (other than the default All activity) still open it, so they can be shared.
+ */
+function startRoute(): Route {
+  const r = parseHash();
+  if (r.mission || (r.report && r.report !== 'activity')) return r;
+  if (location.hash) history.replaceState(null, '', `${location.pathname}${location.search}`);
+  return { tab: 'ops', mission: null };
+}
+
 export function App() {
   const session = useSession();
   const me = useMe();
-  const [route, setRoute] = useState<Route>(parseHash);
+  const [route, setRoute] = useState<Route>(startRoute);
   const { tab, mission: missionId } = route;
   useEffect(() => {
     const onHash = () => setRoute(parseHash());

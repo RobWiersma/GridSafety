@@ -1,3 +1,4 @@
+using System.Globalization;
 using GridSafety.Core;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -39,6 +40,12 @@ public sealed record VehicleView(Vehicle Vehicle, string KindLabel, FieldDispatc
 /// A repair or service to log. A repair puts the asset in the shop for <see cref="Hours"/> (simulated hours for a truck,
 /// real hours for a drone), or until it's marked back when there are none; a service resets the service counter.
 /// </summary>
+/// <summary>One employee's edit: crew details, employee record, and own hourly rate (null: the standard rate).</summary>
+public sealed record EmployeeEdit(string Name, string Role, IReadOnlyList<FindingType>? Skills, string? DepotId, EmployeeProfile? Profile, double? PayRate);
+
+/// <summary>An hourly rate in dollars, or null to go back to the standard rate.</summary>
+public sealed record PayRateRequest(double? Rate);
+
 public sealed record MaintenanceRequest(MaintenanceKind Kind, double? Hours, string? Note, double? Cost = null);
 
 public sealed record ResourcesView(IReadOnlyList<DroneResourceView> Drones, IReadOnlyList<FlightCrewView> FlightCrews, IReadOnlyList<CrewView> GroundCrews,
@@ -83,6 +90,18 @@ public static partial class Endpoints
         secured.MapPost("/resources/vehicles/{id}/maintenance", (string id, MaintenanceRequest body, HttpContext ctx, IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct) =>
             LogMaintenance("vehicles", id, body, ctx, repo, resources, clock, ct));
         secured.MapPost("/resources/maintenance/{recordId}/done", FinishRepair);
+
+        // One employee: their details, employee record and own pay rate. Supervisors only.
+        secured.MapPut("/resources/ground-crews/{crewId}/members/{member}", (string crewId, string member, EmployeeEdit body, HttpContext ctx, IGridRepository repo, IResourceStore resources, CancellationToken ct) =>
+            PutEmployee("ground-crews", crewId, member, body, ctx, repo, resources, ct));
+        secured.MapPut("/resources/flight-crews/{crewId}/members/{member}", (string crewId, string member, EmployeeEdit body, HttpContext ctx, IGridRepository repo, IResourceStore resources, CancellationToken ct) =>
+            PutEmployee("flight-crews", crewId, member, body, ctx, repo, resources, ct));
+
+        // Pay: a person's own hourly rate, in place of the standard one. Supervisors only.
+        secured.MapPut("/resources/ground-crews/{crewId}/members/{member}/pay", (string crewId, string member, PayRateRequest body, HttpContext ctx, IResourceStore resources, CancellationToken ct) =>
+            PutPayRate("ground-crews", crewId, member, body, ctx, resources, ct));
+        secured.MapPut("/resources/flight-crews/{crewId}/members/{member}/pay", (string crewId, string member, PayRateRequest body, HttpContext ctx, IResourceStore resources, CancellationToken ct) =>
+            PutPayRate("flight-crews", crewId, member, body, ctx, resources, ct));
     }
 
     private static async Task<Results<Ok<DroneReportView>, NotFound>> GetDroneReport(
@@ -92,7 +111,7 @@ public static partial class Endpoints
         if (catalog.Drones.FirstOrDefault(d => d.Id.Equals(id, StringComparison.OrdinalIgnoreCase)) is not { } drone) return TypedResults.NotFound();
         var missions = (await repo.ListMissionsAsync(1000, ct)).Where(m => m.DroneId.Equals(drone.Id, StringComparison.OrdinalIgnoreCase)).ToList();
         var now = clock.GetUtcNow();
-        return TypedResults.Ok(new DroneReportView(drone, FlightReports.Of(missions, circuits.Find), Upkeep.Drone(drone, missions, catalog.Maintenance, now), now));
+        return TypedResults.Ok(new DroneReportView(drone, FlightReports.Of(missions, circuits.Find, rates: PayRates.Of(catalog)), Upkeep.Drone(drone, missions, catalog.Maintenance, now), now));
     }
 
     private static async Task<Results<Ok<PilotReportView>, NotFound>> GetPilotReport(
@@ -104,7 +123,7 @@ public static partial class Endpoints
             return TypedResults.NotFound();
         // Missions record the pilot in command only; visual observers get an empty log.
         var missions = m.Role == FlightCrew.PilotRole ? (await repo.ListMissionsAsync(1000, ct)).Where(x => FlownBy(x, m)) : [];
-        return TypedResults.Ok(new PilotReportView(crew.Id, crew.Name, m.Name, m.Role, FlightReports.Of(missions, circuits.Find), clock.GetUtcNow()));
+        return TypedResults.Ok(new PilotReportView(crew.Id, crew.Name, m.Name, m.Role, FlightReports.Of(missions, circuits.Find, rates: PayRates.Of(catalog)), clock.GetUtcNow()));
     }
 
     private static async Task<Results<Ok<VehicleReportView>, NotFound>> GetVehicleReport(
@@ -114,7 +133,7 @@ public static partial class Endpoints
         var catalog = await resources.GetAsync(ct);
         if (catalog.FindVehicle(id) is not { } v) return TypedResults.NotFound();
         var findings = await ListSettledFindingsAsync(repo, now, ct);
-        var work = WorkReports.Of(findings, d => d.VehicleId == v.Id, d => WorkReports.PeopleOf(d), now);
+        var work = WorkReports.Of(findings, d => d.VehicleId == v.Id, d => WorkReports.PeopleOf(d), now, rates: PayRates.Of(catalog));
         return TypedResults.Ok(new VehicleReportView(v, Vehicle.KindLabel(v.Kind), catalog.FindDepot(v.DepotId)?.Name, work,
             Upkeep.Truck(v, FieldWork.History(findings), catalog.Maintenance, now), now));
     }
@@ -129,7 +148,7 @@ public static partial class Endpoints
         // Per member: every job they were on, whether they did the repair or rode along.
         var work = WorkReports.Of(findings, d => d.Involves(crew.Id, null),
             d => crew.Members.Where(m => d.Involves(crew.Id, m.Name)).Select(m => m.Name),
-            now, [.. crew.Members.Select(m => (m.Name, (string?)m.Role))]);
+            now, [.. crew.Members.Select(m => (m.Name, (string?)m.Role))], rates: PayRates.Of(catalog));
         return TypedResults.Ok(new CrewWorkReportView(crew.Id, crew.Name, crew.Specialty, catalog.FindDepot(crew.DepotId)?.Name, work, now));
     }
 
@@ -139,7 +158,7 @@ public static partial class Endpoints
         var catalog = await resources.GetAsync(ct);
         if (catalog.FlightCrews.FirstOrDefault(c => c.Id == crewId) is not { } crew) return TypedResults.NotFound();
         var missions = (await repo.ListMissionsAsync(1000, ct)).Where(m => crew.Pilots.Any(p => FlownBy(m, p)));
-        return TypedResults.Ok(new FlightCrewReportView(crew.Id, crew.Name, crew.HomeBase, FlightReports.Of(missions, circuits.Find), clock.GetUtcNow()));
+        return TypedResults.Ok(new FlightCrewReportView(crew.Id, crew.Name, crew.HomeBase, FlightReports.Of(missions, circuits.Find, rates: PayRates.Of(catalog)), clock.GetUtcNow()));
     }
 
     private static async Task<Ok<ActivityReportView>> GetActivityReport(IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct)
@@ -151,8 +170,10 @@ public static partial class Endpoints
         var history = FieldWork.History(findings);
         var upkeep = catalog.Vehicles.SelectMany(v => Upkeep.Truck(v, history, catalog.Maintenance, now).Events)
             .Concat(catalog.Drones.SelectMany(d => Upkeep.Drone(d, missions, catalog.Maintenance, now).Events));
-        return TypedResults.Ok(new ActivityReportView(ActivityReports.Daily(findings, missions, now, upkeep), Costs.Card, now));
+        return TypedResults.Ok(new ActivityReportView(ActivityReports.Daily(findings, missions, now, upkeep, PayRates.Of(catalog)), Costs.Card, now));
     }
+
+    private const string NoTruck = "No truck";
 
     private static async Task<Results<Ok<DepotReportView>, NotFound>> GetDepotReport(
         string id, IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct)
@@ -163,9 +184,11 @@ public static partial class Endpoints
         var findings = await ListSettledFindingsAsync(repo, now, ct);
         var trucks = catalog.Vehicles.Where(v => v.DepotId == depot.Id).ToList();
         var people = catalog.GroundCrews.Sum(c => c.Members.Count(m => c.DepotOf(m) == depot.Id));
-        // Per truck; rolls from before trucks were tracked go under the person sent.
-        var work = WorkReports.Of(findings, d => d.DepotId == depot.Id, d => [d.VehicleId ?? d.Member ?? d.Assignee], now,
-            [.. trucks.Select(v => (v.Id, (string?)$"{Vehicle.KindLabel(v.Kind)}, {v.Seats} seats{(v.Status == VehicleStatus.OutOfService ? ", out of service" : "")}"))]);
+        // Per truck; rolls from before trucks were tracked share one line, so the table lists only trucks.
+        var untracked = findings.Any(f => f.Dispatch is { VehicleId: null } d && d.DepotId == depot.Id);
+        var work = WorkReports.Of(findings, d => d.DepotId == depot.Id, d => [d.VehicleId ?? NoTruck], now,
+            [.. trucks.Select(v => (v.Id, (string?)$"{Vehicle.KindLabel(v.Kind)}, {v.Seats} seats{(v.Status == VehicleStatus.OutOfService ? ", out of service" : "")}")),
+                .. untracked ? [(NoTruck, (string?)"sent before trucks were tracked")] : Array.Empty<(string, string?)>()], rates: PayRates.Of(catalog));
         var history = FieldWork.History(findings);
         var upkeep = Upkeep.CostsOf(trucks.SelectMany(v => Upkeep.Truck(v, history, catalog.Maintenance, now).Events));
         return TypedResults.Ok(new DepotReportView(depot, trucks.Count, people, work, upkeep, now));
@@ -239,11 +262,19 @@ public static partial class Endpoints
     private static Task<IResult> PutFlightCrew(string id, FlightCrew body, HttpContext ctx, IResourceStore resources, CancellationToken ct) =>
         EditAsync(ctx, resources, catalog =>
         {
-            var crew = body with { Id = id.Trim(), Name = body.Name?.Trim()!, HomeBase = body.HomeBase?.Trim()!, Members = [.. CleanMembers(body.Members).Select(m => m with { Skills = null, DepotId = null })] };
-            if (ResourceCatalog.Validate(crew) is { Count: > 0 } errors) return Task.FromResult<IResult>(TypedResults.ValidationProblem(errors));
-            Upsert(catalog.FlightCrews, crew, c => c.Id == crew.Id);
-            return Task.FromResult<IResult>(TypedResults.Ok(crew));
+            var crew = body with { Id = id.Trim(), Name = body.Name?.Trim()!, HomeBase = body.HomeBase?.Trim()!, Members = KeepPersonal(catalog.FlightCrews.FirstOrDefault(c => c.Id == id.Trim())?.Members, CleanMembers(body.Members)) };
+            return Task.FromResult(SaveFlightCrew(catalog, crew));
         }, ct);
+
+    /// <summary>Validates and stores a flight crew (members carry no skills or depots).</summary>
+    private static IResult SaveFlightCrew(ResourceCatalog catalog, FlightCrew crew)
+    {
+        crew = crew with { Members = [.. crew.Members.Select(m => m with { Skills = null, DepotId = null })] };
+        if (ResourceCatalog.Validate(crew) is { Count: > 0 } errors) return TypedResults.ValidationProblem(errors);
+        if (ProfileErrors(crew.Members) is { Count: > 0 } profileErrors) return TypedResults.ValidationProblem(profileErrors);
+        Upsert(catalog.FlightCrews, crew, c => c.Id == crew.Id);
+        return TypedResults.Ok(crew);
+    }
 
     private static Task<IResult> DeleteFlightCrew(string id, HttpContext ctx, IResourceStore resources, CancellationToken ct) =>
         EditAsync(ctx, resources, catalog =>
@@ -252,20 +283,27 @@ public static partial class Endpoints
     private static Task<IResult> PutGroundCrew(string id, Crew body, HttpContext ctx, IGridRepository repo, IResourceStore resources, CancellationToken ct) =>
         EditAsync(ctx, resources, async catalog =>
         {
-            var crew = body with { Id = id.Trim(), Name = body.Name?.Trim()!, Specialty = body.Specialty?.Trim()!, Members = CleanMembers(body.Members), Handles = body.Handles?.Distinct().ToList()!, DepotId = Clean(body.DepotId) };
-            if (ResourceCatalog.Validate(crew) is { Count: > 0 } errors) return TypedResults.ValidationProblem(errors);
-            if (catalog.ValidateDepots(crew) is { Count: > 0 } depotErrors) return TypedResults.ValidationProblem(depotErrors);
-            if (catalog.GroundCrews.Any(c => c.Id != crew.Id && c.Name.Equals(crew.Name, StringComparison.OrdinalIgnoreCase)))
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["name"] = ["Another ground crew already has that name."] });
-
-            // Work orders store "Member (Crew)"; an edit must not orphan open ones.
-            var after = catalog.GroundCrews.Where(c => c.Id != crew.Id).Append(crew).ToList();
-            var orphaned = await OrphanedWorkOrdersAsync(repo, catalog.GroundCrews, after, crew.Id, ct);
-            if (orphaned > 0)
-                return TypedResults.Conflict($"{orphaned} open work order(s) point at a name this edit changes or removes. Reassign them first.");
-            Upsert(catalog.GroundCrews, crew, c => c.Id == crew.Id);
-            return TypedResults.Ok(crew);
+            var crew = body with { Id = id.Trim(), Name = body.Name?.Trim()!, Specialty = body.Specialty?.Trim()!, Members = KeepPersonal(catalog.GroundCrews.FirstOrDefault(c => c.Id == id.Trim())?.Members, CleanMembers(body.Members)), Handles = body.Handles?.Distinct().ToList()!, DepotId = Clean(body.DepotId) };
+            return await SaveGroundCrewAsync(catalog, crew, repo, ct);
         }, ct);
+
+    /// <summary>Validates and stores a ground crew, refusing an edit that would orphan open work orders.</summary>
+    private static async Task<IResult> SaveGroundCrewAsync(ResourceCatalog catalog, Crew crew, IGridRepository repo, CancellationToken ct)
+    {
+        if (ResourceCatalog.Validate(crew) is { Count: > 0 } errors) return TypedResults.ValidationProblem(errors);
+        if (ProfileErrors(crew.Members) is { Count: > 0 } profileErrors) return TypedResults.ValidationProblem(profileErrors);
+        if (catalog.ValidateDepots(crew) is { Count: > 0 } depotErrors) return TypedResults.ValidationProblem(depotErrors);
+        if (catalog.GroundCrews.Any(c => c.Id != crew.Id && c.Name.Equals(crew.Name, StringComparison.OrdinalIgnoreCase)))
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["name"] = ["Another ground crew already has that name."] });
+
+        // Work orders store "Member (Crew)"; an edit must not orphan open ones.
+        var after = catalog.GroundCrews.Where(c => c.Id != crew.Id).Append(crew).ToList();
+        var orphaned = await OrphanedWorkOrdersAsync(repo, catalog.GroundCrews, after, crew.Id, ct);
+        if (orphaned > 0)
+            return TypedResults.Conflict($"{orphaned} open work order(s) point at a name this edit changes or removes. Reassign them first.");
+        Upsert(catalog.GroundCrews, crew, c => c.Id == crew.Id);
+        return TypedResults.Ok(crew);
+    }
 
     private static Task<IResult> DeleteGroundCrew(string id, HttpContext ctx, IGridRepository repo, IResourceStore resources, CancellationToken ct) =>
         EditAsync(ctx, resources, async catalog =>
@@ -370,7 +408,7 @@ public static partial class Endpoints
         {
             var catalog = await resources.GetAsync(ct);
             var result = await edit(catalog);
-            if (result is not (Ok<DroneAsset> or Ok<FlightCrew> or Ok<Crew> or Ok<Vehicle> or Ok<MaintenanceRecord> or NoContent)) return result;
+            if (result is not (Ok<DroneAsset> or Ok<FlightCrew> or Ok<Crew> or Ok<Vehicle> or Ok<MaintenanceRecord> or Ok<CrewMember> or NoContent)) return result;
             try
             {
                 await resources.SaveAsync(catalog, ct);
@@ -404,7 +442,76 @@ public static partial class Endpoints
     }
 
     private static List<CrewMember> CleanMembers(IReadOnlyList<CrewMember>? members) =>
-        (members ?? []).Select(m => new CrewMember(m.Name?.Trim() ?? "", m.Role?.Trim() ?? "", m.Skills?.Distinct().ToList(), Clean(m.DepotId))).ToList();
+        (members ?? []).Select(m => new CrewMember(m.Name?.Trim() ?? "", m.Role?.Trim() ?? "", m.Skills?.Distinct().ToList(), Clean(m.DepotId),
+            Profile: m.Profile?.Cleaned())).ToList();
+
+    private static Dictionary<string, string[]> ProfileErrors(IEnumerable<CrewMember> members) =>
+        members.Select(m => Employees.Validate(m.Profile)).FirstOrDefault(e => e.Count > 0) ?? [];
 
     private static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    /// <summary>
+    /// Editing a whole crew keeps each person's own rate (pay is set per person: <see cref="PutEmployee"/>, <see cref="PutPayRate"/>)
+    /// and their employee record when the edit doesn't send one.
+    /// </summary>
+    private static List<CrewMember> KeepPersonal(IReadOnlyList<CrewMember>? before, List<CrewMember> after) =>
+        [.. after.Select(m => before?.FirstOrDefault(b => b.Name.Equals(m.Name, StringComparison.OrdinalIgnoreCase)) is { } was
+            ? m with { PayRate = was.PayRate, Profile = m.Profile ?? was.Profile }
+            : m with { PayRate = null })];
+
+    private static Dictionary<string, string[]>? PayError(double? rate) =>
+        rate is { } r && (double.IsNaN(r) || r < Costs.MinPayRate || r > Costs.MaxPayRate)
+            ? new() { ["payRate"] = [string.Create(CultureInfo.InvariantCulture, $"An hourly rate is between ${Costs.MinPayRate:0} and ${Costs.MaxPayRate:0}.")] }
+            : null;
+
+    /// <summary>
+    /// Edits one employee: name, role, (ground crews) skills and depot, their employee record, and their own pay rate (null:
+    /// the standard rate). Supervisors only. Goes through the same checks as editing their crew, so a rename that would
+    /// orphan open work orders is refused.
+    /// </summary>
+    private static Task<IResult> PutEmployee(string kind, string crewId, string member, EmployeeEdit body, HttpContext ctx, IGridRepository repo,
+        IResourceStore resources, CancellationToken ct) =>
+        EditAsync(ctx, resources, async catalog =>
+        {
+            if (PayError(body.PayRate) is { } payError) return TypedResults.ValidationProblem(payError);
+            if (Employees.Validate(body.Profile?.Cleaned()) is { Count: > 0 } profileErrors) return TypedResults.ValidationProblem(profileErrors);
+            var updated = new CrewMember(body.Name?.Trim() ?? "", body.Role?.Trim() ?? "", body.Skills?.Distinct().ToList(), Clean(body.DepotId),
+                body.PayRate is { } rate ? Costs.Money(rate) : null, body.Profile?.Cleaned());
+            static List<CrewMember>? Replace(IReadOnlyList<CrewMember> members, string name, CrewMember with) =>
+                members.Any(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                    ? [.. members.Select(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase) ? with : m)]
+                    : null;
+
+            if (kind == "ground-crews")
+            {
+                if (catalog.GroundCrews.FirstOrDefault(c => c.Id == crewId) is not { } crew || Replace(crew.Members, member, updated) is not { } members)
+                    return TypedResults.NotFound();
+                var saved = await SaveGroundCrewAsync(catalog, crew with { Members = members }, repo, ct);
+                return saved is Ok<Crew> ? TypedResults.Ok(updated) : saved;
+            }
+            if (catalog.FlightCrews.FirstOrDefault(c => c.Id == crewId) is not { } flight || Replace(flight.Members, member, updated) is not { } flyers)
+                return TypedResults.NotFound();
+            var result = SaveFlightCrew(catalog, flight with { Members = flyers });
+            return result is Ok<FlightCrew> ? TypedResults.Ok(updated with { Skills = null, DepotId = null }) : result;
+        }, ct);
+
+    /// <summary>
+    /// Sets (or, with no rate, clears) one person's own hourly rate. Supervisors only. Ground crews: a technician's rate.
+    /// Flight crews: a pilot's or an observer's share of the flight crew rate.
+    /// </summary>
+    private static Task<IResult> PutPayRate(string kind, string crewId, string member, PayRateRequest body, HttpContext ctx, IResourceStore resources,
+        CancellationToken ct) =>
+        EditAsync(ctx, resources, catalog =>
+        {
+            if (PayError(body.Rate) is { } payError) return Task.FromResult<IResult>(TypedResults.ValidationProblem(payError));
+            var rate = body.Rate is { } set ? Costs.Money(set) : (double?)null;
+            CrewMember? updated = null;
+            List<CrewMember> Set(IReadOnlyList<CrewMember> members) =>
+                [.. members.Select(m => m.Name.Equals(member, StringComparison.OrdinalIgnoreCase) ? updated = m with { PayRate = rate } : m)];
+            if (kind == "ground-crews" && catalog.GroundCrews.FindIndex(c => c.Id == crewId) is var g and >= 0)
+                catalog.GroundCrews[g] = catalog.GroundCrews[g] with { Members = Set(catalog.GroundCrews[g].Members) };
+            else if (kind == "flight-crews" && catalog.FlightCrews.FindIndex(c => c.Id == crewId) is var f and >= 0)
+                catalog.FlightCrews[f] = catalog.FlightCrews[f] with { Members = Set(catalog.FlightCrews[f].Members) };
+            return Task.FromResult<IResult>(updated is null ? TypedResults.NotFound() : TypedResults.Ok(updated));
+        }, ct);
 }
