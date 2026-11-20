@@ -359,6 +359,18 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
     }
 
     [Fact]
+    public async Task Guests_can_read_the_reports_but_not_log_maintenance()
+    {
+        var guest = factory.CreateClient();
+        (await guest.GetAsync("/api/public/reports/activity")).EnsureSuccessStatusCode();
+        (await guest.GetAsync("/api/public/reports/rates")).EnsureSuccessStatusCode();
+        (await guest.GetAsync($"/api/public/resources/drones/{DemoFlight.DroneId}/report")).EnsureSuccessStatusCode();
+        (await guest.GetAsync("/api/public/resources/vehicles/T-011/report")).EnsureSuccessStatusCode();
+        var write = await guest.PostAsJsonAsync("/api/public/resources/vehicles/T-011/maintenance", new { kind = "Repair", hours = 1 }, JsonOpts);
+        Assert.False(write.IsSuccessStatusCode);
+    }
+
+    [Fact]
     public async Task Only_supervisors_change_resources()
     {
         var drone = new DroneAsset("DRN-RBAC", "Test quad", "Test yard");

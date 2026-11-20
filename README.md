@@ -304,4 +304,4 @@ I've spent the last couple of years supporting grid operations software (ADMS on
 | Infrastructure as code | `infra/GridSafetyStack.cs` (CDK in C#) |
 | Secure CI/CD | GitHub Actions with OIDC, no long-lived keys |
 | RBAC / identity | Cognito groups → JWT authorizer → API-enforced Supervisor rights |
-| Automation and testing | Simulator with scripted incidents; 210 .NET tests + frontend tests |
+| Automation and testing | Simulator with scripted incidents; 211 .NET tests + frontend tests |

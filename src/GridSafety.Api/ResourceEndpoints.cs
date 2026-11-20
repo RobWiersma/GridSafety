@@ -47,6 +47,23 @@ public sealed record ResourcesView(IReadOnlyList<DroneResourceView> Drones, IRea
 /// <summary>Drones, flight crews and ground crews. Everyone can see them; supervisors add, edit and remove them.</summary>
 public static partial class Endpoints
 {
+    /// <summary>The read-only reports, for signed-in users and (redacted, through the guest group) the public demo.</summary>
+    private static void MapReports(RouteGroupBuilder group)
+    {
+        // A drone's and a pilot's flight log, a technician's shifts.
+        group.MapGet("/resources/drones/{id}/report", GetDroneReport);
+        group.MapGet("/resources/flight-crews/{crewId}/members/{member}/report", GetPilotReport);
+        group.MapGet("/resources/ground-crews/{crewId}/members/{member}/report", GetShiftReports);
+
+        // Work reports for each kind of resource as a whole, and the whole operation.
+        group.MapGet("/resources/vehicles/{id}/report", GetVehicleReport);
+        group.MapGet("/resources/ground-crews/{crewId}/report", GetCrewWorkReport);
+        group.MapGet("/resources/flight-crews/{crewId}/report", GetFlightCrewReport);
+        group.MapGet("/resources/depots/{id}/report", GetDepotReport);
+        group.MapGet("/reports/activity", GetActivityReport);
+        group.MapGet("/reports/rates", () => TypedResults.Ok(Costs.Card));
+    }
+
     private static void MapResources(RouteGroupBuilder secured)
     {
         secured.MapGet("/resources", ListResources);
@@ -58,19 +75,7 @@ public static partial class Endpoints
         secured.MapDelete("/resources/ground-crews/{id}", DeleteGroundCrew);
         secured.MapPut("/resources/vehicles/{id}", PutVehicle);
         secured.MapDelete("/resources/vehicles/{id}", DeleteVehicle);
-
-        // Reports: a drone's and a pilot's flight log, a technician's shifts.
-        secured.MapGet("/resources/drones/{id}/report", GetDroneReport);
-        secured.MapGet("/resources/flight-crews/{crewId}/members/{member}/report", GetPilotReport);
-        secured.MapGet("/resources/ground-crews/{crewId}/members/{member}/report", GetShiftReports);
-
-        // Work reports for each kind of resource as a whole.
-        secured.MapGet("/resources/vehicles/{id}/report", GetVehicleReport);
-        secured.MapGet("/resources/ground-crews/{crewId}/report", GetCrewWorkReport);
-        secured.MapGet("/resources/flight-crews/{crewId}/report", GetFlightCrewReport);
-        secured.MapGet("/resources/depots/{id}/report", GetDepotReport);
-        secured.MapGet("/reports/activity", GetActivityReport);
-        secured.MapGet("/reports/rates", () => TypedResults.Ok(Costs.Card));
+        MapReports(secured);
 
         // Maintenance: supervisors log repairs and services; refuels and charging are simulated.
         secured.MapPost("/resources/drones/{id}/maintenance", (string id, MaintenanceRequest body, HttpContext ctx, IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct) =>

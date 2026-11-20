@@ -71,6 +71,7 @@ public static partial class Endpoints
         guest.MapGet("/findings/{id}/assignees", ListAssignees);
         guest.MapGet("/crews", ListCrews);
         guest.MapGet("/resources", ListResources);
+        MapReports(guest);
         MapFieldJobs(guest);
 
         var secured = api.MapGroup("/").AddEndpointFilter(RequireUser);
