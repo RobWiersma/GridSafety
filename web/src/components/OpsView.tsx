@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAcknowledgeAlerts, useBulkFindings, type BulkResult, useCircuits, useDrones, useFieldJobs, useFindings, useMissions, useResources, useTrack } from '../api';
 import { REST_HOURS, SHIFT_HOURS, phaseAt, positionAt, roadAhead, statusText, tripKey, truckName, useServerClock } from '../lib/field';
 import { ShiftMeter } from './CrewsPanel';
-import { FINDING_TYPE_LABEL, miles, pct, relativeTime } from '../lib/format';
+import { FINDING_TYPE_LABEL, flightLabel, miles, pct, relativeTime } from '../lib/format';
 import type { DroneAlert, MissionView } from '../types';
 import { OpsMap, pickable, type DepotPin, type TruckPin } from './OpsMap';
 import type { ToastMessage } from './Toast';
@@ -310,7 +310,7 @@ function MissionCard({ m, selected, onSelect }: { m: MissionView; selected: bool
         <strong>{mi.name ?? mi.droneId}</strong>
         <span className={`pill pill-${mi.status.toLowerCase()}`}>{mi.status === 'InFlight' ? 'In flight' : mi.status}</span>
       </div>
-      <div className="muted small">{mi.name ? `Drone ${mi.droneId} · ` : ''}{m.circuitName} · PIC {mi.pilot}</div>
+      <div className="muted small">{mi.name ? `Drone ${mi.droneId} · ` : ''}{m.circuitName}{flightLabel(m.flight, false) ? ` · ${flightLabel(m.flight, false)}` : ''} · PIC {mi.pilot}</div>
       <div className="progress" title={`Coverage ${pct(m.coverage)}`}>
         <span style={{ width: pct(m.coverage) }} />
       </div>

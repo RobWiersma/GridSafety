@@ -48,7 +48,7 @@ public static partial class Endpoints
         try
         {
             var sim = await simulation.GetAsync(ct);
-            await launcher.LaunchAsync(new DemoFlightLaunch(mission.Id, circuit.Id, mission.DroneId, sim.FindingCountForNextFlight(Random.Shared)), ct);
+            await launcher.LaunchAsync(new DemoFlightLaunch(mission.Id, circuit.Id, mission.DroneId, sim.FindingCountForNextFlight(Random.Shared), mission.Leg), ct);
         }
         catch
         {

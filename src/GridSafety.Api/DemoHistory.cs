@@ -55,26 +55,25 @@ public sealed class DemoHistorySeeder(IGridRepository repo, IResourceStore resou
             {
                 var circuit = lines[rng.Next(lines.Count)];
                 var start = morning + TimeSpan.FromMinutes(rng.Next(0, 9 * 60));
-                var minutes = rng.Next(20, 75);
+                // One battery's stretch of the line: the flight due next, along it from end to end.
+                var leg = circuit.Legs()[circuit.NextLeg(missions) - 1];
                 var m = Mission.Plan(circuit, drones[rng.Next(drones.Count)].Id, pilots[rng.Next(pilots.Count)], Supervisor, start - TimeSpan.FromMinutes(20),
-                    FlightNames.Generate(rng, missions.Select(x => x.Name)));
+                    FlightNames.Generate(rng, missions.Select(x => x.Name)), leg.Number);
                 m.MoveTo(MissionStatus.InFlight, start, m.Pilot, "First telemetry received");
 
-                // A run of consecutive towers along the line, out and back.
-                var count = Math.Min(circuit.Structures.Count, rng.Next(10, 32));
-                var first = rng.Next(0, circuit.Structures.Count - count + 1);
-                var run = circuit.Structures.Skip(first).Take(count).ToList();
+                var run = circuit.Stretch(leg.Number).Structures.ToList();
                 var aborted = rng.NextDouble() < 0.06;
-                if (aborted) run = run.Take(Math.Max(2, count / 3)).ToList();
+                if (aborted) run = run.Take(Math.Max(2, run.Count / 3)).ToList();
                 m.StructuresInspected.AddRange(run.Select(s => s.Id));
-                m.DistanceFlownMeters = 2 * run.Zip(run.Skip(1), (a, b) => Geo.DistanceMeters(a.Location, b.Location)).Sum();
-                m.LastPosition = run[0].Location;
-                m.BatteryPct = aborted ? rng.Next(18, 25) : rng.Next(28, 55);
+                m.DistanceFlownMeters = run.Zip(run.Skip(1), (a, b) => Geo.DistanceMeters(a.Location, b.Location)).Sum() * (1.02 + rng.NextDouble() * 0.04);
+                m.LastPosition = run[^1].Location;
+                var minutes = Math.Max(3, (int)Math.Round(FlightLegs.MinutesFor(m.DistanceFlownMeters)));
+                m.BatteryPct = Math.Round(FlightPlan.BatteryAfter(TimeSpan.FromMinutes(minutes - 1)));
 
                 var found = aborted ? 0 : rng.Next(0, 5);
                 foreach (var s in run.OrderBy(_ => rng.Next()).Take(found))
                 {
-                    var at = start + TimeSpan.FromMinutes(rng.Next(2, minutes));
+                    var at = start + TimeSpan.FromMinutes(rng.Next(1, minutes));
                     var severity = rng.NextDouble() switch { < 0.3 => 1, < 0.6 => 2, < 0.8 => 3, < 0.93 => 4, _ => 5 };
                     var f = new Finding
                     {
@@ -88,8 +87,8 @@ public sealed class DemoHistorySeeder(IGridRepository repo, IResourceStore resou
                     if (rng.NextDouble() < 0.92) triage.Add((at + TimeSpan.FromMinutes(rng.Next(10, severity >= 4 ? 90 : 360)), f));
                 }
                 m.FindingCount = found;
-                m.MoveTo(aborted ? MissionStatus.Aborted : MissionStatus.Completed, start + TimeSpan.FromMinutes(aborted ? minutes / 3 : minutes), m.Pilot,
-                    aborted ? "Returned early: low battery" : "Drone landed");
+                m.MoveTo(aborted ? MissionStatus.Aborted : MissionStatus.Completed, start + TimeSpan.FromMinutes(minutes), m.Pilot,
+                    aborted ? "Returned early: weak signal" : "Drone landed");
                 missions.Add(m);
             }
         }

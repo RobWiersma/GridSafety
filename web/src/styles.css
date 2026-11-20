@@ -137,6 +137,13 @@ button { font: inherit; color: inherit; }
   box-shadow: 0 0 0 4px #f5b22455, 0 4px 10px rgb(0 0 0 / 40%); }
 .drone-alert { background: #dc2626; color: #fff; box-shadow: 0 0 0 0 #dc262699; animation: pulse 1.2s infinite; }
 .drone-idle { background: #64748b; color: #fff; box-shadow: none; }
+.drone-rotor { animation: spin .35s linear infinite; }
+.finding-marker { box-sizing: border-box; border-radius: 50%; display: grid; place-items: center; border: 2px solid #fff; opacity: .95;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 45%); cursor: pointer; }
+.finding-marker svg { display: block; }
+.finding-picked { border: 3px solid #38bdf8; box-shadow: 0 0 0 3px rgb(56 189 248 / 35%), 0 1px 4px rgb(0 0 0 / 45%); }
+.drone-idle .drone-rotor { animation: none; }
+@media (prefers-reduced-motion: reduce) { .drone-rotor { animation: none; } }
 .leaflet-tooltip { font: 12px/1.35 Inter, system-ui, sans-serif; }
 
 /* Panels */
@@ -442,7 +449,7 @@ button { font: inherit; color: inherit; }
 .sev-filter-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 0 4px; }
 .sev-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: transparent; color: var(--muted);
   border-radius: 999px; padding: 3px 8px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; opacity: .55; }
-.sev-chip i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.sev-chip i { width: 15px; height: 15px; border-radius: 50%; display: inline-grid; place-items: center; }
 .sev-chip-on { opacity: 1; color: var(--text); background: var(--surface-2); }
 .sev-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .sev-chip-count { font-weight: 600; color: var(--muted); }

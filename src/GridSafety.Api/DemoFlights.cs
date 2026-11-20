@@ -44,7 +44,7 @@ public sealed class InProcessDemoFlightLauncher(
 
     public Task LaunchAsync(DemoFlightLaunch launch, CancellationToken ct)
     {
-        var circuit = circuits.Find(launch.CircuitId) ?? throw new NotFoundException($"Circuit {launch.CircuitId}");
+        var circuit = (circuits.Find(launch.CircuitId) ?? throw new NotFoundException($"Circuit {launch.CircuitId}")).Stretch(launch.Leg);
         var tick = TimeSpan.FromMilliseconds(config.GetValue("GridSafety:DemoTickMs", DemoFlight.DefaultTick.TotalMilliseconds));
         var stopping = lifetime.ApplicationStopping;
 

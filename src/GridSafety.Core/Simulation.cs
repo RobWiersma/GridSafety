@@ -53,6 +53,12 @@ public sealed record FlightPlan(IReadOnlyList<TelemetryPoint> Points, Structure 
     /// <summary>How far the drone flies from the ground station before the crew moves it up the line.</summary>
     public const double RadioLegMeters = 2500;
 
+    /// <summary>Battery used per minute in the air: a full 20-minute flight lands with about 22% left.</summary>
+    public const double DrainPerMinute = 3.9;
+
+    /// <summary>Battery left after this long in the air (the climb out counts as the first minute).</summary>
+    public static double BatteryAfter(TimeSpan alongLine) => Math.Max(0, 100 - DrainPerMinute * (1 + alongLine.TotalMinutes));
+
     public static FlightPlan Build(Circuit c, Random rng, bool scriptedIncidents, DateTimeOffset start)
     {
         ArgumentNullException.ThrowIfNull(c);
@@ -86,7 +92,7 @@ public sealed record FlightPlan(IReadOnlyList<TelemetryPoint> Points, Structure 
             var (sideN, sideE) = drift == 0 ? (0d, 0d) : Perpendicular(samples, i);
             var pos = Geo.Offset(samples[i], rng.NextDouble() * 12 - 6 + drift * sideN, rng.NextDouble() * 12 - 6 + drift * sideE);
             var altitude = climbAt >= 0 && i >= climbAt && i < climbAt + 3 ? 126 + rng.NextDouble() * 4 : 58 + rng.NextDouble() * 10;
-            var battery = 100 - 78.0 * i / Math.Max(1, samples.Count - 1);
+            var battery = BatteryAfter(TimeSpan.FromSeconds(i * SecondsPerTick));
             var fade = fadeAt >= 0 && i >= fadeAt && i < fadeAt + 6 ? 14 + 8 * Math.Sin(Math.PI * (i - fadeAt) / 6) : 0;
             if (Geo.DistanceMeters(station, samples[i]) > RadioLegMeters) station = samples[i];
             var rssi = Rssi(Geo.DistanceMeters(station, pos), altitude) - fade + rng.NextDouble() * 5 - 2.5;
@@ -148,7 +154,8 @@ public static class FindingGenerator
 
 /// <summary>Start a demo flight: which mission to fly. Sent from the API to the DemoFlight Lambda.</summary>
 /// <param name="FindingCount">Exactly this many findings (see <see cref="SimulationSettings"/>), or null for random.</param>
-public sealed record DemoFlightLaunch(string MissionId, string CircuitId, string DroneId, int? FindingCount = null);
+/// <param name="Leg">Which flight of the line to fly (see <see cref="FlightLegs"/>); the whole line when null.</param>
+public sealed record DemoFlightLaunch(string MissionId, string CircuitId, string DroneId, int? FindingCount = null, int? Leg = null);
 
 /// <summary>
 /// Flies a whole simulated mission through an <see cref="IDroneLink"/>: telemetry every tick, a finding
@@ -180,7 +187,7 @@ public static class DemoFlight
     /// <summary>A demo mission with no progress for this long is treated as abandoned (e.g. the flight crashed).</summary>
     public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(10);
 
-    /// <summary>Real-time delay between telemetry messages for on-demand demos (a 9 km line takes about 3 minutes).</summary>
+    /// <summary>Real-time delay between telemetry messages for on-demand demos (a full 20-minute flight plays in under 5 minutes).</summary>
     public static readonly TimeSpan DefaultTick = TimeSpan.FromMilliseconds(500);
 
     public static bool IsStale(Mission m, DateTimeOffset now)

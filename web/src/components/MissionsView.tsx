@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ApiError, useCircuits, useDemoFlight, useMe, useMissions, useMissionStatus, useOpenReport, usePlanMission, useResources } from '../api';
-import { MISSION_STATUS_LABEL, circuitsByVoltage, miles, pct, relativeTime } from '../lib/format';
+import { ApiError, useCircuitFlights, useCircuits, useDemoFlight, useMe, useMissions, useMissionStatus, useOpenReport, usePlanMission, useResources } from '../api';
+import { MISSION_STATUS_LABEL, circuitsByVoltage, flightLabel, miles, pct, relativeTime } from '../lib/format';
 import { useSession } from '../session';
 import type { MissionView } from '../types';
 import { FilterBar, matchesSearch, SearchFilter, SelectFilter, ToggleFilter } from './FilterBar';
@@ -120,7 +120,7 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
               {shown.map((m) => (
                 <tr key={m.mission.id}>
                   <td><button className="mission-link mono" onClick={() => onOpenMission(m.mission.id)}>{m.mission.id}</button><div className="muted small">{relativeTime(m.mission.createdAt)}</div></td>
-                  <td>{m.circuitName}</td>
+                  <td>{m.circuitName}{flightLabel(m.flight, false) && <div className="muted small">{flightLabel(m.flight)}</div>}</td>
                   <td>{m.mission.name ? <strong>{m.mission.name}</strong> : m.mission.droneId}<div className="muted small">{m.mission.name ? `Drone ${m.mission.droneId} · ` : ''}{m.mission.pilot}</div></td>
                   <td><span className={`pill pill-${m.mission.status.toLowerCase()}`}>{MISSION_STATUS_LABEL[m.mission.status]}</span></td>
                   <td>
@@ -170,6 +170,12 @@ function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: Miss
   const plan = usePlanMission();
   const ref = useRef<HTMLDialogElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const grouped = circuitsByVoltage(circuits.data ?? []);
+  const [circuitId, setCircuitId] = useState<string | null>(null);
+  const chosenCircuit = circuitId ?? grouped[0]?.circuits[0]?.id ?? null;
+  const flights = useCircuitFlights(chosenCircuit);
+  const [leg, setLeg] = useState<number | null>(null);
+  const chosenLeg = leg ?? flights.data?.nextLeg ?? 1;
 
   useEffect(() => ref.current?.showModal(), []);
 
@@ -183,7 +189,8 @@ function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: Miss
     const f = new FormData(e.currentTarget);
     setError(null);
     try {
-      onPlanned(await plan.mutateAsync({ circuitId: String(f.get('circuitId')), droneId: String(f.get('droneId')), pilot: String(f.get('pilot')) }));
+      onPlanned(await plan.mutateAsync({ circuitId: String(f.get('circuitId')), droneId: String(f.get('droneId')), pilot: String(f.get('pilot')),
+        leg: flights.data && flights.data.circuitId === chosenCircuit ? chosenLeg : undefined }));
     } catch (err) {
       setError(err instanceof ApiError || err instanceof Error ? err.message : 'Failed');
     }
@@ -195,8 +202,8 @@ function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: Miss
         <h2>Plan inspection mission</h2>
         <label>
           Circuit
-          <select className="input" name="circuitId" required>
-            {circuitsByVoltage(circuits.data ?? []).map((g) => (
+          <select className="input" name="circuitId" required value={chosenCircuit ?? ''} onChange={(e) => { setCircuitId(e.target.value); setLeg(null); }}>
+            {grouped.map((g) => (
               <optgroup key={g.kv} label={`${g.label} (${g.circuits.length})`}>
                 {g.circuits.map((c) => (
                   <option key={c.id} value={c.id}>{c.name} · {c.structures.length} structures · {(c.lengthMeters / 1000).toFixed(1)} km</option>
@@ -205,6 +212,24 @@ function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: Miss
             ))}
           </select>
         </label>
+        {flights.data && flights.data.circuitId === chosenCircuit && flights.data.flights.length > 1 && (
+          <label>
+            Flight
+            <select className="input" value={chosenLeg} onChange={(e) => setLeg(Number(e.target.value))}>
+              {flights.data.flights.map(({ leg: l, lastInspected, inProgress }) => (
+                <option key={l.number} value={l.number}>
+                  {l.number} of {l.of}: {l.fromLabel} to {l.toLabel} · {(l.lengthMeters / 1000).toFixed(1)} km · ~{Math.round(l.minutes)} min ·{' '}
+                  {inProgress ? 'being flown now' : lastInspected ? `inspected ${relativeTime(lastInspected)}` : 'not inspected yet'}
+                  {l.number === flights.data.nextLeg ? ' (due next)' : ''}
+                </option>
+              ))}
+            </select>
+            <span className="muted small">
+              This line is {(flights.data.lengthMeters / 1000).toFixed(1)} km, more than one {flights.data.enduranceMinutes}-minute battery covers, so it's
+              inspected over {flights.data.flights.length} flights. The crew lands at the end of each stretch and swaps the battery.
+            </span>
+          </label>
+        )}
         {resources.data ? (
           <div className="grid-2">
             <label>
@@ -252,7 +277,7 @@ function SimulatorHint({ mission, onClose, onToast, onLaunched }: { mission: Mis
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => ref.current?.showModal(), []);
   const m = mission.mission;
-  const cmd = `dotnet run --project tools/GridSafety.Simulator -- ${devMode ? '' : '--aws '}--mission ${m.id} --circuit ${m.circuitId} --drone ${m.droneId}`;
+  const cmd = `dotnet run --project tools/GridSafety.Simulator -- ${devMode ? '' : '--aws '}--mission ${m.id} --circuit ${m.circuitId}${m.leg ? ` --leg ${m.leg}` : ''} --drone ${m.droneId}`;
 
   return (
     <dialog ref={ref} className="dialog" onClose={onClose} onCancel={onClose}>

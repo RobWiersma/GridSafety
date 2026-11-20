@@ -1,7 +1,8 @@
 import L from 'leaflet';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleMarker, MapContainer, Marker, Pane, Polyline, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
-import { FINDING_TYPE_LABEL, TOWER_ZOOM, minKvForZoom, severityHex, voltageHex } from '../lib/format';
+import { FINDING_TYPE_LABEL, TOWER_ZOOM, minKvForZoom, voltageHex } from '../lib/format';
+import { severityMarkerHtml, severityMarkerSize } from '../lib/severityIcon';
 import type { Circuit, Depot, DroneState, FieldDispatch, FieldPhase, FindingView, GeoPoint, TelemetryPoint } from '../types';
 
 /** A truck on a simulated field job, positioned for the current moment. */
@@ -64,21 +65,41 @@ const depotIcon = L.divIcon({
            <path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></div>`,
 });
 
+/** A quadcopter seen from above: body, four arms and a rotor at the end of each. The rotors spin while it flies. */
+const ROTOR = (x: number, y: number) =>
+  `<circle cx="${x}" cy="${y}" r="4.3" fill="currentColor" fill-opacity=".3" stroke="currentColor" stroke-width="1.1"/>`
+  + `<g class="drone-rotor" style="transform-origin:${x}px ${y}px"><path d="M${x - 3.6} ${y}h7.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></g>`;
+const QUADCOPTER = `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+  <path d="M7 7l10 10M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  ${ROTOR(5.6, 5.6)}${ROTOR(18.4, 5.6)}${ROTOR(5.6, 18.4)}${ROTOR(18.4, 18.4)}
+  <rect x="8.6" y="8.6" width="6.8" height="6.8" rx="2" fill="currentColor"/>
+</svg>`;
+
+/** One icon per severity and selected state, made once and reused. */
+const findingIcons = new Map<string, L.DivIcon>();
+const findingIcon = (sev: number, picked: boolean) => {
+  const key = `${sev}/${picked}`;
+  let icon = findingIcons.get(key);
+  if (!icon) {
+    const size = severityMarkerSize(sev);
+    icon = L.divIcon({ className: '', iconSize: [size, size], iconAnchor: [size / 2, size / 2], html: severityMarkerHtml(sev, picked) });
+    findingIcons.set(key, icon);
+  }
+  return icon;
+};
+
 const droneIcon = (d: DroneState) =>
   L.divIcon({
     className: '',
     iconSize: [34, 34],
     iconAnchor: [17, 17],
-    html: `<div class="drone-marker ${d.activeAlerts.length ? 'drone-alert' : ''} ${d.status === 'Idle' ? 'drone-idle' : ''}">
-             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 16.5 5.5 21l2-7.5L2 9h7z"/></svg>
-           </div>`,
+    html: `<div class="drone-marker ${d.activeAlerts.length ? 'drone-alert' : ''} ${d.status === 'Idle' ? 'drone-idle' : ''}">${QUADCOPTER}</div>`,
   });
 
 export function OpsMap({ circuits, drones, findings, track, focus, flightNames = {}, depots = [], trucks = [], onOpenFinding,
   selected, selectMode = false, onSelect }: Props) {
   // SVG, not the map's shared canvas: a canvas in its own pane would cover the whole map and swallow
   // hover and clicks meant for everything underneath (findings, lines, parked drones). There are only tens of each.
-  const findingsRenderer = useMemo(() => L.svg({ pane: 'findings' }), []);
   const trucksRenderer = useMemo(() => L.svg({ pane: 'trucks' }), []);
   const clickFinding = (f: FindingView, e: L.LeafletMouseEvent) => {
     const k = e.originalEvent;
@@ -147,15 +168,14 @@ export function OpsMap({ circuits, drones, findings, track, focus, flightNames =
       {[...findings].sort((a, b) => a.finding.severity - b.finding.severity).map((f) => {
         const picked = selected?.has(f.finding.id) ?? false;
         return (
-        <CircleMarker key={f.finding.id} pane="findings" renderer={findingsRenderer} center={[f.finding.location.lat, f.finding.location.lon]}
-          radius={6 + f.finding.severity * 1.5}
-          pathOptions={{ color: picked ? SELECTED : '#fff', weight: picked ? 4 : 2, fillColor: severityHex(f.finding.severity), fillOpacity: 0.9 }}
+        <Marker key={f.finding.id} pane="findings" position={[f.finding.location.lat, f.finding.location.lon]}
+          icon={findingIcon(f.finding.severity, picked)} zIndexOffset={f.finding.severity * 1000}
           eventHandlers={{ click: (e) => clickFinding(f, e) }}>
-          <Tooltip>
+          <Tooltip direction="top" offset={[0, -severityMarkerSize(f.finding.severity) / 2]}>
             <strong>Sev {f.finding.severity}</strong> · {FINDING_TYPE_LABEL[f.finding.type]}<br />
             {f.finding.structureLabel} · {f.finding.status}{picked ? ' · selected' : ''}
           </Tooltip>
-        </CircleMarker>
+        </Marker>
         );
       })}
       </Pane>
@@ -222,7 +242,6 @@ function CircuitLayer({ circuits, focus }: { circuits: Circuit[]; focus?: Circui
   );
 }
 
-const SELECTED = '#38bdf8';
 
 /**
  * Shift-drag (or any drag in select mode, mouse or touch) draws a box and picks the open findings inside it, in place of

@@ -5,7 +5,7 @@ import { canTake } from './lib/field';
 import type {
   AlertKind, AlertSettings, AlertSettingsView,
   AssigneeOption, Circuit, Crew, CrewView, FieldJobs, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint, SimulationSettings,
- DroneReport, PilotReport, TechnicianReport, Vehicle, VehicleReport, CrewWorkReport, DepotReport, FlightCrewReport, ActivityReport, RateCard, EmployeeProfile, FindingType, ScheduleView, ScheduleDispatchResult,} from './types';
+ DroneReport, PilotReport, TechnicianReport, Vehicle, VehicleReport, CrewWorkReport, DepotReport, FlightCrewReport, ActivityReport, RateCard, EmployeeProfile, FindingType, ScheduleView, ScheduleDispatchResult, CircuitFlightsView,} from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public fieldErrors?: Record<string, string[]>) {
@@ -68,6 +68,16 @@ export const useMe = () => {
   // Keyed by user so a role switch (or re-login) never shows another user's rights.
   const { displayName } = useSession();
   return useQuery({ queryKey: [...keys.me, displayName], queryFn: () => api<Me>('/me'), staleTime: 60_000 });
+};
+
+/** How a line splits into one-battery flights, when each was last inspected, and which is due next. */
+export const useCircuitFlights = (circuitId: string | null) => {
+  const api = useFetcher();
+  return useQuery({
+    queryKey: ['circuit-flights', circuitId],
+    queryFn: () => api<CircuitFlightsView>(`/circuits/${encodeURIComponent(circuitId!)}/flights`),
+    enabled: Boolean(circuitId),
+  });
 };
 
 export const useCircuits = () => {
@@ -332,7 +342,7 @@ export function usePlanMission() {
   const api = useFetcher();
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (input: { circuitId: string; droneId: string; pilot: string }) =>
+    mutationFn: (input: { circuitId: string; droneId: string; pilot: string; leg?: number }) =>
       api<MissionView>('/missions', { method: 'POST', body: JSON.stringify(input) }),
     onSuccess: invalidate,
   });

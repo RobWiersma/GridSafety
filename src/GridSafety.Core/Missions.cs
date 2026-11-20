@@ -2,7 +2,7 @@ namespace GridSafety.Core;
 
 public enum MissionStatus { Planned, InFlight, Completed, Aborted }
 
-/// <summary>One drone flight inspecting one circuit.</summary>
+/// <summary>One drone flight inspecting one circuit, or one battery's stretch of it (<see cref="Leg"/>).</summary>
 public sealed class Mission
 {
     public static readonly Workflow<MissionStatus> Workflow = new(new Dictionary<MissionStatus, MissionStatus[]>
@@ -19,6 +19,13 @@ public sealed class Mission
     /// <summary>Human-friendly callsign, e.g. "Amber Kestrel 07". Demo flights always get one; older missions may not.</summary>
     public string? Name { get; init; }
     public required string CircuitId { get; init; }
+    /// <summary>
+    /// Which flight of the line this is (1-based, see <see cref="FlightLegs"/>): a line longer than one battery allows is
+    /// inspected over several flights. Null on missions from before lines were split, which covered the whole line.
+    /// </summary>
+    public int? Leg { get; init; }
+    /// <summary>How many flights the whole line takes.</summary>
+    public int? Legs { get; init; }
     public required string DroneId { get; init; }
     public required string Pilot { get; init; }
     public string? CreatedBy { get; init; }
@@ -41,11 +48,14 @@ public sealed class Mission
     public List<StatusChange<MissionStatus>> History { get; init; } = [];
     public long Version { get; set; }
 
-    public static Mission Plan(Circuit circuit, string droneId, string pilot, string? createdBy, DateTimeOffset now, string? name = null) => new()
+    /// <param name="leg">Which flight of the line (see <see cref="FlightLegs"/>); the first when null.</param>
+    public static Mission Plan(Circuit circuit, string droneId, string pilot, string? createdBy, DateTimeOffset now, string? name = null, int? leg = null) => new()
     {
         Id = Ids.New(),
         Name = string.IsNullOrWhiteSpace(name) ? null : name.Trim(),
         CircuitId = circuit.Id,
+        Leg = circuit.Leg(leg ?? 1)?.Number ?? 1,
+        Legs = circuit.Legs().Count,
         DroneId = droneId.Trim(),
         Pilot = pilot.Trim(),
         CreatedBy = createdBy,
@@ -90,6 +100,11 @@ public sealed class Mission
     }
 
     /// <summary>Share of the circuit's structures the drone has passed within inspection range of.</summary>
-    public double Coverage(Circuit circuit) =>
-        circuit.Structures.Count == 0 ? 0 : Math.Round((double)StructuresInspected.Count / circuit.Structures.Count, 3);
+    /// <summary>Share of this flight's structures inspected (of the whole line for missions with no flight number).</summary>
+    public double Coverage(Circuit circuit)
+    {
+        ArgumentNullException.ThrowIfNull(circuit);
+        var planned = circuit.Stretch(Leg).Structures;
+        return planned.Count == 0 ? 0 : Math.Round((double)planned.Count(s => StructuresInspected.Contains(s.Id)) / planned.Count, 3);
+    }
 }

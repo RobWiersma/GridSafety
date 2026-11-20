@@ -68,6 +68,10 @@ export function slaText(f: FindingView, now: Date = new Date()): { text: string;
 export const miles = (meters: number) => (meters / 1609.344).toFixed(1);
 export const pct = (n: number) => `${Math.round(n * 100)}%`;
 
+/** "Flight 2 of 5 (L-050 to L-100)" for a line flown over several batteries; null when the whole line is one flight. */
+export const flightLabel = (leg: { number: number; of: number; fromLabel: string; toLabel: string } | null | undefined, stretch = true) =>
+  leg && leg.of > 1 ? `Flight ${leg.number} of ${leg.of}${stretch ? ` (${leg.fromLabel} to ${leg.toLabel})` : ''}` : null;
+
 export const FINDING_FILTERS: { key: string; label: string }[] = [
   { key: 'open', label: 'Open' },
   { key: 'New', label: 'New' },

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { severityHex } from '../lib/format';
+import { severityGlyph, severityInk } from '../lib/severityIcon';
 
 const LEVELS = [5, 4, 3, 2, 1] as const;
 const KEY = 'gs.ops.severities';
@@ -50,7 +51,7 @@ export function SeverityFilter({ counts, shown, onToggle, onOnly, onAll }: {
           onClick={() => onToggle(sev)}
           onDoubleClick={() => onOnly(sev)}
         >
-          <i style={{ background: severityHex(sev) }} />
+          <i style={{ background: severityHex(sev), color: severityInk(sev) }} dangerouslySetInnerHTML={{ __html: severityGlyph(sev, 9) }} />
           {sev}
           <span className="sev-chip-count">{counts[sev] ?? 0}</span>
         </button>

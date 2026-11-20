@@ -2,7 +2,7 @@ import L from 'leaflet';
 import { useMemo } from 'react';
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from 'react-leaflet';
 import { useCircuits, useFindingAerial, useFindingImage, useMission, useMissionFindings, useOpenReport, useTrack } from '../api';
-import { FINDING_TYPE_LABEL, MISSION_STATUS_LABEL, miles, pct, relativeTime, severityHex, voltageHex } from '../lib/format';
+import { FINDING_TYPE_LABEL, MISSION_STATUS_LABEL, flightLabel, miles, pct, relativeTime, severityHex, voltageHex } from '../lib/format';
 import type { Circuit, DroneAlert, FindingView, Mission, TelemetryPoint } from '../types';
 import { WEAK_SIGNAL_DBM } from './SignalBars';
 import { SeverityBadge } from './SeverityBadge';
@@ -36,7 +36,12 @@ export function MissionDetail({ missionId, onBack, onOpenFinding, onToast }: Pro
   const openReport = useOpenReport();
 
   const m = mission.data?.mission;
-  const circuit = useMemo(() => circuits.data?.find((c) => c.id === m?.circuitId) ?? null, [circuits.data, m?.circuitId]);
+  const flight = mission.data?.flight;
+  // The stretch of line this flight covers (the whole line for missions from before lines were split).
+  const circuit = useMemo(() => {
+    const c = circuits.data?.find((x) => x.id === m?.circuitId);
+    return c && flight ? { ...c, structures: c.structures.slice(flight.firstIndex, flight.lastIndex + 1) } : c ?? null;
+  }, [circuits.data, m?.circuitId, flight]);
   const points = track.data ?? [];
   const items = useMemo(() => [...(findings.data ?? [])].sort((a, b) => b.finding.severity - a.finding.severity), [findings.data]);
 
@@ -67,6 +72,7 @@ export function MissionDetail({ missionId, onBack, onOpenFinding, onToast }: Pro
             <h2>{m.name ?? mission.data.circuitName}</h2>
             <p className="muted">
               {m.name && <>{mission.data.circuitName} · </>}
+              {flightLabel(flight) && <>{flightLabel(flight)} · </>}
               <span className="mono">{m.id}</span> · Drone {m.droneId} · PIC {m.pilot} · planned {relativeTime(m.createdAt)}
             </p>
           </div>

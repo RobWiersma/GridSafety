@@ -4,16 +4,18 @@ import { Logo } from '../session';
 const REPO = 'https://github.com/RobWiersma/GridSafety';
 
 const STEPS = [
-  ['🛰️', 'Inspect', 'Drones fly the lines and visually check every pole and tower, streaming live position and photos of anything wrong.'],
+  ['🛰️', 'Inspect', 'Drones fly the lines and visually check every pole and tower, streaming live position and photos of anything wrong. A line longer than one 20-minute battery is flown in several flights, one stretch at a time.'],
   ['🖥️', 'Monitor', 'One live map shows every drone, every line and every flight-safety alert as it happens.'],
   ['🚦', 'Triage', 'Each problem lands in a work queue ranked by severity. Urgent ones carry a deadline and escalate if nobody acts.'],
-  ['👷', 'Assign', 'Supervisors send each issue to the right field crew: tree trimmers for vegetation, linemen for damaged hardware.'],
-  ['🧰', 'Manage', 'The drone fleet, flight crews and ground crews are managed in one place, so only airworthy drones and on-duty crews get the work.'],
+  ['🗓️', 'Schedule', 'Repairs take far longer than inspections, so work backs up. A forward schedule ranks what is waiting by importance and plans each job onto the qualified technician who would finish it soonest, around their shifts, rests and free trucks.'],
+  ['🚚', 'Dispatch', 'Each work order goes to someone qualified for that defect: tree trimmers for vegetation, linemen for damaged hardware. Their truck leaves the nearest yard and drives real roads to the site, repairs it and comes back.'],
+  ['🧰', 'Manage', 'Drones, battery packs, trucks, yards, flight crews and technicians are managed in one place. Only airworthy drones, fuelled and serviced trucks, and people with hours left in their shift get the work.'],
+  ['📊', 'Report', 'Every drone, truck, crew, person and yard has a report by day, week or month, with labor, flight, fuel and maintenance costs. Pay keeps a dated history, so a raise never reprices past work.'],
 ] as const;
 
 const PROBLEMS = ['Vegetation growing into lines', 'Cracked or missing insulators', 'Damaged crossarms and conductors', 'Overheating connections'];
 
-const STACK = ['.NET 10', 'AWS Lambda', 'IoT Core (MQTT)', 'DynamoDB', 'EventBridge', 'Cognito', 'CloudFront', 'AWS CDK', 'React 19', 'TypeScript', 'Leaflet', 'GitHub Actions'];
+const STACK = ['.NET 10', 'AWS Lambda', 'IoT Core (MQTT)', 'DynamoDB', 'EventBridge', 'Cognito', 'CloudFront', 'AWS CDK', 'React 19', 'TypeScript', 'TanStack Query', 'Leaflet', 'OpenStreetMap', 'OSRM', 'GitHub Actions'];
 
 /** Project info: what GridSafety is for, how the workflow runs, and what is simulated. */
 export function AboutDialog({ onClose }: { onClose(): void }) {
@@ -34,7 +36,7 @@ export function AboutDialog({ onClose }: { onClose(): void }) {
           <Logo size={44} />
           <div>
             <h2 id="about-title">About GridSafety</h2>
-            <p className="muted small">Inspect, monitor, triage and dispatch for safer power lines</p>
+            <p className="muted small">Inspect, monitor, triage, schedule and dispatch for safer power lines</p>
           </div>
           <button ref={closeRef} className="btn btn-ghost icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
@@ -42,8 +44,8 @@ export function AboutDialog({ onClose }: { onClose(): void }) {
         <div className="about-body">
           <p className="about-lead">
             GridSafety is an <strong>operations dashboard for keeping power lines clear and inspected</strong>. Drone
-            inspections, live monitoring, triage and crew assignments all happen in one place, so problems get found and
-            fixed before they cause a fire or an outage.
+            inspections, live monitoring, triage, scheduling, crew dispatch and reporting all happen in one place, so
+            problems get found and fixed before they cause a fire or an outage.
           </p>
 
           <section>
@@ -69,9 +71,10 @@ export function AboutDialog({ onClose }: { onClose(): void }) {
           </section>
 
           <section className="about-note">
-            <strong>This is a demo.</strong> The power lines on the map are real, from public OpenStreetMap data, and the aerial
-            photos of each structure are real public-domain USDA NAIP imagery. The drones, the problems they find and the crews
-            are simulated. No utility's internal data is used.
+            <strong>This is a demo.</strong> The power lines on the map are real, from public OpenStreetMap data for Contra Costa,
+            Alameda and Solano counties. The aerial photos of each structure are real public-domain USDA NAIP imagery, and trucks
+            follow real roads using public OSRM routing. The drones, the problems they find, the crews, pay rates and costs are
+            simulated, and field work runs sped up (1 second is 1 minute). No utility's internal data is used.
           </section>
 
           <section>
@@ -82,7 +85,8 @@ export function AboutDialog({ onClose }: { onClose(): void }) {
           </section>
 
           <p className="muted small">
-            Browse as a guest, or sign in to plan missions, fly the demo drone and assign findings to crews.
+            Browse as a guest, including the schedule and reports, or sign in to plan missions, fly the demo drone, assign
+            findings and dispatch work from the schedule.
           </p>
         </div>
 

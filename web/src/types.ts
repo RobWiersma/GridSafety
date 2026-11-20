@@ -52,6 +52,10 @@ export interface Mission {
   /** Callsign, e.g. "Amber Kestrel 07"; demo flights always have one. */
   name?: string;
   circuitId: string;
+  /** Which flight of the line (1-based): long lines take several ~20 min flights. Missing on older missions (whole line). */
+  leg?: number;
+  /** How many flights the whole line takes. */
+  legs?: number;
   droneId: string;
   pilot: string;
   createdBy?: string;
@@ -78,6 +82,39 @@ export interface MissionView {
   circuitName: string;
   coverage: number;
   nextStatuses: MissionStatus[];
+  /** The stretch of line this mission flies (missing on missions from before lines were split). */
+  flight?: CircuitLeg | null;
+}
+
+/** One flight's stretch of a line, structures firstIndex..lastIndex; neighbouring flights share their end structure. */
+export interface CircuitLeg {
+  number: number;
+  of: number;
+  firstIndex: number;
+  lastIndex: number;
+  fromLabel: string;
+  toLabel: string;
+  structures: number;
+  lengthMeters: number;
+  /** Expected time in the air, takeoff and landing included. */
+  minutes: number;
+}
+
+export interface CircuitFlightView {
+  leg: CircuitLeg;
+  lastInspected?: string | null;
+  /** A mission is planned or in the air for this flight now. */
+  inProgress: boolean;
+}
+
+/** A line's flights, one battery each, and which one is due next. */
+export interface CircuitFlightsView {
+  circuitId: string;
+  circuitName: string;
+  lengthMeters: number;
+  enduranceMinutes: number;
+  flights: CircuitFlightView[];
+  nextLeg: number;
 }
 
 export interface Finding {

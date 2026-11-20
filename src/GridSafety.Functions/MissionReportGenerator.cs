@@ -84,7 +84,7 @@ public sealed class MissionReportGenerator(
             <h1>Inspection report: {{H(c.Name)}}</h1>
             <div class="muted">{{(m.Name is null ? "" : $"Flight {H(m.Name)} · ")}}Mission {{H(m.Id)}} · Drone {{H(m.DroneId)}} · PIC {{H(m.Pilot)}} · {{m.Status}} · Generated {{generatedAt:u}}</div>
             <div class="grid">
-              <div class="tile">Coverage<b>{{m.Coverage(c) * 100:0}}%</b>{{m.StructuresInspected.Count}} / {{c.Structures.Count}} structures</div>
+              <div class="tile">Coverage<b>{{m.Coverage(c) * 100:0}}%</b>{{m.StructuresInspected.Count}} / {{c.Stretch(m.Leg).Structures.Count}} structures{{(c.Leg(m.Leg) is { Of: > 1 } leg ? $" · flight {leg.Number} of {leg.Of} ({H(leg.FromLabel)} to {H(leg.ToLabel)})" : "")}}</div>
               <div class="tile">Distance<b>{{m.DistanceFlownMeters / 1609.344:0.0}} mi</b>{{(c.VoltageKv > 0 ? $"{c.VoltageKv} kV circuit" : "voltage not tagged")}}</div>
               <div class="tile">Flight time<b>{{(int)duration.TotalMinutes}}m {{duration.Seconds}}s</b>{{track.Count}} telemetry points</div>
               <div class="tile">Findings<b>{{findings.Count}}</b>{{findings.Count(f => f.Severity >= 4)}} high/critical</div>

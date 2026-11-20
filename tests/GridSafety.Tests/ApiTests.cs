@@ -173,6 +173,38 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
     }
 
     [Fact]
+    public async Task A_long_line_is_planned_one_flight_at_a_time_starting_with_the_one_due_next()
+    {
+        var line = StaticCircuitCatalog.Instance.All.OrderByDescending(c => c.LengthMeters).First();
+        var legs = line.Legs();
+        Assert.True(legs.Count > 1, $"{line.Id} should take more than one flight");
+        var c = Client("legs", supervisor: true);
+
+        var flights = await c.GetFromJsonAsync<CircuitFlightsView>($"/api/circuits/{line.Id}/flights", JsonOpts);
+        Assert.Equal(legs.Count, flights!.Flights.Count);
+        Assert.Equal(20, flights.EnduranceMinutes);
+        Assert.All(flights.Flights, f => Assert.True(f.Leg.Minutes <= 20.5));
+        // Guests can see the flights too.
+        Assert.Equal(HttpStatusCode.OK, (await factory.CreateClient().GetAsync($"/api/public/circuits/{line.Id}/flights")).StatusCode);
+
+        var third = await c.PostAsJsonAsync("/api/missions", new PlanMissionRequest(line.Id, "DRN-LEG-1", "Pat", Leg: 3), JsonOpts);
+        Assert.Equal(HttpStatusCode.Created, third.StatusCode);
+        var planned = (await third.Content.ReadFromJsonAsync<MissionView>(JsonOpts))!;
+        Assert.Equal((3, legs.Count), (planned.Mission.Leg, planned.Mission.Legs));
+        Assert.Equal(legs[2], planned.Flight);
+
+        // Flight 3 is spoken for now, so the next one due is another.
+        var next = (await (await c.PostAsJsonAsync("/api/missions", new PlanMissionRequest(line.Id, "DRN-LEG-2", "Pat"), JsonOpts))
+            .Content.ReadFromJsonAsync<MissionView>(JsonOpts))!;
+        Assert.NotEqual(3, next.Mission.Leg);
+        Assert.True((await c.GetFromJsonAsync<CircuitFlightsView>($"/api/circuits/{line.Id}/flights", JsonOpts))!.Flights[2].InProgress);
+
+        var bad = await c.PostAsJsonAsync("/api/missions", new PlanMissionRequest(line.Id, "DRN-LEG-3", "Pat", Leg: legs.Count + 1), JsonOpts);
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        Assert.Contains("leg", await bad.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Validates_mission_input()
     {
         var res = await Client().PostAsJsonAsync("/api/missions", new PlanMissionRequest("NOPE", "bad id!", ""), JsonOpts);

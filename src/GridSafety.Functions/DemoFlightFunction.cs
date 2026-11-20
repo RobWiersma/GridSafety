@@ -38,7 +38,7 @@ public sealed class DemoFlightFunction
         ArgumentNullException.ThrowIfNull(context);
         var launch = await JsonSerializer.DeserializeAsync<DemoFlightLaunch>(input, Json.Options)
                      ?? throw new InvalidOperationException("Empty demo flight request");
-        var circuit = StaticCircuitCatalog.Instance.Find(launch.CircuitId) ?? throw new NotFoundException($"Circuit {launch.CircuitId}");
+        var circuit = (StaticCircuitCatalog.Instance.Find(launch.CircuitId) ?? throw new NotFoundException($"Circuit {launch.CircuitId}")).Stretch(launch.Leg);
         var tick = int.TryParse(Env.Optional("DEMO_TICK_MS"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var ms)
             ? TimeSpan.FromMilliseconds(ms)
             : DemoFlight.DefaultTick;

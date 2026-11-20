@@ -24,6 +24,7 @@ if (opts.Help)
           --circuit <id>     Circuit to patrol (default PITT-MART-115). Run --list to see all
           --drone <id>       Drone id (default DRN-07)
           --mission <id>     Existing mission id (required with --aws; locally one is created for you)
+          --leg <n>          Which flight of the line to fly (long lines take several ~20 min flights; default: the one due next)
           --api <url>        Local API base URL (default http://localhost:5080)
           --aws              Publish to AWS IoT Core instead of the local API
           --speed <x>        Playback speed multiplier (default 1)
@@ -46,16 +47,19 @@ var circuit = StaticCircuitCatalog.Instance.Find(opts.Circuit)
 var rng = opts.Seed is { } seed ? new Random(seed) : new Random();
 
 await using ISimulatorLink link = opts.Aws ? await IotCoreLink.CreateAsync(opts.Drone) : new LocalApiLink(opts.Api);
-var missionId = opts.Mission ?? await link.PlanMissionAsync(circuit.Id, opts.Drone);
+var (missionId, leg) = opts.Mission is { } given ? (given, opts.Leg) : await link.PlanMissionAsync(circuit.Id, opts.Drone, opts.Leg);
 if (missionId is null)
 {
     Console.Error.WriteLine("--mission is required with --aws (plan the mission in the console first).");
     return 1;
 }
 
-Console.WriteLine($"✈  {opts.Drone} patrolling {circuit.Name} ({circuit.Structures.Count} structures, {circuit.LengthMeters / 1000:0.0} km), mission {missionId}");
+var flight = circuit.Leg(leg);
+var stretch = circuit.Stretch(leg);
+Console.WriteLine($"✈  {opts.Drone} patrolling {circuit.Name}{(flight is { Of: > 1 } f ? $", flight {f.Number} of {f.Of} ({f.FromLabel} to {f.ToLabel})" : "")} " +
+    $"({stretch.Structures.Count} structures, {stretch.LengthMeters / 1000:0.0} km), mission {missionId}");
 
-await DemoFlight.FlyAsync(circuit, opts.Drone, missionId, link, TimeSpan.FromMilliseconds(400 / opts.Speed), rng, TimeProvider.System,
+await DemoFlight.FlyAsync(stretch, opts.Drone, missionId, link, TimeSpan.FromMilliseconds(400 / opts.Speed), rng, TimeProvider.System,
     scriptedIncidents: !opts.NoIncidents,
     onPoint: (i, n, p) => Console.Write($"\r   {i + 1,4}/{n}  {p.Lat:0.00000},{p.Lon:0.00000}  alt {p.AltitudeM,5:0} m  batt {p.BatteryPct,3:0}%  rssi {p.RssiDbm,4:0} dBm   "),
     onFinding: (s, f) => Console.WriteLine($"\n   ⚠ sev {f.Severity} {f.Type} at {s.Label}"));
@@ -63,7 +67,7 @@ await DemoFlight.FlyAsync(circuit, opts.Drone, missionId, link, TimeSpan.FromMil
 Console.WriteLine($"\n🛬 Landed. Mission {missionId} complete.");
 return 0;
 
-internal sealed record Options(string Circuit, string Drone, string? Mission, string Api, bool Aws, double Speed, int? Seed, bool NoIncidents, bool Help)
+internal sealed record Options(string Circuit, string Drone, string? Mission, string Api, bool Aws, double Speed, int? Seed, bool NoIncidents, bool Help, int? Leg)
 {
     public static Options Parse(string[] args)
     {
@@ -77,13 +81,15 @@ internal sealed record Options(string Circuit, string Drone, string? Mission, st
             double.TryParse(Val("--speed"), System.Globalization.CultureInfo.InvariantCulture, out var sp) && sp > 0 ? sp : 1,
             int.TryParse(Val("--seed"), out var sd) ? sd : null,
             args.Contains("--no-incidents"),
-            args.Contains("--help") || args.Contains("-h"));
+            args.Contains("--help") || args.Contains("-h"),
+            int.TryParse(Val("--leg"), out var lg) && lg > 0 ? lg : null);
     }
 }
 
 internal interface ISimulatorLink : IDroneLink, IAsyncDisposable
 {
-    Task<string?> PlanMissionAsync(string circuitId, string droneId);
+    /// <summary>Plans a mission (locally); returns its id and which flight of the line it is, or a null id with AWS.</summary>
+    Task<(string? Id, int? Leg)> PlanMissionAsync(string circuitId, string droneId, int? leg);
 }
 
 /// <summary>Local dev: talks to the API's dev-only /api/ingest endpoint.</summary>
@@ -97,12 +103,13 @@ internal sealed class LocalApiLink : ISimulatorLink
         _http.DefaultRequestHeaders.Add("X-Dev-User", "simulator");
     }
 
-    public async Task<string?> PlanMissionAsync(string circuitId, string droneId)
+    public async Task<(string? Id, int? Leg)> PlanMissionAsync(string circuitId, string droneId, int? leg)
     {
-        var res = await _http.PostAsJsonAsync("api/missions", new { circuitId, droneId, pilot = "Sim Pilot" }, Json.Options);
+        var res = await _http.PostAsJsonAsync("api/missions", new { circuitId, droneId, pilot = "Sim Pilot", leg }, Json.Options);
         if (!res.IsSuccessStatusCode) throw new InvalidOperationException($"Could not plan mission: {(int)res.StatusCode} {await res.Content.ReadAsStringAsync()}");
         using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
-        return doc.RootElement.GetProperty("mission").GetProperty("id").GetString();
+        var mission = doc.RootElement.GetProperty("mission");
+        return (mission.GetProperty("id").GetString(), mission.TryGetProperty("leg", out var l) && l.ValueKind == JsonValueKind.Number ? l.GetInt32() : null);
     }
 
     public async Task SendAsync(DroneMessage message, CancellationToken ct = default)
@@ -129,7 +136,7 @@ internal sealed class IotCoreLink(AmazonIotDataClient data, string droneId) : IS
         return new IotCoreLink(new AmazonIotDataClient($"https://{endpoint.EndpointAddress}"), droneId);
     }
 
-    public Task<string?> PlanMissionAsync(string circuitId, string droneId) => Task.FromResult<string?>(null);
+    public Task<(string? Id, int? Leg)> PlanMissionAsync(string circuitId, string droneId, int? leg) => Task.FromResult<(string?, int?)>((null, leg));
 
     public async Task SendAsync(DroneMessage message, CancellationToken ct = default)
     {

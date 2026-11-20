@@ -8,11 +8,20 @@ using Microsoft.Extensions.Options;
 
 namespace GridSafety.Api;
 
-public sealed record PlanMissionRequest(string CircuitId, string DroneId, string Pilot);
+/// <param name="Leg">Which flight of the line (see <see cref="FlightLegs"/>); the one due next when null.</param>
+public sealed record PlanMissionRequest(string CircuitId, string DroneId, string Pilot, int? Leg = null);
 public sealed record MissionStatusRequest(MissionStatus Status, string? Note);
 public sealed record FindingStatusRequest(FindingStatus Status, string? Note, string? Assignee);
 
-public sealed record MissionView(Mission Mission, string CircuitName, double Coverage, IReadOnlyList<MissionStatus> NextStatuses);
+/// <param name="Flight">The stretch of line this mission flies (null for missions from before lines were split).</param>
+public sealed record MissionView(Mission Mission, string CircuitName, double Coverage, IReadOnlyList<MissionStatus> NextStatuses, CircuitLeg? Flight = null);
+
+/// <summary>A line's flights, one battery each, with when each was last inspected and which one is due next.</summary>
+public sealed record CircuitFlightsView(string CircuitId, string CircuitName, double LengthMeters, double EnduranceMinutes,
+    IReadOnlyList<CircuitFlightView> Flights, int NextLeg);
+
+/// <param name="InProgress">A mission is planned or in the air for this flight now.</param>
+public sealed record CircuitFlightView(CircuitLeg Leg, DateTimeOffset? LastInspected, bool InProgress);
 public sealed record FindingView(Finding Finding, string CircuitName, IReadOnlyList<FindingStatus> NextStatuses, bool Overdue, string SeverityLabel, string SuggestedCrew);
 /// <summary>A ground crew with its open work orders and the jobs its people are out on right now.</summary>
 public sealed record CrewView(Crew Crew, int OpenWorkOrders, IReadOnlyList<FieldDispatch>? InField = null, IReadOnlyList<MemberShift>? Shifts = null);
@@ -58,6 +67,7 @@ public static partial class Endpoints
         var guest = api.MapGroup("/public").AddEndpointFilter(GuestView.Filter);
         guest.MapGet("/me", () => TypedResults.Ok(new MeView("guest", "Guest", false, [], IsGuest: true)));
         guest.MapGet("/circuits", (ICircuitCatalog c) => TypedResults.Ok(c.All));
+        guest.MapGet("/circuits/{id}/flights", GetCircuitFlights);
         guest.MapGet("/stats", Stats);
         guest.MapGet("/drones", ListDrones);
         guest.MapGet("/missions", ListMissions);
@@ -78,6 +88,7 @@ public static partial class Endpoints
         var secured = api.MapGroup("/").AddEndpointFilter(RequireUser);
         secured.MapGet("/me", (HttpContext ctx) => { var u = User(ctx); return TypedResults.Ok(new MeView(u.Id, u.DisplayName, u.IsSupervisor, u.Groups)); });
         secured.MapGet("/circuits", (ICircuitCatalog c) => TypedResults.Ok(c.All));
+        secured.MapGet("/circuits/{id}/flights", GetCircuitFlights);
         secured.MapGet("/stats", Stats);
         secured.MapGet("/drones", ListDrones);
 
@@ -139,7 +150,7 @@ public static partial class Endpoints
     private static MissionView ToView(Mission m, ICircuitCatalog circuits)
     {
         var circuit = circuits.Find(m.CircuitId);
-        return new MissionView(m, circuit?.Name ?? m.CircuitId, circuit is null ? 0 : m.Coverage(circuit), Mission.Workflow.Next(m.Status));
+        return new MissionView(m, circuit?.Name ?? m.CircuitId, circuit is null ? 0 : m.Coverage(circuit), Mission.Workflow.Next(m.Status), circuit?.Leg(m.Leg));
     }
 
     /// <summary>The suggested assignee is the nearest on-duty technician qualified for the defect who isn't out on another job.</summary>
@@ -169,6 +180,18 @@ public static partial class Endpoints
         }),
     ];
 
+    private static async Task<Results<Ok<CircuitFlightsView>, NotFound>> GetCircuitFlights(string id, IGridRepository repo, ICircuitCatalog circuits,
+        CancellationToken ct)
+    {
+        if (circuits.Find(id) is not { } circuit) return TypedResults.NotFound();
+        var flown = (await repo.ListMissionsAsync(1000, ct)).Where(m => m.CircuitId == circuit.Id && m.Status != MissionStatus.Aborted).ToList();
+        var flights = circuit.Legs().Select(l => new CircuitFlightView(l,
+            flown.Where(m => m.Status == MissionStatus.Completed && (m.Leg is null || m.Leg == l.Number)).Max(m => (DateTimeOffset?)(m.EndedAt ?? m.UpdatedAt)),
+            flown.Any(m => !Mission.Workflow.IsTerminal(m.Status) && m.Leg == l.Number))).ToList();
+        return TypedResults.Ok(new CircuitFlightsView(circuit.Id, circuit.Name, Math.Round(circuit.LengthMeters), FlightLegs.Endurance.TotalMinutes,
+            flights, circuit.NextLeg(flown)));
+    }
+
     private static async Task<Ok<IReadOnlyList<DroneState>>> ListDrones(IGridRepository repo, CancellationToken ct) =>
         TypedResults.Ok(DroneState.Settled(await repo.ListDronesAsync(ct), await repo.ListMissionsAsync(200, ct)));
 
@@ -192,6 +215,8 @@ public static partial class Endpoints
         if (string.IsNullOrWhiteSpace(req.DroneId) || req.DroneId.Length > 40 || !req.DroneId.All(c => char.IsLetterOrDigit(c) || c == '-'))
             errors["droneId"] = ["Drone ID is required: letters, digits and dashes, max 40."];
         if (string.IsNullOrWhiteSpace(req.Pilot) || req.Pilot.Length > 100) errors["pilot"] = ["Pilot in command is required."];
+        if (circuit is not null && req.Leg is { } leg && circuit.Leg(leg) is null)
+            errors["leg"] = [$"{circuit.Name} is inspected in {circuit.Legs().Count} flight(s); pick one of 1 to {circuit.Legs().Count}."];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
 
         // Fleet drones in the shop, inspection, out of charged batteries or retired stay on the ground. (IDs outside the
@@ -199,11 +224,12 @@ public static partial class Endpoints
         if (await GroundedAsync(repo, await resources.GetAsync(ct), req.DroneId, clock.GetUtcNow(), ct) is { } why) return TypedResults.Conflict(why);
 
         // A drone can only fly one mission at a time.
-        var busy = (await repo.ListMissionsAsync(200, ct))
+        var recent = await repo.ListMissionsAsync(1000, ct);
+        var busy = recent
             .FirstOrDefault(m => m.DroneId.Equals(req.DroneId.Trim(), StringComparison.OrdinalIgnoreCase) && !Mission.Workflow.IsTerminal(m.Status));
         if (busy is not null) return TypedResults.Conflict($"{req.DroneId} is already assigned to mission {busy.Id} ({busy.Status}).");
 
-        var mission = Mission.Plan(circuit!, req.DroneId, req.Pilot, User(ctx).DisplayName, clock.GetUtcNow());
+        var mission = Mission.Plan(circuit!, req.DroneId, req.Pilot, User(ctx).DisplayName, clock.GetUtcNow(), leg: req.Leg ?? circuit!.NextLeg(recent));
         await repo.SaveMissionAsync(mission, ct);
         return TypedResults.Created($"/api/missions/{mission.Id}", ToView(mission, circuits));
     }
@@ -253,13 +279,13 @@ public static partial class Endpoints
             return TypedResults.Conflict($"{MaxSimulatedFlights} simulated flights are already in the air. Try again when one lands.");
 
         var mission = Mission.Plan(circuit, DemoFlight.DroneId, DemoFlight.PickPilot(catalog.FlightCrews, recent), user.DisplayName, now,
-            name: FlightNames.Generate(Random.Shared, recent.Select(m => m.Name)));
+            name: FlightNames.Generate(Random.Shared, recent.Select(m => m.Name)), leg: circuit.NextLeg(recent));
         mission.SimulatedAt = now;
         await repo.SaveMissionAsync(mission, ct);
         try
         {
             var sim = await simulation.GetAsync(ct);
-            await launcher.LaunchAsync(new DemoFlightLaunch(mission.Id, circuit.Id, mission.DroneId, sim.FindingCountForNextFlight(Random.Shared)), ct);
+            await launcher.LaunchAsync(new DemoFlightLaunch(mission.Id, circuit.Id, mission.DroneId, sim.FindingCountForNextFlight(Random.Shared), mission.Leg), ct);
         }
         catch
         {
