@@ -5,7 +5,9 @@ using Amazon.IoT;
 using Amazon.IoT.Model;
 using Amazon.IotData;
 using Amazon.IotData.Model;
+using Amazon.Lambda;
 using Amazon.Lambda.Core;
+using Amazon.Lambda.Model;
 using AWS.Lambda.Powertools.Logging;
 using GridSafety.Core;
 using GridSafety.Core.Simulation;
@@ -50,6 +52,21 @@ public sealed class DemoFlightFunction
         await DemoFlight.FlyAsync(circuit, launch.DroneId, launch.MissionId, retrying, tick, new Random(), TimeProvider.System,
             keepFlying: () => context.RemainingTime > LandingReserve, findingCount: launch.FindingCount);
         Logger.LogInformation("Demo flight {MissionId} landed after {Messages} messages", launch.MissionId, link.Sent);
+
+        // The next flight of an outing goes up in a fresh invocation of this function, after the battery swap, so a whole
+        // outing never runs into one invocation's time limit.
+        if (launch.Next is { } next)
+        {
+            await Task.Delay(DemoFlightLaunch.BatterySwap);
+            using var lambda = new AmazonLambdaClient();
+            await lambda.InvokeAsync(new InvokeRequest
+            {
+                FunctionName = context.InvokedFunctionArn,
+                InvocationType = InvocationType.Event,
+                Payload = JsonSerializer.Serialize(next, Json.Options),
+            });
+            Logger.LogInformation("Outing continues: flight {MissionId} is next", next.MissionId);
+        }
     }
 }
 

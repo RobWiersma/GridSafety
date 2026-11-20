@@ -72,6 +72,10 @@ export const pct = (n: number) => `${Math.round(n * 100)}%`;
 export const flightLabel = (leg: { number: number; of: number; fromLabel: string; toLabel: string } | null | undefined, stretch = true) =>
   leg && leg.of > 1 ? `Flight ${leg.number} of ${leg.of}${stretch ? ` (${leg.fromLabel} to ${leg.toLabel})` : ''}` : null;
 
+/** "outing 2/3" for a flight booked with others in one outing; null otherwise. */
+export const outingLabel = (m: { outingFlight?: number; outingFlights?: number }) =>
+  m.outingFlight && m.outingFlights && m.outingFlights > 1 ? `outing ${m.outingFlight}/${m.outingFlights}` : null;
+
 export const FINDING_FILTERS: { key: string; label: string }[] = [
   { key: 'open', label: 'Open' },
   { key: 'New', label: 'New' },

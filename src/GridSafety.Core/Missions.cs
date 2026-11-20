@@ -26,6 +26,15 @@ public sealed class Mission
     public int? Leg { get; init; }
     /// <summary>How many flights the whole line takes.</summary>
     public int? Legs { get; init; }
+    /// <summary>
+    /// Set when this flight was booked with others in one outing: the same drone and crew fly them back to back, swapping
+    /// the battery in between. Shared by every flight of the outing.
+    /// </summary>
+    public string? OutingId { get; init; }
+    /// <summary>This flight's place in its outing (1-based).</summary>
+    public int? OutingFlight { get; init; }
+    /// <summary>How many flights the outing has.</summary>
+    public int? OutingFlights { get; init; }
     public required string DroneId { get; init; }
     public required string Pilot { get; init; }
     public string? CreatedBy { get; init; }
@@ -49,8 +58,12 @@ public sealed class Mission
     public long Version { get; set; }
 
     /// <param name="leg">Which flight of the line (see <see cref="FlightLegs"/>); the first when null.</param>
-    public static Mission Plan(Circuit circuit, string droneId, string pilot, string? createdBy, DateTimeOffset now, string? name = null, int? leg = null) => new()
+    public static Mission Plan(Circuit circuit, string droneId, string pilot, string? createdBy, DateTimeOffset now, string? name = null, int? leg = null,
+        (string Id, int Flight, int Flights)? outing = null) => new()
     {
+        OutingId = outing?.Id,
+        OutingFlight = outing?.Flight,
+        OutingFlights = outing?.Flights,
         Id = Ids.New(),
         Name = string.IsNullOrWhiteSpace(name) ? null : name.Trim(),
         CircuitId = circuit.Id,
@@ -62,6 +75,24 @@ public sealed class Mission
         CreatedAt = now,
         UpdatedAt = now,
     };
+
+    /// <summary>
+    /// Books flights <paramref name="legs"/> of a line as one outing: one mission per flight, in order along the line, for
+    /// the same drone and pilot (a single flight books as a plain mission). Callsigns come from <paramref name="name"/>.
+    /// </summary>
+    public static IReadOnlyList<Mission> PlanOuting(Circuit circuit, IEnumerable<int> legs, string droneId, string pilot, string? createdBy,
+        DateTimeOffset now, Func<string?>? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(circuit);
+        var order = legs.Distinct().Order().ToList();
+        if (order.Count == 0) throw new ArgumentException("Pick at least one flight.", nameof(legs));
+        var outing = order.Count > 1 ? Ids.New() : null;
+        return [.. order.Select((leg, i) => Plan(circuit, droneId, pilot, createdBy, now, name?.Invoke(), leg,
+            outing is null ? null : (outing, i + 1, order.Count)))];
+    }
+
+    /// <summary>The outing this flight belongs to, or the flight itself when it was booked on its own.</summary>
+    public string OutingKey => OutingId ?? Id;
 
     public void MoveTo(MissionStatus next, DateTimeOffset now, string? by = null, string? note = null)
     {

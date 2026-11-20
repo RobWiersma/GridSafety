@@ -502,6 +502,13 @@ public sealed class GridSafetyStack : Stack
             Resources = new[] { $"arn:{Partition}:iot:{Region}:{Account}:topic/gridsafety/drones/*" },
         }));
         demoFn.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps { Actions = new[] { "iot:DescribeEndpoint" }, Resources = new[] { "*" } }));
+        // An outing's next flight is a fresh invocation of this same function. (By name pattern, not demoFn's ARN: a role
+        // policy naming its own function's ARN is a circular dependency.)
+        demoFn.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
+        {
+            Actions = new[] { "lambda:InvokeFunction" },
+            Resources = new[] { $"arn:{Partition}:lambda:{Region}:{Account}:function:*DemoFlight*" },
+        }));
         // A retried flight would replay a mission that already landed: run each launch at most once.
         demoFn.ConfigureAsyncInvoke(new EventInvokeConfigOptions { RetryAttempts = 0 });
         apiFn.AddEnvironment("GridSafety__DemoFunctionName", demoFn.FunctionName);

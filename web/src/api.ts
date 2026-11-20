@@ -342,7 +342,7 @@ export function usePlanMission() {
   const api = useFetcher();
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (input: { circuitId: string; droneId: string; pilot: string; leg?: number }) =>
+    mutationFn: (input: { circuitId: string; droneId: string; pilot: string; leg?: number; legs?: number[] }) =>
       api<MissionView>('/missions', { method: 'POST', body: JSON.stringify(input) }),
     onSuccess: invalidate,
   });

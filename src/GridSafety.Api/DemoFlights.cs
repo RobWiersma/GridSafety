@@ -44,7 +44,7 @@ public sealed class InProcessDemoFlightLauncher(
 
     public Task LaunchAsync(DemoFlightLaunch launch, CancellationToken ct)
     {
-        var circuit = (circuits.Find(launch.CircuitId) ?? throw new NotFoundException($"Circuit {launch.CircuitId}")).Stretch(launch.Leg);
+        var line = circuits.Find(launch.CircuitId) ?? throw new NotFoundException($"Circuit {launch.CircuitId}");
         var tick = TimeSpan.FromMilliseconds(config.GetValue("GridSafety:DemoTickMs", DemoFlight.DefaultTick.TotalMilliseconds));
         var stopping = lifetime.ApplicationStopping;
 
@@ -52,8 +52,13 @@ public sealed class InProcessDemoFlightLauncher(
         {
             try
             {
-                await DemoFlight.FlyAsync(circuit, launch.DroneId, launch.MissionId, new IngestLink(ingest), tick, new Random(), clock,
-                    findingCount: launch.FindingCount, ct: stopping);
+                // An outing's flights go one after another, with a battery swap between.
+                for (DemoFlightLaunch? flight = launch; flight is not null; flight = flight.Next)
+                {
+                    if (flight != launch) await Task.Delay(tick * 10 < DemoFlightLaunch.BatterySwap ? tick * 10 : DemoFlightLaunch.BatterySwap, clock, stopping);
+                    await DemoFlight.FlyAsync(line.Stretch(flight.Leg), flight.DroneId, flight.MissionId, new IngestLink(ingest), tick, new Random(), clock,
+                        findingCount: flight.FindingCount, ct: stopping);
+                }
             }
             catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
 #pragma warning disable CA1031 // A background flight must never take the API down; log and let the mission go stale.

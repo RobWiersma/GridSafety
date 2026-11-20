@@ -141,6 +141,13 @@ button { font: inherit; color: inherit; }
 .finding-marker { box-sizing: border-box; border-radius: 50%; display: grid; place-items: center; border: 2px solid #fff; opacity: .95;
   box-shadow: 0 1px 4px rgb(0 0 0 / 45%); cursor: pointer; }
 .finding-marker svg { display: block; }
+.flight-picker { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px 10px; margin: 0 0 12px; }
+.flight-picker legend { padding: 0 4px; font-size: 13px; }
+.flight-picker p { margin: 0 0 6px; }
+.flight-picker ul { list-style: none; margin: 0 0 8px; padding: 0; max-height: 220px; overflow-y: auto; }
+.dialog .flight-picker li label { display: flex; flex-direction: row; align-items: flex-start; gap: 8px; padding: 4px 0; font-weight: 400; cursor: pointer; }
+.flight-picker li input { margin-top: 3px; }
+.flight-picker .pill { margin-left: 6px; }
 .finding-picked { border: 3px solid #38bdf8; box-shadow: 0 0 0 3px rgb(56 189 248 / 35%), 0 1px 4px rgb(0 0 0 / 45%); }
 .drone-idle .drone-rotor { animation: none; }
 @media (prefers-reduced-motion: reduce) { .drone-rotor { animation: none; } }

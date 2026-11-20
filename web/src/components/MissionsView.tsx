@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { ApiError, useCircuitFlights, useCircuits, useDemoFlight, useMe, useMissions, useMissionStatus, useOpenReport, usePlanMission, useResources } from '../api';
-import { MISSION_STATUS_LABEL, circuitsByVoltage, flightLabel, miles, pct, relativeTime } from '../lib/format';
+import { MISSION_STATUS_LABEL, circuitsByVoltage, flightLabel, miles, outingLabel, pct, relativeTime } from '../lib/format';
 import { useSession } from '../session';
 import type { MissionView } from '../types';
 import { FilterBar, matchesSearch, SearchFilter, SelectFilter, ToggleFilter } from './FilterBar';
@@ -120,7 +120,9 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
               {shown.map((m) => (
                 <tr key={m.mission.id}>
                   <td><button className="mission-link mono" onClick={() => onOpenMission(m.mission.id)}>{m.mission.id}</button><div className="muted small">{relativeTime(m.mission.createdAt)}</div></td>
-                  <td>{m.circuitName}{flightLabel(m.flight, false) && <div className="muted small">{flightLabel(m.flight)}</div>}</td>
+                  <td>{m.circuitName}{flightLabel(m.flight, false) && (
+                    <div className="muted small">{flightLabel(m.flight)}{outingLabel(m.mission) ? ` · ${outingLabel(m.mission)}` : ''}</div>
+                  )}</td>
                   <td>{m.mission.name ? <strong>{m.mission.name}</strong> : m.mission.droneId}<div className="muted small">{m.mission.name ? `Drone ${m.mission.droneId} · ` : ''}{m.mission.pilot}</div></td>
                   <td><span className={`pill pill-${m.mission.status.toLowerCase()}`}>{MISSION_STATUS_LABEL[m.mission.status]}</span></td>
                   <td>
@@ -164,6 +166,9 @@ export function MissionsView({ onToast, onShowOnMap, onOpenMission }: { onToast(
   );
 }
 
+/** Matches the API's limit on flights booked in one outing. */
+const MAX_FLIGHTS_PER_OUTING = 6;
+
 function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: MissionView): void }) {
   const circuits = useCircuits();
   const resources = useResources();
@@ -174,12 +179,20 @@ function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: Miss
   const [circuitId, setCircuitId] = useState<string | null>(null);
   const chosenCircuit = circuitId ?? grouped[0]?.circuits[0]?.id ?? null;
   const flights = useCircuitFlights(chosenCircuit);
-  const [leg, setLeg] = useState<number | null>(null);
-  const chosenLeg = leg ?? flights.data?.nextLeg ?? 1;
+  const lineFlights = flights.data && flights.data.circuitId === chosenCircuit ? flights.data : null;
+  // Flights picked for this outing; until someone picks, the one due next.
+  const [picked, setPicked] = useState<number[] | null>(null);
+  const chosenLegs = picked ?? (lineFlights ? [lineFlights.nextLeg] : []);
+  const toggleLeg = (n: number) => setPicked(chosenLegs.includes(n) ? chosenLegs.filter((x) => x !== n) : [...chosenLegs, n].sort((a, b) => a - b));
+  const [droneId, setDroneId] = useState<string | null>(null);
 
   useEffect(() => ref.current?.showModal(), []);
 
   const firstReadyDrone = resources.data?.drones.find(({ drone, activeMissionId }) => drone.status === 'Active' && !activeMissionId && drone.id !== 'DEMO-01')?.drone.id;
+  const chosenDrone = resources.data?.drones.find((d) => d.drone.id === (droneId ?? firstReadyDrone));
+  const outingMinutes = lineFlights ? lineFlights.flights.filter((f) => chosenLegs.includes(f.leg.number)).reduce((a, f) => a + f.leg.minutes, 0) : 0;
+  const packsShort = chosenDrone && chosenLegs.length > chosenDrone.upkeep.readyPacks;
+  const tooMany = chosenLegs.length > MAX_FLIGHTS_PER_OUTING;
   const pilots = (resources.data?.flightCrews ?? [])
     .filter(({ crew }) => crew.status === 'Available')
     .flatMap(({ crew }) => crew.members.filter((m) => m.role === 'Remote pilot (PIC)').map((m) => ({ crewId: crew.id, value: m.name })));
@@ -190,7 +203,7 @@ function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: Miss
     setError(null);
     try {
       onPlanned(await plan.mutateAsync({ circuitId: String(f.get('circuitId')), droneId: String(f.get('droneId')), pilot: String(f.get('pilot')),
-        leg: flights.data && flights.data.circuitId === chosenCircuit ? chosenLeg : undefined }));
+        legs: lineFlights ? chosenLegs : undefined }));
     } catch (err) {
       setError(err instanceof ApiError || err instanceof Error ? err.message : 'Failed');
     }
@@ -202,7 +215,7 @@ function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: Miss
         <h2>Plan inspection mission</h2>
         <label>
           Circuit
-          <select className="input" name="circuitId" required value={chosenCircuit ?? ''} onChange={(e) => { setCircuitId(e.target.value); setLeg(null); }}>
+          <select className="input" name="circuitId" required value={chosenCircuit ?? ''} onChange={(e) => { setCircuitId(e.target.value); setPicked(null); }}>
             {grouped.map((g) => (
               <optgroup key={g.kv} label={`${g.label} (${g.circuits.length})`}>
                 {g.circuits.map((c) => (
@@ -212,29 +225,45 @@ function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: Miss
             ))}
           </select>
         </label>
-        {flights.data && flights.data.circuitId === chosenCircuit && flights.data.flights.length > 1 && (
-          <label>
-            Flight
-            <select className="input" value={chosenLeg} onChange={(e) => setLeg(Number(e.target.value))}>
-              {flights.data.flights.map(({ leg: l, lastInspected, inProgress }) => (
-                <option key={l.number} value={l.number}>
-                  {l.number} of {l.of}: {l.fromLabel} to {l.toLabel} · {(l.lengthMeters / 1000).toFixed(1)} km · ~{Math.round(l.minutes)} min ·{' '}
-                  {inProgress ? 'being flown now' : lastInspected ? `inspected ${relativeTime(lastInspected)}` : 'not inspected yet'}
-                  {l.number === flights.data.nextLeg ? ' (due next)' : ''}
-                </option>
+        {lineFlights && lineFlights.flights.length > 1 && (
+          <fieldset className="flight-picker">
+            <legend>Flights for this outing</legend>
+            <p className="muted small">
+              This line is {(lineFlights.lengthMeters / 1000).toFixed(1)} km, more than one {lineFlights.enduranceMinutes}-minute battery covers, so it's
+              inspected over {lineFlights.flights.length} flights. Pick the ones this crew flies in one outing: they go back to back, landing at the end
+              of each stretch to swap the battery.
+            </p>
+            <ul>
+              {lineFlights.flights.map(({ leg: l, lastInspected, inProgress }) => (
+                <li key={l.number}>
+                  <label className={inProgress ? 'muted' : undefined}>
+                    <input type="checkbox" checked={chosenLegs.includes(l.number)} disabled={inProgress} onChange={() => toggleLeg(l.number)} />
+                    <span>
+                      <strong>{l.number}</strong> {l.fromLabel} to {l.toLabel}
+                      <span className="muted small"> · {(l.lengthMeters / 1000).toFixed(1)} km · ~{Math.round(l.minutes)} min · {inProgress ? 'booked or in the air'
+                        : lastInspected ? `inspected ${relativeTime(lastInspected)}` : 'not inspected yet'}</span>
+                      {l.number === lineFlights.nextLeg && <span className="pill pill-accent">due next</span>}
+                    </span>
+                  </label>
+                </li>
               ))}
-            </select>
-            <span className="muted small">
-              This line is {(flights.data.lengthMeters / 1000).toFixed(1)} km, more than one {flights.data.enduranceMinutes}-minute battery covers, so it's
-              inspected over {flights.data.flights.length} flights. The crew lands at the end of each stretch and swaps the battery.
-            </span>
-          </label>
+            </ul>
+            <div className={`small ${packsShort || tooMany ? 'danger-text' : 'muted'}`}>
+              {chosenLegs.length === 0 ? 'Pick at least one flight.' : (
+                <>
+                  {chosenLegs.length} flight{chosenLegs.length === 1 ? '' : 's'} · about {Math.round(outingMinutes)} min in the air
+                  {chosenDrone && <> · {chosenDrone.drone.id} has {chosenDrone.upkeep.readyPacks} charged pack{chosenDrone.upkeep.readyPacks === 1 ? '' : 's'}</>}
+                  {tooMany && <> · one outing books at most {MAX_FLIGHTS_PER_OUTING}</>}
+                </>
+              )}
+            </div>
+          </fieldset>
         )}
         {resources.data ? (
           <div className="grid-2">
             <label>
               Drone
-              <select className="input" name="droneId" required defaultValue={firstReadyDrone ?? ''}>
+              <select className="input" name="droneId" required value={droneId ?? firstReadyDrone ?? ''} onChange={(e) => setDroneId(e.target.value)}>
                 {!firstReadyDrone && <option value="">No drone is free</option>}
                 {resources.data.drones.map(({ drone, activeMissionName }) => {
                   const why = drone.id === 'DEMO-01' ? 'demo flights only' : drone.status !== 'Active' ? drone.status.toLowerCase() : activeMissionName ? `on ${activeMissionName}` : null;
@@ -265,7 +294,9 @@ function PlanDialog({ onClose, onPlanned }: { onClose(): void; onPlanned(m: Miss
         {error && <div className="banner banner-error">{error}</div>}
         <div className="dialog-actions">
           <button type="button" className="btn btn-ghost" onClick={() => ref.current?.close()}>Cancel</button>
-          <button className="btn btn-primary" disabled={plan.isPending || !firstReadyDrone || pilots.length === 0}>{plan.isPending ? 'Planning…' : 'Plan mission'}</button>
+          <button className="btn btn-primary" disabled={plan.isPending || !firstReadyDrone || pilots.length === 0 || (lineFlights != null && chosenLegs.length === 0) || packsShort || tooMany}>
+            {plan.isPending ? 'Planning…' : chosenLegs.length > 1 ? `Book ${chosenLegs.length} flights` : 'Plan mission'}
+          </button>
         </div>
       </form>
     </dialog>
@@ -282,10 +313,13 @@ function SimulatorHint({ mission, onClose, onToast, onLaunched }: { mission: Mis
   return (
     <dialog ref={ref} className="dialog" onClose={onClose} onCancel={onClose}>
       <div className="dialog-body">
-        <h2>Mission planned ✓</h2>
+        <h2>{m.outingFlights && m.outingFlights > 1 ? `Outing of ${m.outingFlights} flights booked ✓` : 'Mission planned ✓'}</h2>
         <p className="muted">
-          {m.droneId} is assigned to {mission.circuitName}. The mission goes <strong>In flight</strong> automatically when the first telemetry arrives.
-          Supervisors can fly it right now with a simulated drone. Or fly it from your machine with the simulator CLI{devMode ? '' : ' (publishes to AWS IoT Core with your AWS credentials)'}:
+          {m.droneId} is assigned to {mission.circuitName}
+          {m.outingFlights && m.outingFlights > 1 ? `, ${m.outingFlights} flights back to back starting with flight ${mission.flight?.number} (${mission.flight?.fromLabel} to ${mission.flight?.toLabel})` : ''}.
+          {' '}Each mission goes <strong>In flight</strong> automatically when its first telemetry arrives.
+          Supervisors can fly {m.outingFlights && m.outingFlights > 1 ? 'the whole outing' : 'it'} right now with a simulated drone. Or fly {m.outingFlights && m.outingFlights > 1 ? 'the first flight' : 'it'} from
+          your machine with the simulator CLI{devMode ? '' : ' (publishes to AWS IoT Core with your AWS credentials)'}:
         </p>
         <pre className="code">{cmd}</pre>
         <div className="dialog-actions">

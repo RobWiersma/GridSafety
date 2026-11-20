@@ -90,6 +90,34 @@ public class FlightLegsTests
     }
 
     [Fact]
+    public void Flights_booked_together_are_one_outing_in_order_along_the_line()
+    {
+        var line = Line(200);
+        var outing = Mission.PlanOuting(line, [3, 1, 3, 2], "D", "P", null, Now);
+
+        Assert.Equal([1, 2, 3], outing.Select(m => m.Leg));
+        Assert.Equal([1, 2, 3], outing.Select(m => m.OutingFlight));
+        Assert.All(outing, m => Assert.Equal(3, m.OutingFlights));
+        Assert.Single(outing.Select(m => m.OutingKey).Distinct());
+        Assert.NotNull(outing[0].OutingId);
+
+        var alone = Assert.Single(Mission.PlanOuting(line, [4], "D", "P", null, Now));
+        Assert.Null(alone.OutingId);
+        Assert.Equal(alone.Id, alone.OutingKey);
+        Assert.Throws<ArgumentException>(() => Mission.PlanOuting(line, [], "D", "P", null, Now));
+    }
+
+    [Fact]
+    public void An_outing_launches_its_flights_one_after_another()
+    {
+        var launch = new DemoFlightLaunch("a", "C", "D", Leg: 1, Then: [new("b", "C", "D", Leg: 2), new("c", "C", "D", Leg: 3)]);
+        var order = new List<string>();
+        for (var f = launch; f is not null; f = f.Next) order.Add($"{f.MissionId}{f.Leg}");
+        Assert.Equal(["a1", "b2", "c3"], order);
+        Assert.Null(new DemoFlightLaunch("a", "C", "D").Next);
+    }
+
+    [Fact]
     public void Coverage_is_measured_against_the_flight_not_the_whole_line()
     {
         var line = Line(200);

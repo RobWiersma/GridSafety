@@ -56,6 +56,11 @@ export interface Mission {
   leg?: number;
   /** How many flights the whole line takes. */
   legs?: number;
+  /** Set when booked with other flights as one outing: same drone and crew, flown back to back. */
+  outingId?: string;
+  /** This flight's place in its outing (1-based), and how many flights the outing has. */
+  outingFlight?: number;
+  outingFlights?: number;
   droneId: string;
   pilot: string;
   createdBy?: string;

@@ -755,6 +755,37 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
     }
 
     [Fact]
+    public async Task Several_flights_book_as_one_outing_and_fly_back_to_back()
+    {
+        var line = StaticCircuitCatalog.Instance.All.OrderByDescending(c => c.LengthMeters).First();
+        var sup = Client("dana", supervisor: true);
+
+        var booked = await sup.PostAsJsonAsync("/api/missions", new PlanMissionRequest(line.Id, "DRN-OUTING", "Pat", Legs: [6, 5]), JsonOpts);
+        Assert.Equal(HttpStatusCode.Created, booked.StatusCode);
+        var first = (await booked.Content.ReadFromJsonAsync<MissionView>(JsonOpts))!.Mission;
+        Assert.Equal((5, 1, 2), (first.Leg, first.OutingFlight, first.OutingFlights));
+        var outing = (await sup.GetFromJsonAsync<List<MissionView>>("/api/missions", JsonOpts))!
+            .Select(v => v.Mission).Where(m => m.OutingId == first.OutingId).OrderBy(m => m.OutingFlight).ToList();
+        Assert.Equal([5, 6], outing.Select(m => m.Leg));
+        Assert.All(outing, m => Assert.Equal(("DRN-OUTING", "Pat", MissionStatus.Planned), (m.DroneId, m.Pilot, m.Status)));
+
+        // A flight that's booked can't be booked again by someone else's outing; and one outing has a limit.
+        var clash = await sup.PostAsJsonAsync("/api/missions", new PlanMissionRequest(line.Id, "DRN-OUTING-2", "Pat", Legs: [4, 5]), JsonOpts);
+        Assert.Equal(HttpStatusCode.Conflict, clash.StatusCode);
+        Assert.Contains("Flight 5", await clash.Content.ReadAsStringAsync());
+        var tooMany = await sup.PostAsJsonAsync("/api/missions", new PlanMissionRequest(line.Id, "DRN-OUTING-3", "Pat", Legs: [1, 2, 3, 4, 5, 6, 7]), JsonOpts);
+        Assert.Equal(HttpStatusCode.BadRequest, tooMany.StatusCode);
+
+        // Simulating the outing flies both flights, in order.
+        Assert.Equal(HttpStatusCode.Accepted, (await sup.PostAsync($"/api/missions/{first.Id}/simulate", null)).StatusCode);
+        await WaitForLandingAsync(sup, outing[1].Id);
+        var flown = await Task.WhenAll(outing.Select(m => sup.GetFromJsonAsync<MissionView>($"/api/missions/{m.Id}", JsonOpts)));
+        Assert.All(flown, v => Assert.Equal(MissionStatus.Completed, v!.Mission.Status));
+        Assert.True(flown[0]!.Mission.EndedAt <= flown[1]!.Mission.StartedAt, "the second flight went up after the first landed");
+        Assert.All(flown, v => Assert.True(v!.Coverage > 0.9, $"flight {v.Mission.Leg} covered {v.Coverage}"));
+    }
+
+    [Fact]
     public async Task Opening_a_finding_fetches_its_aerial_photo_once_in_the_background()
     {
         var c = Client();

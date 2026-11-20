@@ -9,7 +9,9 @@ using Microsoft.Extensions.Options;
 namespace GridSafety.Api;
 
 /// <param name="Leg">Which flight of the line (see <see cref="FlightLegs"/>); the one due next when null.</param>
-public sealed record PlanMissionRequest(string CircuitId, string DroneId, string Pilot, int? Leg = null);
+/// <param name="Legs">Several flights of the line booked as one outing, flown back to back with a battery swap between
+/// (overrides <paramref name="Leg"/>).</param>
+public sealed record PlanMissionRequest(string CircuitId, string DroneId, string Pilot, int? Leg = null, IReadOnlyList<int>? Legs = null);
 public sealed record MissionStatusRequest(MissionStatus Status, string? Note);
 public sealed record FindingStatusRequest(FindingStatus Status, string? Note, string? Assignee);
 
@@ -215,8 +217,10 @@ public static partial class Endpoints
         if (string.IsNullOrWhiteSpace(req.DroneId) || req.DroneId.Length > 40 || !req.DroneId.All(c => char.IsLetterOrDigit(c) || c == '-'))
             errors["droneId"] = ["Drone ID is required: letters, digits and dashes, max 40."];
         if (string.IsNullOrWhiteSpace(req.Pilot) || req.Pilot.Length > 100) errors["pilot"] = ["Pilot in command is required."];
-        if (circuit is not null && req.Leg is { } leg && circuit.Leg(leg) is null)
-            errors["leg"] = [$"{circuit.Name} is inspected in {circuit.Legs().Count} flight(s); pick one of 1 to {circuit.Legs().Count}."];
+        var asked = req.Legs is { Count: > 0 } several ? several.Distinct().ToList() : req.Leg is { } one ? [one] : [];
+        if (circuit is not null && asked.FirstOrDefault(l => circuit.Leg(l) is null, int.MinValue) is var badLeg && badLeg != int.MinValue)
+            errors["leg"] = [$"{circuit.Name} is inspected in {circuit.Legs().Count} flight(s); flight {badLeg} isn't one of 1 to {circuit.Legs().Count}."];
+        if (asked.Count > MaxFlightsPerOuting) errors["legs"] = [$"One outing can book at most {MaxFlightsPerOuting} flights."];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
 
         // Fleet drones in the shop, inspection, out of charged batteries or retired stay on the ground. (IDs outside the
@@ -229,9 +233,30 @@ public static partial class Endpoints
             .FirstOrDefault(m => m.DroneId.Equals(req.DroneId.Trim(), StringComparison.OrdinalIgnoreCase) && !Mission.Workflow.IsTerminal(m.Status));
         if (busy is not null) return TypedResults.Conflict($"{req.DroneId} is already assigned to mission {busy.Id} ({busy.Status}).");
 
-        var mission = Mission.Plan(circuit!, req.DroneId, req.Pilot, User(ctx).DisplayName, clock.GetUtcNow(), leg: req.Leg ?? circuit!.NextLeg(recent));
-        await repo.SaveMissionAsync(mission, ct);
-        return TypedResults.Created($"/api/missions/{mission.Id}", ToView(mission, circuits));
+        var legs = asked.Count > 0 ? asked : [circuit!.NextLeg(recent)];
+        if (asked.Count > 1)
+        {
+            // Every flight of an outing needs someone else not to be flying it, a charged battery, and flight hours left before
+            // the drone's next inspection.
+            if (recent.FirstOrDefault(m => m.CircuitId == circuit!.Id && m.Leg is { } l && legs.Contains(l) && !Mission.Workflow.IsTerminal(m.Status)) is { } taken)
+                return TypedResults.Conflict($"Flight {taken.Leg} of {circuit!.Name} is already booked ({taken.Name ?? taken.Id}, {taken.Status}).");
+            var catalog = await resources.GetAsync(ct);
+            if (catalog.FindDrone(req.DroneId) is { } fleetDrone)
+            {
+                var upkeep = Upkeep.Drone(fleetDrone, recent, catalog.Maintenance, clock.GetUtcNow());
+                if (upkeep.ReadyPacks < legs.Count)
+                    return TypedResults.Conflict($"{fleetDrone.Id} has {upkeep.ReadyPacks} charged battery pack(s); {legs.Count} flights need {legs.Count}.");
+                var minutes = legs.Sum(l => circuit!.Leg(l)!.Minutes);
+                if (minutes / 60 > upkeep.HoursToInspection)
+                    return TypedResults.Conflict($"{fleetDrone.Id} is due for inspection after {Math.Round(upkeep.HoursToInspection * 60)} more minutes in the air; " +
+                        $"these flights take about {Math.Round(minutes)}.");
+            }
+        }
+
+        var user = User(ctx).DisplayName;
+        var planned = Mission.PlanOuting(circuit!, legs, req.DroneId, req.Pilot, user, clock.GetUtcNow());
+        foreach (var m in planned) await repo.SaveMissionAsync(m, ct);
+        return TypedResults.Created($"/api/missions/{planned[0].Id}", ToView(planned[0], circuits));
     }
 
     /// <summary>
@@ -275,7 +300,7 @@ public static partial class Endpoints
             await repo.SaveMissionAsync(m, ct);
         }
 
-        if (recent.Count(m => m.SimulatedAt is not null && !Mission.Workflow.IsTerminal(m.Status) && !DemoFlight.IsStale(m, now)) >= MaxSimulatedFlights)
+        if (AirborneOutings(recent, now) >= MaxSimulatedFlights)
             return TypedResults.Conflict($"{MaxSimulatedFlights} simulated flights are already in the air. Try again when one lands.");
 
         var mission = Mission.Plan(circuit, DemoFlight.DroneId, DemoFlight.PickPilot(catalog.FlightCrews, recent), user.DisplayName, now,

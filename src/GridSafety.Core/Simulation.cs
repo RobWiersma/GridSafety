@@ -155,7 +155,16 @@ public static class FindingGenerator
 /// <summary>Start a demo flight: which mission to fly. Sent from the API to the DemoFlight Lambda.</summary>
 /// <param name="FindingCount">Exactly this many findings (see <see cref="SimulationSettings"/>), or null for random.</param>
 /// <param name="Leg">Which flight of the line to fly (see <see cref="FlightLegs"/>); the whole line when null.</param>
-public sealed record DemoFlightLaunch(string MissionId, string CircuitId, string DroneId, int? FindingCount = null, int? Leg = null);
+/// <param name="Then">The rest of an outing, flown in order after this one lands and the battery is swapped.</param>
+public sealed record DemoFlightLaunch(string MissionId, string CircuitId, string DroneId, int? FindingCount = null, int? Leg = null,
+    IReadOnlyList<DemoFlightLaunch>? Then = null)
+{
+    /// <summary>The next flight of the outing, carrying the ones after it; null when this was the last.</summary>
+    public DemoFlightLaunch? Next => Then is { Count: > 0 } rest ? rest[0] with { Then = rest.Count > 1 ? [.. rest.Skip(1)] : null } : null;
+
+    /// <summary>Real time the crew takes to land, swap the battery and launch the next flight of an outing.</summary>
+    public static readonly TimeSpan BatterySwap = TimeSpan.FromSeconds(5);
+}
 
 /// <summary>
 /// Flies a whole simulated mission through an <see cref="IDroneLink"/>: telemetry every tick, a finding
