@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ApiError, useMe, useResources, useSaveResource, type ReportTarget, type ResourceKind } from '../api';
-import { ReportDialog } from './ReportDialog';
 import { FINDING_TYPE_LABEL, miles, relativeTime } from '../lib/format';
 import { useSession } from '../session';
 import { PHASE_LABEL, dispatchName, involves } from '../lib/field';
 import { OutBadge, ShiftMeter } from './CrewsPanel';
+import { BackInServiceButton, FuelGauge, MaintenanceDialog, PackBars, UpkeepPill } from './Upkeep';
 import type { Crew, CrewMember, CrewStatus, Depot, DroneAsset, DroneAssetStatus, FindingType, FlightCrew, Vehicle, VehicleKind, VehicleStatus } from '../types';
 import type { ToastMessage } from './Toast';
 
@@ -34,7 +34,12 @@ function rememberedSection(): Section {
 }
 
 /** Drones, flight crews and ground crews: everyone can look, supervisors add, edit and retire them. */
-export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMessage): void; onOpenMission(id: string): void }) {
+export function ResourcesView({ onToast, onOpenMission, onOpenReport }: {
+  onToast(t: ToastMessage): void;
+  onOpenMission(id: string): void;
+  /** Opens that resource's report on the Reports tab. */
+  onOpenReport(t: ReportTarget): void;
+}) {
   const resources = useResources();
   const save = useSaveResource();
   const me = useMe();
@@ -42,7 +47,9 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
   const canEdit = !guest && Boolean(me.data?.isSupervisor);
   const [section, setSection] = useState<Section>(rememberedSection);
   const [editing, setEditing] = useState<Editing | null>(null);
-  const [report, setReport] = useState<ReportTarget | null>(null);
+  const [servicing, setServicing] = useState<{ kind: 'drones' | 'vehicles'; id: string } | null>(null);
+  const done = (text: string) => onToast({ kind: 'success', text });
+  const setReport = onOpenReport;
 
   const pick = (s: Section) => {
     setSection(s);
@@ -99,7 +106,7 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
           <div className="table-wrap">
             <table className="table">
               <thead>
-                <tr><th>Drone</th><th>Home base</th><th>Status</th><th>Now</th><th>Missions</th><th>Flight time</th><th>Distance</th><th>Last flight</th>{canEdit && <th />}</tr>
+                <tr><th>Drone</th><th>Home base</th><th>Status</th><th>Now</th><th>Batteries</th><th>Inspection</th><th>Missions</th><th>Flight time</th><th>Distance</th><th>Last flight</th>{canEdit && <th />}</tr>
               </thead>
               <tbody>
                 {data.drones.map((d) => (
@@ -111,7 +118,11 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
                       {d.drone.notes && <div className="muted small resource-note">{d.drone.notes}</div>}
                     </td>
                     <td>{d.drone.homeBase}</td>
-                    <td><span className={`pill pill-res-${d.drone.status.toLowerCase()}`}>{DRONE_STATUS_LABEL[d.drone.status]}</span></td>
+                    <td>
+                      {d.drone.status === 'Active' && d.upkeep.state !== 'Ready'
+                        ? <UpkeepPill state={d.upkeep.state} until={d.upkeep.busyUntil} note={d.upkeep.note} />
+                        : <span className={`pill pill-res-${d.drone.status.toLowerCase()}`}>{DRONE_STATUS_LABEL[d.drone.status]}</span>}
+                    </td>
                     <td>
                       {d.activeMissionId ? (
                         <button className="link-button" onClick={() => onOpenMission(d.activeMissionId!)}>
@@ -120,12 +131,16 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
                       ) : <span className="muted">On the ground</span>}
                       {d.live && <div className="muted small">Battery {Math.round(d.live.batteryPct)}% · seen {relativeTime(d.live.lastSeen)}</div>}
                     </td>
+                    <td><PackBars u={d.upkeep} /></td>
+                    <td className="small">{d.upkeep.hoursToInspection < 0.1 ? 'Due' : `in ${d.upkeep.hoursToInspection.toFixed(1)} flight h`}</td>
                     <td>{d.missions}</td>
                     <td>{d.flightHours.toFixed(1)} h</td>
                     <td>{miles(d.distanceMeters)} mi</td>
                     <td>{d.lastFlight ? relativeTime(d.lastFlight) : <span className="muted">Never</span>}</td>
                     {canEdit && (
                       <td className="row-actions">
+                        <button className="btn btn-ghost" onClick={() => setServicing({ kind: 'drones', id: d.drone.id })}>Maintenance</button>
+                        <BackInServiceButton events={d.upkeep.events} onDone={done} />
                         <button className="btn btn-ghost" onClick={() => setEditing({ kind: 'drones', record: d.drone })}>Edit</button>
                         <button className="btn btn-danger-ghost" onClick={() => remove('drones', d.drone.id, d.drone.id)}>Remove</button>
                       </td>
@@ -198,7 +213,7 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
           <div className="table-wrap">
             <table className="table">
               <thead>
-                <tr><th>Truck</th><th>Seats</th><th>Kept at</th><th>Status</th><th>Now</th><th>Jobs</th><th>Last out</th>{canEdit && <th />}</tr>
+                <tr><th>Truck</th><th>Seats</th><th>Kept at</th><th>Status</th><th>Now</th><th>Fuel</th><th>Service</th><th>Jobs</th><th>Last out</th>{canEdit && <th />}</tr>
               </thead>
               <tbody>
                 {[...data.vehicles].sort((a, b) => depotName(a.vehicle.depotId).localeCompare(depotName(b.vehicle.depotId)) || a.vehicle.id.localeCompare(b.vehicle.id)).map((v) => (
@@ -211,7 +226,12 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
                     </td>
                     <td>{v.vehicle.seats}</td>
                     <td>{depotName(v.vehicle.depotId)}</td>
-                    <td><span className={`pill pill-res-${v.vehicle.status === 'InService' ? 'active' : 'maintenance'}`}>{VEHICLE_STATUS_LABEL[v.vehicle.status]}</span></td>
+                    <td>
+                      {v.vehicle.status === 'InService' && v.upkeep.state !== 'Ready'
+                        ? <UpkeepPill state={v.upkeep.state} until={v.upkeep.busyUntil} note={v.upkeep.note} />
+                        : <span className={`pill pill-res-${v.vehicle.status === 'InService' ? 'active' : 'maintenance'}`}>{VEHICLE_STATUS_LABEL[v.vehicle.status]}</span>}
+                      {v.upkeep.state === 'InShop' && v.upkeep.note && <div className="muted small">{v.upkeep.note}</div>}
+                    </td>
                     <td>
                       {v.trip && v.phase ? (
                         <>
@@ -220,10 +240,14 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
                         </>
                       ) : <span className="muted">{v.vehicle.status === 'InService' ? 'At the yard' : 'In the shop'}</span>}
                     </td>
+                    <td><FuelGauge u={v.upkeep} /></td>
+                    <td className="small nowrap">{v.upkeep.milesToService < 1 ? 'Due' : `in ${v.upkeep.milesToService} mi`}</td>
                     <td>{v.jobs}</td>
                     <td>{v.lastOut ? relativeTime(v.lastOut) : <span className="muted">Never</span>}</td>
                     {canEdit && (
                       <td className="row-actions">
+                        <button className="btn btn-ghost" onClick={() => setServicing({ kind: 'vehicles', id: v.vehicle.id })}>Maintenance</button>
+                        <BackInServiceButton events={v.upkeep.events} onDone={done} />
                         <button className="btn btn-ghost" onClick={() => setEditing({ kind: 'vehicles', record: v.vehicle })}>Edit</button>
                         <button className="btn btn-danger-ghost" onClick={() => remove('vehicles', v.vehicle.id, v.vehicle.id)}>Remove</button>
                       </td>
@@ -282,7 +306,9 @@ export function ResourcesView({ onToast, onOpenMission }: { onToast(t: ToastMess
         )
       )}
 
-      {report && <ReportDialog key={JSON.stringify(report)} target={report} onClose={() => setReport(null)} />}
+
+      {servicing && <MaintenanceDialog key={servicing.id} kind={servicing.kind} id={servicing.id} onClose={() => setServicing(null)} onDone={done} />}
+
 
       {editing && (
         <ResourceDialog

@@ -112,6 +112,10 @@ public class VehicleTests
         Assert.All(report.Breakdown, b => Assert.Equal(2, b.Jobs));
         var truckHours = Shifts.Hours(hot.Dispatch.ReturnsAt - first.Dispatch!.DepartedAt);
         Assert.Equal(truckHours * 2, report.Totals.PersonHours, 1);
+
+        var day = Assert.Single(report.Days); // 10 am in California
+        Assert.Equal((new DateOnly(2026, 11, 19), 1, 2, 2), (day.Day, day.Trips, day.Jobs, day.Repaired));
+        Assert.Equal(report.Totals.PersonHours, day.PersonHours, 1);
     }
 
     [Fact]

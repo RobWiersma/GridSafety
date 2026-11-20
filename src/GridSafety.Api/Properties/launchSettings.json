@@ -6,6 +6,12 @@
       "applicationUrl": "http://localhost:5080",
       "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development" }
     },
+    "GridSafety.Api (demo history)": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5080",
+      "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development", "GridSafety__SeedHistoryDays": "28" }
+    },
     "GridSafety.Api (DynamoDB Local)": {
       "commandName": "Project",
       "launchBrowser": false,

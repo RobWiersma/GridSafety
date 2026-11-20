@@ -42,6 +42,13 @@ export function circuitsByVoltage<T extends { voltageKv: number; name: string }>
     .map(([kv, list]) => ({ kv, label: kv > 0 ? `${kv} kV` : 'Voltage not tagged', circuits: list.sort((x, y) => x.name.localeCompare(y.name)) }));
 }
 
+/** Dollars for reports: "$1,234", or "$12.50" under $100. */
+export function money(n: number): string {
+  return n < 100 && n % 1 !== 0
+    ? `$${n.toFixed(2)}`
+    : `$${Math.round(n).toLocaleString()}`;
+}
+
 export function relativeTime(iso: string, now: Date = new Date()): string {
   const sec = Math.round((now.getTime() - new Date(iso).getTime()) / 1000);
   const abs = Math.abs(sec);

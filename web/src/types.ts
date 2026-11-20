@@ -171,6 +171,24 @@ export interface VehicleView {
   phase?: FieldPhase;
   jobs: number;
   lastOut?: string;
+  upkeep: TruckUpkeep;
+}
+
+/** What a truck or drone is doing about its upkeep; anything but Ready keeps it at the yard. */
+export type UpkeepState = 'Ready' | 'Refueling' | 'Charging' | 'Servicing' | 'InShop' | 'OutOfService';
+export type MaintenanceKind = 'Refuel' | 'Service' | 'Inspection' | 'BatterySwap' | 'BatteryReplaced' | 'Repair';
+/** One line of a maintenance log; recordId is set for repairs and services a supervisor logged. */
+export interface MaintenanceEvent {
+  assetId: string; kind: MaintenanceKind; at: string; until?: string; detail: string; recordId?: string; by?: string; gallons?: number; cost?: number;
+}
+export interface TruckUpkeep {
+  fuelPct: number; tankGallons: number; rangeMiles: number; milesDriven: number; milesToService: number;
+  state: UpkeepState; busyUntil?: string; note?: string; events: MaintenanceEvent[]; costs: UpkeepCosts;
+}
+export interface BatteryPack { id: string; cycles: number; healthPct: number; chargePct: number; readyAt?: string; inUse: boolean }
+export interface DroneUpkeep {
+  packs: BatteryPack[]; readyPacks: number; nextReadyAt?: string; flightHours: number; hoursToInspection: number;
+  state: UpkeepState; busyUntil?: string; note?: string; events: MaintenanceEvent[]; costs: UpkeepCosts;
 }
 
 export interface FieldJob {
@@ -301,6 +319,7 @@ export interface DroneResourceView {
   flightHours: number;
   distanceMeters: number;
   lastFlight?: string;
+  upkeep: DroneUpkeep;
 }
 
 export interface FlightCrewView {
@@ -469,6 +488,8 @@ export interface TechnicianReport {
   depotName?: string;
   current: MemberShift;
   shifts: ShiftReport[];
+  /** Every job they were on, by Pacific calendar day. */
+  days: WorkDay[];
   now: string;
 }
 
@@ -505,20 +526,48 @@ export interface FlightReport {
     alertsByKind: Partial<Record<AlertKind, number>>;
     firstFlight?: string;
     lastFlight?: string;
+    /** Flight hours at the flight crew rate. */
+    crewCost: number;
   };
   flights: FlightLogEntry[];
+  days: FlightDay[];
 }
 
-export interface DroneReport { drone: DroneAsset; report: FlightReport; now: string }
+/** One Pacific calendar day of a flight log (flight hours are real time). */
+export interface FlightDay {
+  day: string; missions: number; completed: number; aborted: number; flightHours: number; distanceMeters: number;
+  structuresInspected: number; findings: number; alerts: number; crewCost: number;
+}
+
+export interface DroneReport { drone: DroneAsset; report: FlightReport; upkeep: DroneUpkeep; now: string }
 
 /** Simulated hours; personHours counts each person in the truck. A trip that went on from job to job counts once. */
-export interface WorkTotals { trips: number; jobs: number; repaired: number; calledBack: number; driveHours: number; repairHours: number; personHours: number }
+export interface WorkTotals { trips: number; jobs: number; repaired: number; calledBack: number; driveHours: number; repairHours: number; personHours: number; laborCost: number }
 /** One line of a breakdown: a person or a truck. */
 export interface WorkBreakdown { name: string; detail?: string; jobs: number; repaired: number; hours: number }
 /** Field work by a truck, a crew or out of a yard; in each job, `with` is everyone who was in the truck. */
-export interface WorkReport { totals: WorkTotals; breakdown: WorkBreakdown[]; jobs: ShiftJob[] }
-export interface VehicleReport { vehicle: Vehicle; kindLabel: string; depotName?: string; work: WorkReport; now: string }
+export interface WorkReport { totals: WorkTotals; breakdown: WorkBreakdown[]; jobs: ShiftJob[]; days: WorkDay[] }
+/** One Pacific calendar day of field work; a job counts on the day its truck left. */
+export interface WorkDay { day: string; trips: number; jobs: number; repaired: number; calledBack: number; driveHours: number; repairHours: number; personHours: number; laborCost: number }
+export interface VehicleReport { vehicle: Vehicle; kindLabel: string; depotName?: string; work: WorkReport; upkeep: TruckUpkeep; now: string }
 export interface CrewWorkReport { crewId: string; crewName: string; specialty: string; depotName?: string; work: WorkReport; now: string }
-export interface DepotReport { depot: Depot; trucks: number; people: number; work: WorkReport; now: string }
+export interface DepotReport { depot: Depot; trucks: number; people: number; work: WorkReport; truckUpkeep: UpkeepCosts; now: string }
+/** One Pacific calendar day of the whole operation. Flight hours are real time; field hours simulated. */
+export interface ActivityDay {
+  day: string;
+  missions: number; completed: number; aborted: number; flightHours: number; distanceMeters: number; structuresInspected: number;
+  found: number; foundSevere: number; triaged: number; dismissed: number; escalated: number;
+  trips: number; jobs: number; repaired: number; calledBack: number; driveHours: number; repairHours: number; personHours: number;
+  refuels: number; gallons: number; fuelCost: number; batterySwaps: number; packsReplaced: number; shopVisits: number;
+  maintenanceCost: number; laborCost: number; flightCost: number; totalCost: number;
+}
+export interface ActivityReport { days: ActivityDay[]; rates: RateCard; now: string }
+/** The rates every report's costs come from. */
+export interface RateCard {
+  laborPerPersonHour: number; flightCrewPerHour: number; gasPerGallon: number; truckService: number; droneInspection: number;
+  batteryPack: number; truckRepairDefault: number; droneRepairDefault: number;
+}
+/** Upkeep spend, by kind. */
+export interface UpkeepCosts { fuel: number; service: number; batteries: number; repairs: number; total: number }
 export interface FlightCrewReport { crewId: string; crewName: string; homeBase: string; report: FlightReport; now: string }
 export interface PilotReport { crewId: string; crewName: string; member: string; role: string; report: FlightReport; now: string }

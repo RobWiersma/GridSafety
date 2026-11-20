@@ -31,6 +31,8 @@ if ((config["GridSafety:Storage"] ?? "DynamoDb").Equals("InMemory", StringCompar
     builder.Services.AddSingleton<IAlertSettingsStore, InMemoryAlertSettingsStore>();
     builder.Services.AddSingleton<ISimulationSettingsStore, InMemorySimulationSettingsStore>();
     builder.Services.AddSingleton<IAerialStore, InMemoryAerialStore>();
+    // Past days of simulated operations for the reports, when asked for (the "demo history" launch profile).
+    if (config.GetValue<int>("GridSafety:SeedHistoryDays") > 0) builder.Services.AddHostedService<DemoHistorySeeder>();
 }
 else
 {

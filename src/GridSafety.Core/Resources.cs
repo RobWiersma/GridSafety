@@ -42,6 +42,12 @@ public sealed partial class ResourceCatalog
     public List<Depot> Depots { get; init; } = [];
     public List<Vehicle> Vehicles { get; init; } = [];
 
+    /// <summary>Repairs and services supervisors logged, oldest first (refuels and charging are simulated, not stored).</summary>
+    public List<MaintenanceRecord> Maintenance { get; init; } = [];
+
+    /// <summary>The most logged maintenance kept; the oldest go first.</summary>
+    public const int MaxMaintenanceRecords = 500;
+
     public Vehicle? FindVehicle(string id) => Vehicles.FirstOrDefault(v => v.Id.Equals(id.Trim(), StringComparison.OrdinalIgnoreCase));
 
     public DroneAsset? FindDrone(string id) => Drones.FirstOrDefault(d => d.Id.Equals(id.Trim(), StringComparison.OrdinalIgnoreCase));

@@ -5,7 +5,7 @@ import { canTake } from './lib/field';
 import type {
   AlertKind, AlertSettings, AlertSettingsView,
   AssigneeOption, Circuit, Crew, CrewView, FieldJobs, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint, SimulationSettings,
- DroneReport, PilotReport, TechnicianReport, Vehicle, VehicleReport, CrewWorkReport, DepotReport, FlightCrewReport,} from './types';
+ DroneReport, PilotReport, TechnicianReport, Vehicle, VehicleReport, CrewWorkReport, DepotReport, FlightCrewReport, ActivityReport, RateCard,} from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public fieldErrors?: Record<string, string[]>) {
@@ -162,6 +162,33 @@ export function useSaveResource() {
       qc.invalidateQueries({ queryKey: keys.crews }),
       qc.invalidateQueries({ queryKey: ['findings'] }),
     ]),
+  });
+}
+
+/** Supervisor-only: log a repair (into the shop) or a service for a drone or truck. */
+export function useLogMaintenance() {
+  const api = useFetcher();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { kind: 'drones' | 'vehicles'; id: string; body: { kind: 'Repair' | 'Service'; hours?: number; note?: string; cost?: number } }) =>
+      api<unknown>(`/resources/${input.kind}/${encodeURIComponent(input.id)}/maintenance`, { method: 'POST', body: JSON.stringify(input.body) }),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: keys.resources }), qc.invalidateQueries({ queryKey: ['report'] })]),
+  });
+}
+
+/** The rate card behind every report's costs. */
+export const useRates = () => {
+  const api = useFetcher();
+  return useQuery({ queryKey: ['rates'], queryFn: () => api<RateCard>('/reports/rates'), staleTime: Infinity });
+};
+
+/** Supervisor-only: a repair is done, back in service now. */
+export function useFinishRepair() {
+  const api = useFetcher();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (recordId: string) => api<unknown>(`/resources/maintenance/${encodeURIComponent(recordId)}/done`, { method: 'POST' }),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: keys.resources }), qc.invalidateQueries({ queryKey: ['report'] })]),
   });
 }
 
@@ -381,9 +408,10 @@ export type ReportTarget =
   | { kind: 'truck'; id: string }
   | { kind: 'ground-crew'; crewId: string; name: string }
   | { kind: 'flight-crew'; crewId: string; name: string }
-  | { kind: 'depot'; id: string; name: string };
+  | { kind: 'depot'; id: string; name: string }
+  | { kind: 'activity' };
 
-export type AnyReport = TechnicianReport | DroneReport | PilotReport | VehicleReport | CrewWorkReport | DepotReport | FlightCrewReport;
+export type AnyReport = TechnicianReport | DroneReport | PilotReport | VehicleReport | CrewWorkReport | DepotReport | FlightCrewReport | ActivityReport;
 
 function reportPath(t: ReportTarget) {
   const e = encodeURIComponent;
@@ -395,6 +423,7 @@ function reportPath(t: ReportTarget) {
     case 'ground-crew': return `/resources/ground-crews/${e(t.crewId)}/report`;
     case 'flight-crew': return `/resources/flight-crews/${e(t.crewId)}/report`;
     case 'depot': return `/resources/depots/${e(t.id)}/report`;
+    case 'activity': return '/reports/activity';
   }
 }
 

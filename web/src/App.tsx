@@ -9,6 +9,7 @@ import { FindingsView } from './components/FindingsView';
 import { MissionDetail } from './components/MissionDetail';
 import { MissionsView } from './components/MissionsView';
 import { OpsView } from './components/OpsView';
+import { ReportsView, reportKey } from './components/ReportsView';
 import { ResourcesView } from './components/ResourcesView';
 import { StatsBar } from './components/StatsBar';
 import { UserMenu } from './components/UserMenu';
@@ -17,12 +18,17 @@ import { Toast, type ToastMessage } from './components/Toast';
 import { recordVisit } from './lib/visits';
 import { Logo, useSession } from './session';
 
-type Tab = 'ops' | 'findings' | 'missions' | 'resources' | 'visitors' | 'settings';
+type Tab = 'ops' | 'findings' | 'missions' | 'resources' | 'reports' | 'visitors' | 'settings';
+type Route = { tab: Tab; mission: string | null; report?: string | null };
 
-/** #ops, #findings, #missions, #resources, #visitors, #settings (#alerts still works), or #mission/<id> for one mission's overview (linkable, works with back/forward). */
-function parseHash(): { tab: Tab; mission: string | null } {
+/**
+ * #ops, #findings, #missions, #resources, #reports, #visitors, #settings (#alerts still works), #mission/<id> for one
+ * mission's overview, or #reports/<kind>/<id> for one report (linkable, works with back/forward).
+ */
+function parseHash(): Route {
   const h = location.hash.slice(1);
   if (h.startsWith('mission/')) return { tab: 'missions', mission: decodeURIComponent(h.slice('mission/'.length)) };
+  if (h === 'reports' || h.startsWith('reports/')) return { tab: 'reports', mission: null, report: h.slice('reports/'.length) || null };
   if (h === 'alerts') return { tab: 'settings', mission: null }; // old link to the email alerts page
   return { tab: h === 'findings' || h === 'missions' || h === 'resources' || h === 'visitors' || h === 'settings' ? h : 'ops', mission: null };
 }
@@ -30,7 +36,7 @@ function parseHash(): { tab: Tab; mission: string | null } {
 export function App() {
   const session = useSession();
   const me = useMe();
-  const [route, setRoute] = useState(parseHash);
+  const [route, setRoute] = useState<Route>(parseHash);
   const { tab, mission: missionId } = route;
   useEffect(() => {
     const onHash = () => setRoute(parseHash());
@@ -43,7 +49,7 @@ export function App() {
   const [findingsFilter, setFindingsFilter] = useState('open');
 
   const isSupervisor = Boolean(me.data?.isSupervisor);
-  const tabs: [Tab, string][] = [['ops', 'Operations'], ['findings', 'Findings'], ['missions', 'Missions'], ['resources', 'Resources']];
+  const tabs: [Tab, string][] = [['ops', 'Operations'], ['findings', 'Findings'], ['missions', 'Missions'], ['resources', 'Resources'], ['reports', 'Reports']];
 
   const page = missionId ? 'mission' : tab;
   useEffect(() => recordVisit(page, !session.guest), [page, session.guest]);
@@ -56,6 +62,10 @@ export function App() {
     setRoute({ tab: 'missions', mission: id });
     history.pushState(null, '', `#mission/${encodeURIComponent(id)}`);
     window.scrollTo(0, 0);
+  };
+  const openReport = (key: string | null) => {
+    setRoute({ tab: 'reports', mission: null, report: key });
+    history.pushState(null, '', key ? `#reports/${key}` : '#reports');
   };
 
   return (
@@ -117,7 +127,8 @@ export function App() {
             <CrewsPanel />
           </>
         )}
-        {tab === 'resources' && <ResourcesView onToast={setToast} onOpenMission={openMission} />}
+        {tab === 'resources' && <ResourcesView onToast={setToast} onOpenMission={openMission} onOpenReport={(t) => { openReport(reportKey(t)); window.scrollTo(0, 0); }} />}
+        {tab === 'reports' && <ReportsView selected={route.report ?? null} onSelect={openReport} />}
         {tab === 'settings' && (session.guest ? <div className="banner banner-info">Sign in to see settings.</div> : (
           <div className="settings-page">
             <SimulationSettingsPanel onToast={setToast} />

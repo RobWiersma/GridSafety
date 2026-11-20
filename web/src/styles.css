@@ -555,8 +555,7 @@ button { font: inherit; color: inherit; }
 .shift-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px; }
 
 /* Reports */
-.report-dialog { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
-.report-dialog .dialog-body { gap: 12px; }
+.report-panel { gap: 12px; min-width: 0; }
 .report-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .report-head h2 { margin: 0; font-size: 18px; }
 .report-actions { display: flex; gap: 6px; flex-shrink: 0; }
@@ -581,3 +580,55 @@ button { font: inherit; color: inherit; }
 
 /* Work reports */
 .report-subhead { margin: 14px 0 6px; font-size: 13px; }
+
+/* Reports by day or week */
+.period-report { margin: 10px 0 4px; }
+.period-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.period-head .report-subhead { margin: 0; }
+.period-download { margin-left: auto; }
+.period-metrics { margin: 8px 0 4px; flex-wrap: wrap; }
+.period-compare { margin: 4px 0 6px; }
+.period-chart { margin-bottom: 8px; }
+
+/* Reports tab: a picker beside the report */
+.reports-page { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 14px; align-items: start; }
+.reports-picker { position: sticky; top: 12px; max-height: calc(100vh - 24px); }
+.reports-picker h2 { margin: 0; font-size: 15px; }
+.reports-groups { flex-wrap: wrap; }
+.reports-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; }
+.reports-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; text-align: left; padding: 6px 8px; border: 0; border-radius: 8px;
+  background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.reports-item:hover { background: var(--surface-2); }
+.reports-item-active, .reports-item-active:hover { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.reports-empty h2 { margin: 0; font-size: 16px; }
+@media (max-width: 760px) {
+  .reports-page { grid-template-columns: 1fr; }
+  .reports-picker { position: static; max-height: none; }
+  .reports-list { max-height: 260px; }
+}
+
+.nowrap { white-space: nowrap; }
+
+/* Maintenance: fuel gauges, battery packs, upkeep pills */
+.gauge { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.gauge-bar { width: 56px; height: 8px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.gauge-fill { display: block; height: 100%; background: var(--success); }
+.gauge-low { background: var(--warn); }
+.packs { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.packs-row { display: inline-flex; gap: 2px; align-items: flex-end; }
+.pack { position: relative; width: 7px; height: 16px; border-radius: 2px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.pack-fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--success); }
+.pack-charging .pack-fill { background: var(--warn); }
+.pack-flying { border-color: var(--info); }
+.pack-flying .pack-fill { background: var(--info); }
+.upkeep-pill { background: var(--accent-soft); color: var(--text); white-space: nowrap; }
+.upkeep-inshop, .upkeep-outofservice { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+.upkeep-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+
+/* Costs */
+.cost-tiles .report-tile { background: var(--surface); }
+.rates { border-top: 1px solid var(--border); padding-top: 8px; }
+.rates summary { cursor: pointer; color: var(--muted); }
+.rates dl { display: grid; grid-template-columns: 1fr; gap: 2px; margin: 6px 0 0; }
+.rates dt { color: var(--muted); margin-top: 4px; }
+.rates dd { margin: 0; }

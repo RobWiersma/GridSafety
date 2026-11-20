@@ -5,7 +5,11 @@ namespace GridSafety.Core;
 /// <see cref="PersonHours"/> counts each person in the truck (two people for an hour is two person-hours).
 /// <see cref="Trips"/> counts truck rolls; a trip that went on from one job to the next counts once.
 /// </summary>
-public sealed record WorkTotals(int Trips, int Jobs, int Repaired, int CalledBack, double DriveHours, double RepairHours, double PersonHours);
+public sealed record WorkTotals(int Trips, int Jobs, int Repaired, int CalledBack, double DriveHours, double RepairHours, double PersonHours)
+{
+    /// <summary>Person-hours at the labor rate (see <see cref="Costs"/>).</summary>
+    public double LaborCost => Costs.Money(PersonHours * Costs.LaborPerPersonHour);
+}
 
 /// <summary>One line of a report's breakdown: a person, or a truck, with the jobs they were on and their time on them.</summary>
 public sealed record WorkBreakdown(string Name, string? Detail, int Jobs, int Repaired, double Hours);
@@ -14,7 +18,16 @@ public sealed record WorkBreakdown(string Name, string? Detail, int Jobs, int Re
 /// The field work done by a truck, a crew or out of a yard: totals, a breakdown (per person or per truck), and every
 /// job, newest first. In each job, <see cref="ShiftJob.With"/> is everyone who was in the truck.
 /// </summary>
-public sealed record WorkReport(WorkTotals Totals, IReadOnlyList<WorkBreakdown> Breakdown, IReadOnlyList<ShiftJob> Jobs);
+public sealed record WorkReport(WorkTotals Totals, IReadOnlyList<WorkBreakdown> Breakdown, IReadOnlyList<ShiftJob> Jobs, IReadOnlyList<WorkDay> Days);
+
+/// <summary>
+/// One Pacific calendar day of a work report, oldest first. A job counts on the day its truck left, hours and all, so the
+/// days add up to the report's totals.
+/// </summary>
+public sealed record WorkDay(DateOnly Day, int Trips, int Jobs, int Repaired, int CalledBack, double DriveHours, double RepairHours, double PersonHours)
+{
+    public double LaborCost => Costs.Money(PersonHours * Costs.LaborPerPersonHour);
+}
 
 /// <summary>Builds work reports from the truck rolls on record.</summary>
 public static class WorkReports
@@ -53,7 +66,14 @@ public static class WorkReports
             Math.Round(jobs.Sum(j => j.DriveHours), 1), Math.Round(jobs.Sum(j => j.RepairHours), 1), Shifts.Hours(personTime));
         var breakdown = lines.Select(kv => new WorkBreakdown(kv.Key, kv.Value.Detail, kv.Value.Jobs, kv.Value.Repaired, Shifts.Hours(kv.Value.Time)))
             .OrderByDescending(b => b.Hours).ThenBy(b => b.Name, StringComparer.Ordinal).ToList();
-        return new WorkReport(totals, breakdown, [.. jobs.Take(max)]);
+        var days = picked.Zip(jobs).GroupBy(x => Periods.DayOf(x.First.Dispatch!.DepartedAt)).OrderBy(g => g.Key)
+            .Select(g => new WorkDay(g.Key,
+                g.Count(x => !handedOver.Contains(x.First.Id)), g.Count(),
+                g.Count(x => x.Second.Outcome == JobOutcome.Repaired), g.Count(x => x.Second.Outcome == JobOutcome.CalledBack),
+                Math.Round(g.Sum(x => x.Second.DriveHours), 1), Math.Round(g.Sum(x => x.Second.RepairHours), 1),
+                Shifts.Hours(g.Aggregate(TimeSpan.Zero, (t, x) => t + Spent(x.First.Dispatch!, now) * People(x.First.Dispatch!)))))
+            .ToList();
+        return new WorkReport(totals, breakdown, [.. jobs.Take(max)], days);
     }
 
     /// <summary>Who was in the truck: the riders, or the technician (or crew) sent.</summary>

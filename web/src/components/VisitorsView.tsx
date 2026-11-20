@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useVisitorStats } from '../api';
+import { roundedTop } from '../lib/periods';
 import type { CountView, VisitorStats } from '../types';
 
 const RANGES = [7, 30, 90] as const;
@@ -132,12 +133,6 @@ function DailyChart({ s }: { s: VisitorStats }) {
       </table>
     </div>
   );
-}
-
-/** Bar with 4px rounded top corners, square at the baseline. */
-function roundedTop(x: number, y: number, w: number, h: number, r: number) {
-  const rr = Math.min(r, h);
-  return `M${x} ${y + h}V${y + rr}Q${x} ${y} ${x + rr} ${y}H${x + w - rr}Q${x + w} ${y} ${x + w} ${y + rr}V${y + h}Z`;
 }
 
 function Breakdown({ title, items, note, labels }: { title: string; items: CountView[]; note?: string; labels?: Record<string, string> }) {

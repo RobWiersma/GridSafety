@@ -6,31 +6,40 @@ namespace GridSafety.Api;
 /// <summary>A fleet drone with its live state and how much it has flown (from the last 1,000 missions).</summary>
 public sealed record DroneResourceView(
     DroneAsset Drone, DroneState? Live, string? ActiveMissionId, string? ActiveMissionName,
-    int Missions, double FlightHours, double DistanceMeters, DateTimeOffset? LastFlight);
+    int Missions, double FlightHours, double DistanceMeters, DateTimeOffset? LastFlight, DroneUpkeep Upkeep);
 
 /// <summary>A flight crew with the missions flown by its pilots.</summary>
 public sealed record FlightCrewView(FlightCrew Crew, int Missions, int ActiveMissions, DateTimeOffset? LastFlight);
 
 /// <summary>A drone's flight log: every mission it flew, newest first, with totals.</summary>
-public sealed record DroneReportView(DroneAsset Drone, FlightReport Report, DateTimeOffset Now);
+public sealed record DroneReportView(DroneAsset Drone, FlightReport Report, DroneUpkeep Upkeep, DateTimeOffset Now);
 
 /// <summary>A remote pilot's flight log (missions where they were pilot in command).</summary>
 public sealed record PilotReportView(string CrewId, string CrewName, string Member, string Role, FlightReport Report, DateTimeOffset Now);
 
 /// <summary>A truck's work report: every trip it made and who was in it.</summary>
-public sealed record VehicleReportView(Vehicle Vehicle, string KindLabel, string? DepotName, WorkReport Work, DateTimeOffset Now);
+public sealed record VehicleReportView(Vehicle Vehicle, string KindLabel, string? DepotName, WorkReport Work, TruckUpkeep Upkeep, DateTimeOffset Now);
 
 /// <summary>A ground crew's work report: every job its people were on, broken down per member.</summary>
 public sealed record CrewWorkReportView(string CrewId, string CrewName, string Specialty, string? DepotName, WorkReport Work, DateTimeOffset Now);
 
 /// <summary>A yard's work report: every truck roll out of it, broken down per truck, with how many people depart from it.</summary>
-public sealed record DepotReportView(Depot Depot, int Trucks, int People, WorkReport Work, DateTimeOffset Now);
+public sealed record DepotReportView(Depot Depot, int Trucks, int People, WorkReport Work, UpkeepCosts TruckUpkeep, DateTimeOffset Now);
 
 /// <summary>A flight crew's flight log: missions flown by any of its pilots.</summary>
 public sealed record FlightCrewReportView(string CrewId, string CrewName, string HomeBase, FlightReport Report, DateTimeOffset Now);
 
+/// <summary>The whole operation day by day (last 1,000 missions and findings).</summary>
+public sealed record ActivityReportView(IReadOnlyList<ActivityDay> Days, RateCard Rates, DateTimeOffset Now);
+
 /// <summary>A truck with the trip it's on now (if any), who's in it, and how much it has been used.</summary>
-public sealed record VehicleView(Vehicle Vehicle, string KindLabel, FieldDispatch? Trip, FieldPhase? Phase, int Jobs, DateTimeOffset? LastOut);
+public sealed record VehicleView(Vehicle Vehicle, string KindLabel, FieldDispatch? Trip, FieldPhase? Phase, int Jobs, DateTimeOffset? LastOut, TruckUpkeep Upkeep);
+
+/// <summary>
+/// A repair or service to log. A repair puts the asset in the shop for <see cref="Hours"/> (simulated hours for a truck,
+/// real hours for a drone), or until it's marked back when there are none; a service resets the service counter.
+/// </summary>
+public sealed record MaintenanceRequest(MaintenanceKind Kind, double? Hours, string? Note, double? Cost = null);
 
 public sealed record ResourcesView(IReadOnlyList<DroneResourceView> Drones, IReadOnlyList<FlightCrewView> FlightCrews, IReadOnlyList<CrewView> GroundCrews,
     IReadOnlyList<Depot> Depots, IReadOnlyList<VehicleView> Vehicles);
@@ -60,6 +69,15 @@ public static partial class Endpoints
         secured.MapGet("/resources/ground-crews/{crewId}/report", GetCrewWorkReport);
         secured.MapGet("/resources/flight-crews/{crewId}/report", GetFlightCrewReport);
         secured.MapGet("/resources/depots/{id}/report", GetDepotReport);
+        secured.MapGet("/reports/activity", GetActivityReport);
+        secured.MapGet("/reports/rates", () => TypedResults.Ok(Costs.Card));
+
+        // Maintenance: supervisors log repairs and services; refuels and charging are simulated.
+        secured.MapPost("/resources/drones/{id}/maintenance", (string id, MaintenanceRequest body, HttpContext ctx, IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct) =>
+            LogMaintenance("drones", id, body, ctx, repo, resources, clock, ct));
+        secured.MapPost("/resources/vehicles/{id}/maintenance", (string id, MaintenanceRequest body, HttpContext ctx, IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct) =>
+            LogMaintenance("vehicles", id, body, ctx, repo, resources, clock, ct));
+        secured.MapPost("/resources/maintenance/{recordId}/done", FinishRepair);
     }
 
     private static async Task<Results<Ok<DroneReportView>, NotFound>> GetDroneReport(
@@ -67,8 +85,9 @@ public static partial class Endpoints
     {
         var catalog = await resources.GetAsync(ct);
         if (catalog.Drones.FirstOrDefault(d => d.Id.Equals(id, StringComparison.OrdinalIgnoreCase)) is not { } drone) return TypedResults.NotFound();
-        var missions = (await repo.ListMissionsAsync(1000, ct)).Where(m => m.DroneId.Equals(drone.Id, StringComparison.OrdinalIgnoreCase));
-        return TypedResults.Ok(new DroneReportView(drone, FlightReports.Of(missions, circuits.Find), clock.GetUtcNow()));
+        var missions = (await repo.ListMissionsAsync(1000, ct)).Where(m => m.DroneId.Equals(drone.Id, StringComparison.OrdinalIgnoreCase)).ToList();
+        var now = clock.GetUtcNow();
+        return TypedResults.Ok(new DroneReportView(drone, FlightReports.Of(missions, circuits.Find), Upkeep.Drone(drone, missions, catalog.Maintenance, now), now));
     }
 
     private static async Task<Results<Ok<PilotReportView>, NotFound>> GetPilotReport(
@@ -91,7 +110,8 @@ public static partial class Endpoints
         if (catalog.FindVehicle(id) is not { } v) return TypedResults.NotFound();
         var findings = await ListSettledFindingsAsync(repo, now, ct);
         var work = WorkReports.Of(findings, d => d.VehicleId == v.Id, d => WorkReports.PeopleOf(d), now);
-        return TypedResults.Ok(new VehicleReportView(v, Vehicle.KindLabel(v.Kind), catalog.FindDepot(v.DepotId)?.Name, work, now));
+        return TypedResults.Ok(new VehicleReportView(v, Vehicle.KindLabel(v.Kind), catalog.FindDepot(v.DepotId)?.Name, work,
+            Upkeep.Truck(v, FieldWork.History(findings), catalog.Maintenance, now), now));
     }
 
     private static async Task<Results<Ok<CrewWorkReportView>, NotFound>> GetCrewWorkReport(
@@ -117,6 +137,18 @@ public static partial class Endpoints
         return TypedResults.Ok(new FlightCrewReportView(crew.Id, crew.Name, crew.HomeBase, FlightReports.Of(missions, circuits.Find), clock.GetUtcNow()));
     }
 
+    private static async Task<Ok<ActivityReportView>> GetActivityReport(IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var findings = await ListSettledFindingsAsync(repo, now, ct);
+        var missions = await repo.ListMissionsAsync(1000, ct);
+        var catalog = await resources.GetAsync(ct);
+        var history = FieldWork.History(findings);
+        var upkeep = catalog.Vehicles.SelectMany(v => Upkeep.Truck(v, history, catalog.Maintenance, now).Events)
+            .Concat(catalog.Drones.SelectMany(d => Upkeep.Drone(d, missions, catalog.Maintenance, now).Events));
+        return TypedResults.Ok(new ActivityReportView(ActivityReports.Daily(findings, missions, now, upkeep), Costs.Card, now));
+    }
+
     private static async Task<Results<Ok<DepotReportView>, NotFound>> GetDepotReport(
         string id, IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct)
     {
@@ -129,7 +161,9 @@ public static partial class Endpoints
         // Per truck; rolls from before trucks were tracked go under the person sent.
         var work = WorkReports.Of(findings, d => d.DepotId == depot.Id, d => [d.VehicleId ?? d.Member ?? d.Assignee], now,
             [.. trucks.Select(v => (v.Id, (string?)$"{Vehicle.KindLabel(v.Kind)}, {v.Seats} seats{(v.Status == VehicleStatus.OutOfService ? ", out of service" : "")}"))]);
-        return TypedResults.Ok(new DepotReportView(depot, trucks.Count, people, work, now));
+        var history = FieldWork.History(findings);
+        var upkeep = Upkeep.CostsOf(trucks.SelectMany(v => Upkeep.Truck(v, history, catalog.Maintenance, now).Events));
+        return TypedResults.Ok(new DepotReportView(depot, trucks.Count, people, work, upkeep, now));
     }
 
     private static async Task<Ok<ResourcesView>> ListResources(IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct)
@@ -145,7 +179,8 @@ public static partial class Endpoints
             var active = flown.FirstOrDefault(m => !Mission.Workflow.IsTerminal(m.Status));
             var hours = flown.Where(m => m.StartedAt is not null).Sum(m => ((m.EndedAt ?? m.UpdatedAt) - m.StartedAt!.Value).TotalHours);
             return new DroneResourceView(d, live.GetValueOrDefault(d.Id), active?.Id, active?.Name,
-                flown.Count, Math.Round(Math.Max(0, hours), 1), flown.Sum(m => m.DistanceFlownMeters), flown.Max(m => (DateTimeOffset?)(m.StartedAt ?? m.CreatedAt)));
+                flown.Count, Math.Round(Math.Max(0, hours), 1), flown.Sum(m => m.DistanceFlownMeters), flown.Max(m => (DateTimeOffset?)(m.StartedAt ?? m.CreatedAt)),
+                Upkeep.Drone(d, flown, catalog.Maintenance, now));
         }).ToList();
 
         var flightCrews = catalog.FlightCrews.Select(c =>
@@ -166,7 +201,8 @@ public static partial class Endpoints
         {
             var trip = Fleet.CurrentTrip(v, active, now);
             var used = history.Where(d => d.VehicleId == v.Id).ToList();
-            return new VehicleView(v, Vehicle.KindLabel(v.Kind), trip, trip?.PhaseAt(now), used.Count, used.Max(d => (DateTimeOffset?)d.DepartedAt));
+            return new VehicleView(v, Vehicle.KindLabel(v.Kind), trip, trip?.PhaseAt(now), used.Count, used.Max(d => (DateTimeOffset?)d.DepartedAt),
+                Upkeep.Truck(v, history, catalog.Maintenance, now));
         }).ToList();
         return TypedResults.Ok(new ResourcesView(drones, flightCrews, groundCrews, catalog.Depots, vehicles));
     }
@@ -257,6 +293,63 @@ public static partial class Endpoints
             return TypedResults.NoContent();
         }, ct);
 
+    private static Task<IResult> LogMaintenance(string kind, string id, MaintenanceRequest body, HttpContext ctx, IGridRepository repo,
+        IResourceStore resources, TimeProvider clock, CancellationToken ct) =>
+        EditAsync(ctx, resources, async catalog =>
+        {
+            if (body.Kind is not (MaintenanceKind.Repair or MaintenanceKind.Service))
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["kind"] = ["Log a repair or a service; refuels and charging happen by themselves."] });
+            if (body.Hours is < 0 or > 24 * 30)
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["hours"] = ["Hours in the shop: 0 to 720."] });
+            if (body.Cost is < 0 or > 1_000_000)
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["cost"] = ["Cost: $0 to $1,000,000."] });
+            if (body.Note?.Length > 200)
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["note"] = ["Keep the note under 200 characters."] });
+
+            var now = clock.GetUtcNow();
+            string assetId;
+            TimeSpan? shop = body.Hours is > 0 and var h ? TimeSpan.FromHours(h) : null;
+            if (kind == "drones")
+            {
+                if (catalog.FindDrone(id) is not { } drone) return TypedResults.NotFound();
+                if (await ActiveMissionAsync(repo, drone.Id, ct) is { } m)
+                    return TypedResults.Conflict($"{drone.Id} is on mission {m.Name ?? m.Id}. Land it first.");
+                assetId = drone.Id;
+            }
+            else
+            {
+                if (catalog.FindVehicle(id) is not { } truck) return TypedResults.NotFound();
+                if (await TruckOutAsync(repo, truck, clock, ct))
+                    return TypedResults.Conflict($"{truck.Id} is out on a job. Log it once it's back at the yard.");
+                assetId = truck.Id;
+                shop = shop is { } s ? Shifts.Sim(s) : null; // truck time runs at demo speed
+            }
+            if (catalog.Maintenance.Any(r => r.AssetId == assetId && r.Kind == MaintenanceKind.Repair && r.At <= now && (r.Until is null || now < r.Until))
+                && body.Kind == MaintenanceKind.Repair)
+                return TypedResults.Conflict($"{assetId} is already in the shop. Mark it back first.");
+
+            var record = new MaintenanceRecord(Guid.NewGuid().ToString("N")[..12], assetId, body.Kind, now,
+                body.Kind == MaintenanceKind.Repair ? now + shop : now, Clean(body.Note), User(ctx).DisplayName, body.Cost);
+            catalog.Maintenance.Add(record);
+            if (catalog.Maintenance.Count > ResourceCatalog.MaxMaintenanceRecords)
+                catalog.Maintenance.RemoveRange(0, catalog.Maintenance.Count - ResourceCatalog.MaxMaintenanceRecords);
+            return TypedResults.Ok(record);
+        }, ct);
+
+    /// <summary>Back from the shop: ends an open repair now.</summary>
+    private static Task<IResult> FinishRepair(string recordId, HttpContext ctx, IResourceStore resources, TimeProvider clock, CancellationToken ct) =>
+        EditAsync(ctx, resources, catalog =>
+        {
+            var now = clock.GetUtcNow();
+            var i = catalog.Maintenance.FindIndex(r => r.Id == recordId);
+            if (i < 0) return Task.FromResult<IResult>(TypedResults.NotFound());
+            var r = catalog.Maintenance[i];
+            if (r.Kind != MaintenanceKind.Repair || (r.Until is { } u && u <= now))
+                return Task.FromResult<IResult>(TypedResults.Conflict("That repair is already over."));
+            catalog.Maintenance[i] = r with { Until = now };
+            return Task.FromResult<IResult>(TypedResults.Ok(catalog.Maintenance[i]));
+        }, ct);
+
     private static async Task<bool> TruckOutAsync(IGridRepository repo, Vehicle v, TimeProvider clock, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
@@ -272,7 +365,7 @@ public static partial class Endpoints
         {
             var catalog = await resources.GetAsync(ct);
             var result = await edit(catalog);
-            if (result is not (Ok<DroneAsset> or Ok<FlightCrew> or Ok<Crew> or Ok<Vehicle> or NoContent)) return result;
+            if (result is not (Ok<DroneAsset> or Ok<FlightCrew> or Ok<Crew> or Ok<Vehicle> or Ok<MaintenanceRecord> or NoContent)) return result;
             try
             {
                 await resources.SaveAsync(catalog, ct);

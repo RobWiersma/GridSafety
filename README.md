@@ -28,11 +28,29 @@ Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · D
 
 > **Real map data:** the transmission lines and towers are real, public [OpenStreetMap](https://www.openstreetmap.org/copyright) data for Contra Costa, Alameda and Solano counties, CA (878 lines and about 19,700 towers from 12 to 500 kV, such as *Pittsburg - Martinez 115 kV* and *Table Mountain - Tesla 500 kV*), imported by `tools/GridSafety.CircuitImport`. Drones, missions and defects are simulated. No non-public utility data is used.
 
-![Live ops map: a demo drone flying the Lakewood–Clayton 115 kV line with a corridor alert](docs/screenshots/ops-live.png)
+![Live ops map: the demo drone flying the Lakewood–Clayton 115 kV line past Walnut Creek, with the mission in flight, battery, link and coverage](docs/screenshots/ops-live.png)
+
+| Field crews on the roads | Reports: all activity, with costs |
+|---|---|
+| ![Operations map zoomed out over the East Bay: trucks driving to and from jobs on real roads, crew yards, open findings and the drone in flight](docs/screenshots/ops-field.png) | ![All activity report: total cost, labor, flight crews, fuel and maintenance tiles, a daily cost chart and a table of every day](docs/screenshots/reports-activity.png) |
 
 | Finding with its drone capture | Findings work queue |
 |---|---|
-| ![Finding drawer showing a synthetic drone image of crossarm damage, triage SLA and actions](docs/screenshots/finding-detail.png) | ![Findings queue sorted by severity](docs/screenshots/findings.png) |
+| ![Finding drawer showing a synthetic drone image of crossarm damage, triage SLA and actions](docs/screenshots/finding-detail.png) | ![Findings queue sorted by severity, with the technician each work order went to](docs/screenshots/findings.png) |
+
+<details><summary>Reports: a technician's weeks and a truck's days, with labor, fuel and maintenance costs</summary>
+
+![Shift report for a technician by week: hours worked, jobs, repairs and labor cost, with a weekly chart and table](docs/screenshots/reports-technician.png)
+
+![Work report for a bucket truck: trips, repairs, truck time, person-hours, labor, fuel, service and total cost, with a daily jobs chart](docs/screenshots/reports-truck.png)
+
+</details>
+
+<details><summary>Resources: trucks with fuel, service and what each is doing now</summary>
+
+![Trucks tab on Resources: each truck's yard, status, current job, fuel gauge with range, miles to next service and jobs](docs/screenshots/resources-trucks.png)
+
+</details>
 
 <details><summary>Mission overview: map, flight profile, captures, alerts and history</summary>
 
@@ -42,7 +60,7 @@ Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · D
 
 <details><summary>Missions and the synthetic defect images</summary>
 
-![Missions view with the Demo flight button](docs/screenshots/missions.png)
+![Missions view: search and filters, the Demo flight button, a flight in the air and completed flights with coverage, findings and alerts](docs/screenshots/missions.png)
 
 ![The six defect types the simulator draws: conductor damage, crossarm damage, damaged insulator, missing hardware, thermal hotspot (IR), vegetation encroachment](docs/screenshots/defect-images.png)
 
@@ -64,7 +82,7 @@ GridSafety is a **proof of concept for a software-as-a-service product**: one ho
 |---|---|
 | Can it take live drone data at scale? | MQTT telemetry through AWS IoT Core into an event-driven, serverless pipeline, with per-device identity, idempotent processing and out-of-order tolerance |
 | Does it fit how operations actually work? | Flight-safety alerts, a triage queue with severity-based SLAs and escalation, work orders that go only to qualified, on-shift technicians nearest first, crew hours of service, trucks tracked per yard with crews riding together and nearby jobs chained onto the same trip, and an audit trail on every decision |
-| Can managers see what happened? | Live ops map, KPIs, a mission overview and downloadable report per flight, flight logs per drone and pilot, shift reports per technician (CSV) |
+| Can managers see what happened? | Live ops map, KPIs, a mission overview and downloadable report per flight, flight logs and work reports for every drone, pilot, crew, truck and yard, by day, week or month (CSV) |
 | Is it secure? | Cognito sign-in with role-based rights enforced by the API, a read-only guest view with names removed, least-privilege IAM per function, CI/CD through OIDC with no long-lived keys |
 | What does it cost to run? | Pay-per-use AWS services only: an idle deployment costs close to nothing, and a budget alert watches spend (default $5/month) |
 | Can it be operated? | Structured logs, business metrics, a CloudWatch dashboard, alarms on every failure path and dead-letter queue |
@@ -97,7 +115,7 @@ No non-public utility data is used anywhere in the project.
 | **Live ops map** | Circuits colored by voltage, structures, drones moving in real time, the active mission's flight track, and findings sized and colored by severity. |
 | **Flight-safety rules** | Every telemetry point is checked against low/critical battery (30% / 15%), the 120 m altitude ceiling (FAA Part 107), and the circuit's right-of-way corridor. An alert fires **once per onset**; a sustained condition does not page again. |
 | **Findings → work orders** | `New → Triaged → Assigned → Resolved`, or `Dismissed`. A work order goes only to an on-duty technician (or whole crew) qualified for that defect type, and the picker lists them nearest depot first, so the closest qualified tech is the default; the API refuses anyone unqualified. Assigning sends a simulated truck (sped up) along real roads (public OSRM routing, straight-line fallback) to the site, repairs, closes the work order and drives back; the technician is busy meanwhile, except that a job within 15 km of where they already are can be lined up after their current one (up to 4 stops), so they drive on instead of returning. Trucks, their road ahead and an In the field panel show on the Operations map. Technicians work up to 8 h of driving and repairs per shift, then rest 10 h (sped up: 1 s = 1 min); jobs that would not fit are not offered, and a Crew shifts panel shows who is working or resting. On the map, Shift/Ctrl-click or drag a box (or use Select mode) to triage or assign several findings at once. **Only Supervisors (Cognito group) may dismiss**, which the API enforces as well as the UI. Every move is audited with who, when and a note. |
-| **Resources** | One place for the drone fleet, flight crews (remote pilots and visual observers) and ground crews. Supervisors add, edit and take things out of service. A drone in maintenance can't be planned, an off-duty crew takes no new work orders, and an edit that would orphan an open work order is refused. Each drone shows its live state, flight time and distance; each crew shows its missions or open work orders. Ground crews depart from depots (yards); each technician has their own skills and can depart from a different depot than their crew. Depots appear on the Operations map with who leaves from each. Reports: each drone and pilot has a flight log (missions, flight time, distance, findings, alerts) and each technician a shift report (hours, driving vs repairs, every job), all downloadable as CSV. |
+| **Resources** | One place for the drone fleet, flight crews (remote pilots and visual observers) and ground crews. Supervisors add, edit and take things out of service. A drone in maintenance can't be planned, an off-duty crew takes no new work orders, and an edit that would orphan an open work order is refused. Each drone shows its live state, flight time and distance; each crew shows its missions or open work orders. Ground crews depart from depots (yards); each technician has their own skills and can depart from a different depot than their crew. Depots appear on the Operations map with who leaves from each. Reports: each drone and pilot has a flight log (missions, flight time, distance, findings, alerts) and each technician a shift report (hours, driving vs repairs, every job), all downloadable as CSV. Maintenance is simulated from what each asset has done: trucks burn fuel along their actual routes and fill up at the yard when they get back under half a tank, and go in for service every 300 road miles; drones fly on a rotation of battery packs that recharge after each flight and wear with every cycle (replaced under 70% health), with an inspection every 2 flight hours. Supervisors log repairs (in the shop for a set time, or until marked back) and services. Anything refueling, charging, in service or in the shop can't be dispatched or flown, and every refuel, swap, service and repair lands in the asset's maintenance log and in the reports. Reports have their own **Reports** tab, opening on **All activity** (the whole operation day by day: missions, flight time, findings found and triaged, field jobs, repairs, person-hours); or pick a truck, crew, technician, yard, drone, flight crew or pilot; each report has a shareable link, and the links on Resources open it there). Every report also breaks down by day, week or month (Pacific calendar days, Monday-start weeks): a chart of the chosen measure over the last 14 days, 12 weeks or 12 months, this period against the last, and a table of every period. Every report carries costs from one rate card in `Core/Costs.cs` (illustrative figures: $95 per technician person-hour, $140 per flight-crew hour, $4.90 a gallon, plus service, inspection, battery pack and repair prices; a logged repair can carry its own cost). All activity totals labor, flight crews, fuel and maintenance by day, week or month, and the rates behind the numbers are listed alongside. |
 | **Email alerts** | Supervisors choose which events email the on-call team (critical findings, overdue triage, critical flight alerts, mission complete), the finding severity threshold, and up to 10 recipients (user menu → **Email alerts**). The notifier Lambdas read the settings before every page. Recipients are SNS email subscriptions: each address gets a confirmation link from AWS, so nothing has to be verified in the account. |
 | **Triage SLA** | Severity 5 must be triaged within 4 h, severity 4 within 24 h and severity 3 within 72 h. A one-time EventBridge Scheduler timer is set per finding. If the finding is still untriaged when the timer fires, it is escalated to the ops SNS topic. Triaging cancels the timer. |
 | **Paging** | Critical drone alerts and severity 4–5 findings pass through an SQS buffer, then an idempotent notifier, then SNS (email/SMS/PagerDuty). |
@@ -170,6 +188,12 @@ dotnet run --project tools/GridSafety.Simulator -- --circuit PITT-MART-115 --spe
 Open http://localhost:5173 and watch the drone fly. Or skip the simulator: as a Supervisor, press **Missions → Demo flight**, and the API flies a demo drone over a random line in-process. In local mode the API uses an in-memory store and dev headers instead of Cognito. Use the **Inspector / Supervisor** switch in the header to see RBAC in action: only a Supervisor can dismiss a finding.
 
 Simulator options: `--list` (show circuits), `--circuit PITT-MART-115`, `--drone DRN-07`, `--speed 5`, `--seed 42`, `--no-incidents`, `--aws --mission <id>`.
+
+For reports with history behind them, start the API with four weeks of simulated operations instead (in-memory only): flights on most weekdays, the findings they turned up, triage, repairs dispatched to the nearest qualified technician with a free truck, refuels and services. It is seeded from a fixed number, so it looks the same every run. The screenshots above come from it.
+
+```bash
+dotnet run --project src/GridSafety.Api --launch-profile "GridSafety.Api (demo history)"
+```
 
 To use DynamoDB Local instead of memory:
 
@@ -280,4 +304,4 @@ I've spent the last couple of years supporting grid operations software (ADMS on
 | Infrastructure as code | `infra/GridSafetyStack.cs` (CDK in C#) |
 | Secure CI/CD | GitHub Actions with OIDC, no long-lived keys |
 | RBAC / identity | Cognito groups → JWT authorizer → API-enforced Supervisor rights |
-| Automation and testing | Simulator with scripted incidents; 195 .NET tests + frontend tests |
+| Automation and testing | Simulator with scripted incidents; 210 .NET tests + frontend tests |

@@ -11,7 +11,7 @@ public sealed record FieldJobsView(DateTimeOffset Now, IReadOnlyList<FieldJobVie
 
 /// <summary>A technician's shift reports, newest first, with where their current shift stands.</summary>
 public sealed record MemberShiftReports(string CrewId, string CrewName, string Member, string Role, string? DepotName, MemberShift Current,
-    IReadOnlyList<ShiftReport> Shifts, DateTimeOffset Now);
+    IReadOnlyList<ShiftReport> Shifts, IReadOnlyList<WorkDay> Days, DateTimeOffset Now);
 
 /// <summary>Simulated field work: trucks driving to defects, repairing them and driving back.</summary>
 public static partial class Endpoints
@@ -34,7 +34,8 @@ public static partial class Endpoints
         var hours = new FieldHours(FieldWork.History(findings), now);
         var current = MemberShifts(crew, hours).Single(s => s.Member == m.Name);
         return TypedResults.Ok(new MemberShiftReports(crew.Id, crew.Name, m.Name, m.Role, catalog.FindDepot(crew.DepotOf(m))?.Name, current,
-            Shifts.Reports(findings, crew.Id, m.Name, now), now));
+            Shifts.Reports(findings, crew.Id, m.Name, now),
+            WorkReports.Of(findings, d => d.Involves(crew.Id, m.Name), _ => [], now, max: 0).Days, now));
     }
 
     private static async Task<Ok<FieldJobsView>> ListFieldJobs(IGridRepository repo, TimeProvider clock, CancellationToken ct)

@@ -123,6 +123,14 @@ public static partial class Endpoints
         return await next(ctx);
     }
 
+    /// <summary>Why a fleet drone can't take off now (in the shop, inspection, charging, retired), or null when it can.</summary>
+    internal static async Task<string?> GroundedAsync(IGridRepository repo, ResourceCatalog catalog, string droneId, DateTimeOffset now, CancellationToken ct)
+    {
+        if (catalog.FindDrone(droneId) is not { } drone) return null;
+        var upkeep = Upkeep.Drone(drone, await repo.ListMissionsAsync(1000, ct), catalog.Maintenance, now);
+        return upkeep.CanFly ? null : Upkeep.Why(drone.Id, upkeep.State, upkeep.BusyUntil, upkeep.Note);
+    }
+
     private static CurrentUser User(HttpContext ctx) => (CurrentUser)ctx.Items[nameof(CurrentUser)]!;
 
     private static MissionView ToView(Mission m, ICircuitCatalog circuits)
@@ -134,8 +142,17 @@ public static partial class Endpoints
     /// <summary>The suggested assignee is the nearest on-duty technician qualified for the defect who isn't out on another job.</summary>
     private static FindingView ToView(Finding f, ICircuitCatalog circuits, DateTimeOffset now, ResourceCatalog catalog, FieldHours hours) =>
         new(f, circuits.Find(f.CircuitId)?.Name ?? f.CircuitId, Finding.Workflow.Next(f.Status), f.IsOverdue(now), TriageSla.Describe(f.Severity),
-            CrewRoster.Candidates(catalog.GroundCrews, catalog.Depots, f.Type, f.Location, ActiveOf(hours), hours with { Severity = f.Severity }, catalog.Vehicles)
+            CrewRoster.Candidates(catalog.GroundCrews, catalog.Depots, f.Type, f.Location, ActiveOf(hours), hours with { Severity = f.Severity }, ReadyTrucks(catalog, hours))
                 .FirstOrDefault(c => c.Available)?.Label ?? "");
+
+    /// <summary>
+    /// Trucks that can be sent: everything but those refueling, in for service or in the shop (a truck out on a job still
+    /// counts; it's busy, not unavailable). Worked out once per request's history, since every finding asks.
+    /// </summary>
+    private static IReadOnlyList<Vehicle> ReadyTrucks(ResourceCatalog catalog, FieldHours hours) =>
+        ReadyTruckCache.GetValue(hours.History, h => [.. catalog.Vehicles.Where(v => Upkeep.Truck(v, h, catalog.Maintenance, hours.Now).Available)]);
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<FieldDispatch>, IReadOnlyList<Vehicle>> ReadyTruckCache = [];
 
     private static IReadOnlyList<FieldDispatch> ActiveOf(FieldHours hours) => [.. hours.History.Where(d => d.IsActive(hours.Now))];
 
@@ -171,9 +188,9 @@ public static partial class Endpoints
         if (string.IsNullOrWhiteSpace(req.Pilot) || req.Pilot.Length > 100) errors["pilot"] = ["Pilot in command is required."];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
 
-        // Fleet drones in maintenance or retired stay on the ground. (IDs outside the fleet, e.g. a contractor's drone, are allowed.)
-        if ((await resources.GetAsync(ct)).FindDrone(req.DroneId) is { Status: not DroneAssetStatus.Active } grounded)
-            return TypedResults.Conflict($"{grounded.Id} is {grounded.Status.ToString().ToLowerInvariant()} and can't fly.");
+        // Fleet drones in the shop, inspection, out of charged batteries or retired stay on the ground. (IDs outside the
+        // fleet, e.g. a contractor's drone, are allowed.)
+        if (await GroundedAsync(repo, await resources.GetAsync(ct), req.DroneId, clock.GetUtcNow(), ct) is { } why) return TypedResults.Conflict(why);
 
         // A drone can only fly one mission at a time.
         var busy = (await repo.ListMissionsAsync(200, ct))
@@ -200,8 +217,8 @@ public static partial class Endpoints
             return TypedResults.Problem("Demo flights are not configured for this deployment.", statusCode: StatusCodes.Status503ServiceUnavailable);
 
         var catalog = await resources.GetAsync(ct);
-        if (catalog.FindDrone(DemoFlight.DroneId) is { Status: not DroneAssetStatus.Active } demoDrone)
-            return TypedResults.Conflict($"The demo drone {demoDrone.Id} is {demoDrone.Status.ToString().ToLowerInvariant()}. Set it back to active under Resources to fly.");
+        if (await GroundedAsync(repo, catalog, DemoFlight.DroneId, clock.GetUtcNow(), ct) is { } grounded)
+            return TypedResults.Conflict($"The demo drone can't fly yet: {grounded}");
 
         Circuit? circuit;
         if (req?.CircuitId is { Length: > 0 } circuitId)
@@ -449,7 +466,7 @@ public static partial class Endpoints
                     ["assignee"] = [$"{who.Label} isn't qualified to fix {FindingImage.Label(f.Type).ToLowerInvariant()}."],
                 });
             // Someone already out can take it after their current jobs if it's nearby; otherwise they're busy.
-            var candidate = CrewRoster.Candidates(crews, catalog.Depots, f.Type, f.Location, active, hours, catalog.Vehicles).FirstOrDefault(c => c.Label == who.Label);
+            var candidate = CrewRoster.Candidates(crews, catalog.Depots, f.Type, f.Location, active, hours, ReadyTrucks(catalog, hours)).FirstOrDefault(c => c.Label == who.Label);
             if (candidate is { BusyUntil: { } back })
                 return TypedResults.ValidationProblem(new Dictionary<string, string[]>
                 {
@@ -524,7 +541,7 @@ public static partial class Endpoints
         var catalog = await resources.GetAsync(ct);
         var open = OpenWorkOrders(all, catalog.GroundCrews);
         var hours = new FieldHours(FieldWork.History(all), now, f.Severity);
-        return TypedResults.Ok(CrewRoster.Candidates(catalog.GroundCrews, catalog.Depots, f.Type, f.Location, ActiveOf(hours), hours, catalog.Vehicles).Select(c =>
+        return TypedResults.Ok(CrewRoster.Candidates(catalog.GroundCrews, catalog.Depots, f.Type, f.Location, ActiveOf(hours), hours, ReadyTrucks(catalog, hours)).Select(c =>
             new AssigneeOption(c.Label, c.Crew.Id, c.Crew.Name, c.Member?.Name, c.Member?.Role, c.Depot?.Id, c.Depot?.Name, c.DistanceKm,
                 open.GetValueOrDefault(c.Crew.Id), c.BusyUntil, c.After?.SiteLabel,
                 c.Shift is { } s ? Shifts.Hours(s.Left) : null, c.JobTime is { } j ? Shifts.Hours(j) : null, c.Shift?.RestingUntil,

@@ -32,8 +32,7 @@ public static partial class Endpoints
             return TypedResults.Conflict($"{label} is already taking off.");
         if (circuits.Find(mission.CircuitId) is not { } circuit)
             return TypedResults.Conflict($"{label} is planned over a circuit that no longer exists.");
-        if ((await resources.GetAsync(ct)).FindDrone(mission.DroneId) is { Status: not DroneAssetStatus.Active } grounded)
-            return TypedResults.Conflict($"{grounded.Id} is {grounded.Status.ToString().ToLowerInvariant()} and can't fly.");
+        if (await GroundedAsync(repo, await resources.GetAsync(ct), mission.DroneId, now, ct) is { } grounded) return TypedResults.Conflict(grounded);
 
         var airborne = (await repo.ListMissionsAsync(200, ct))
             .Count(m => m.SimulatedAt is not null && m.Id != mission.Id && !Mission.Workflow.IsTerminal(m.Status) && !DemoFlight.IsStale(m, now));
