@@ -199,7 +199,7 @@ public static partial class Endpoints
         var now = clock.GetUtcNow();
         var catalog = await resources.GetAsync(ct);
         var missions = await repo.ListMissionsAsync(1000, ct);
-        var live = (await repo.ListDronesAsync(ct)).ToDictionary(d => d.DroneId, StringComparer.OrdinalIgnoreCase);
+        var live = DroneState.Settled(await repo.ListDronesAsync(ct), missions).ToDictionary(d => d.DroneId, StringComparer.OrdinalIgnoreCase);
 
         var drones = catalog.Drones.Select(d =>
         {

@@ -59,7 +59,7 @@ public static partial class Endpoints
         guest.MapGet("/me", () => TypedResults.Ok(new MeView("guest", "Guest", false, [], IsGuest: true)));
         guest.MapGet("/circuits", (ICircuitCatalog c) => TypedResults.Ok(c.All));
         guest.MapGet("/stats", Stats);
-        guest.MapGet("/drones", async (IGridRepository repo, CancellationToken ct) => TypedResults.Ok(await repo.ListDronesAsync(ct)));
+        guest.MapGet("/drones", ListDrones);
         guest.MapGet("/missions", ListMissions);
         guest.MapGet("/missions/{id}", GetMission);
         guest.MapGet("/missions/{id}/track", GetTrack);
@@ -79,7 +79,7 @@ public static partial class Endpoints
         secured.MapGet("/me", (HttpContext ctx) => { var u = User(ctx); return TypedResults.Ok(new MeView(u.Id, u.DisplayName, u.IsSupervisor, u.Groups)); });
         secured.MapGet("/circuits", (ICircuitCatalog c) => TypedResults.Ok(c.All));
         secured.MapGet("/stats", Stats);
-        secured.MapGet("/drones", async (IGridRepository repo, CancellationToken ct) => TypedResults.Ok(await repo.ListDronesAsync(ct)));
+        secured.MapGet("/drones", ListDrones);
 
         secured.MapGet("/missions", ListMissions);
         secured.MapPost("/missions", PlanMission);
@@ -169,11 +169,14 @@ public static partial class Endpoints
         }),
     ];
 
+    private static async Task<Ok<IReadOnlyList<DroneState>>> ListDrones(IGridRepository repo, CancellationToken ct) =>
+        TypedResults.Ok(DroneState.Settled(await repo.ListDronesAsync(ct), await repo.ListMissionsAsync(200, ct)));
+
     private static async Task<Ok<OpsStats>> Stats(IGridRepository repo, TimeProvider clock, CancellationToken ct)
     {
         var missions = await repo.ListMissionsAsync(500, ct);
         var findings = await ListSettledFindingsAsync(repo, clock.GetUtcNow(), ct);
-        var drones = await repo.ListDronesAsync(ct);
+        var drones = DroneState.Settled(await repo.ListDronesAsync(ct), missions);
         return TypedResults.Ok(OpsStats.Compute(missions, findings, drones, clock.GetUtcNow()));
     }
 

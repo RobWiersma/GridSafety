@@ -98,6 +98,69 @@ public class DroneIngestTests
     }
 
     [Fact]
+    public async Task A_landing_that_lands_while_the_last_batch_is_being_saved_still_leaves_the_drone_on_the_ground()
+    {
+        var fx = new Fixture();
+        await fx.Telemetry(P(0, 0));
+        // The last batch reads the drone (still flying), then "landed" runs to the end before the batch saves.
+        var lander = new DroneIngestService(fx.Repo, TestCircuits.Catalog, fx.Events, TimeProvider.System);
+        var racing = LandMidBatch.Wrap(fx.Repo, () =>
+            lander.HandleAsync(new DroneMessage { Kind = MessageKinds.Landed, DroneId = "DRN-1", MissionId = fx.Mission.Id }));
+        var batch = new DroneIngestService(racing, TestCircuits.Catalog, fx.Events, TimeProvider.System);
+        await batch.HandleAsync(new DroneMessage { Kind = MessageKinds.Telemetry, DroneId = "DRN-1", MissionId = fx.Mission.Id, Points = [P(1, 5)] });
+
+        Assert.Equal(MissionStatus.Completed, (await fx.Repo.GetMissionAsync(fx.Mission.Id))!.Status);
+        var drone = (await fx.Repo.GetDroneAsync("DRN-1"))!;
+        Assert.Equal(DroneStatus.Idle, drone.Status);
+        Assert.Equal(0, drone.SpeedMps);
+    }
+
+    [Fact]
+    public void A_drone_still_marked_flying_after_its_mission_ended_shows_landed()
+    {
+        var done = Mission.Plan(Circuit, "DRN-1", "Pat", null, DateTimeOffset.UtcNow);
+        done.MoveTo(MissionStatus.InFlight, DateTimeOffset.UtcNow, "DRN-1", "up");
+        done.MoveTo(MissionStatus.Completed, DateTimeOffset.UtcNow, "DRN-1", "down");
+        var up = Mission.Plan(Circuit, "DRN-2", "Pat", null, DateTimeOffset.UtcNow);
+        up.MoveTo(MissionStatus.InFlight, DateTimeOffset.UtcNow, "DRN-2", "up");
+        DroneState Flying(string id, string? mission) => new() { DroneId = id, Status = DroneStatus.Flying, MissionId = mission, SpeedMps = 14, AltitudeM = 60, ActiveAlerts = [AlertKind.LowBattery] };
+
+        var settled = DroneState.Settled([Flying("DRN-1", done.Id), Flying("DRN-2", up.Id), Flying("DRN-3", "too-old-to-list")], [done, up]);
+
+        Assert.Equal([DroneStatus.Idle, DroneStatus.Flying, DroneStatus.Idle], settled.Select(d => d.Status));
+        Assert.Equal(0, settled[0].SpeedMps);
+        Assert.Empty(settled[0].ActiveAlerts);
+        Assert.Equal(done.Id, settled[0].MissionId);
+    }
+
+    /// <summary>Passes everything to the real repository, but runs <c>hook</c> right after the first drone read.</summary>
+    public class LandMidBatch : System.Reflection.DispatchProxy
+    {
+        private IGridRepository _inner = null!;
+        private Func<Task>? _hook;
+
+        public static IGridRepository Wrap(IGridRepository inner, Func<Task> hook)
+        {
+            var proxy = Create<IGridRepository, LandMidBatch>();
+            var self = (LandMidBatch)(object)proxy;
+            (self._inner, self._hook) = (inner, hook);
+            return proxy;
+        }
+
+        protected override object? Invoke(System.Reflection.MethodInfo? method, object?[]? args)
+        {
+            var result = method!.Invoke(_inner, args);
+            if (method.Name == nameof(IGridRepository.GetDroneAsync) && _hook is { } hook)
+            {
+                _hook = null;
+                ((Task)result!).GetAwaiter().GetResult();
+                hook().GetAwaiter().GetResult();
+            }
+            return result;
+        }
+    }
+
+    [Fact]
     public async Task Rejects_drone_not_assigned_to_mission()
     {
         var fx = new Fixture();

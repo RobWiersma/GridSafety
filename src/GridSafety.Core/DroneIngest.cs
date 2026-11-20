@@ -70,6 +70,7 @@ public sealed class DroneIngestService(IGridRepository repo, ICircuitCatalog cir
         }
 
         var last = points[^1];
+        var savedFlying = false;
         if (last.Timestamp >= drone.LastSeen)
         {
             drone.Status = DroneStatus.Flying;
@@ -83,10 +84,13 @@ public sealed class DroneIngestService(IGridRepository repo, ICircuitCatalog cir
             drone.LastSeen = last.Timestamp;
             drone.ActiveAlerts = active;
             await repo.SaveDroneAsync(drone, ct);
+            savedFlying = true;
         }
 
+        var ended = false;
         await UpdateMissionAsync(msg.MissionId, m =>
         {
+            ended = Mission.Workflow.IsTerminal(m.Status);
             if (m.Status == MissionStatus.Planned) m.MoveTo(MissionStatus.InFlight, points[0].Timestamp, msg.DroneId, "First telemetry received");
             if (m.Status != MissionStatus.InFlight) return;
 
@@ -105,6 +109,12 @@ public sealed class DroneIngestService(IGridRepository repo, ICircuitCatalog cir
             foreach (var a in raised) m.RecordAlert(a);
             m.UpdatedAt = clock.GetUtcNow();
         }, ct);
+
+        // The last batch and "landed" arrive together and run side by side: if the landing went through while this batch
+        // was being saved, this save may have put the drone back in the air. The mission is read after the save, so
+        // seeing it ended here means the landing came first: land the drone again.
+        if (savedFlying && ended && await repo.GetDroneAsync(msg.DroneId, ct) is { Status: DroneStatus.Flying } stale && stale.MissionId == msg.MissionId)
+            await repo.SaveDroneAsync(stale.Landed(), ct);
 
         if (raised.Count > 0)
         {
@@ -162,14 +172,7 @@ public sealed class DroneIngestService(IGridRepository repo, ICircuitCatalog cir
             if (m.Status == MissionStatus.InFlight) m.MoveTo(MissionStatus.Completed, clock.GetUtcNow(), msg.DroneId, "Drone landed");
         }, ct);
 
-        if (await repo.GetDroneAsync(msg.DroneId, ct) is { } drone)
-        {
-            drone.Status = DroneStatus.Idle;
-            drone.SpeedMps = 0;
-            drone.AltitudeM = 0;
-            drone.ActiveAlerts = [];
-            await repo.SaveDroneAsync(drone, ct);
-        }
+        if (await repo.GetDroneAsync(msg.DroneId, ct) is { } drone) await repo.SaveDroneAsync(drone.Landed(), ct);
         return new IngestResult(0, [], null);
     }
 

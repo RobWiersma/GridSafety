@@ -30,6 +30,24 @@ public sealed class DroneState
     public double? RssiDbm { get; set; }
     public DateTimeOffset LastSeen { get; set; }
     public List<AlertKind> ActiveAlerts { get; set; } = [];
+
+    /// <summary>This drone on the ground: idle, stopped, no alerts. Everything else (where and when it was last seen) is kept.</summary>
+    public DroneState Landed() => new()
+    {
+        DroneId = DroneId, Status = DroneStatus.Idle, MissionId = MissionId, CircuitId = CircuitId, Position = Position,
+        AltitudeM = 0, BatteryPct = BatteryPct, SpeedMps = 0, RssiDbm = RssiDbm, LastSeen = LastSeen, ActiveAlerts = [],
+    };
+
+    /// <summary>
+    /// The drones as they really are: one still marked flying whose mission has ended (or is too old to be in
+    /// <paramref name="missions"/>) is shown landed. Covers a "landed" message whose update was lost to a telemetry
+    /// batch saved at the same moment.
+    /// </summary>
+    public static IReadOnlyList<DroneState> Settled(IEnumerable<DroneState> drones, IEnumerable<Mission> missions)
+    {
+        var flying = missions.Where(m => !Mission.Workflow.IsTerminal(m.Status)).Select(m => m.Id).ToHashSet(StringComparer.Ordinal);
+        return [.. drones.Select(d => d.Status == DroneStatus.Flying && (d.MissionId is null || !flying.Contains(d.MissionId)) ? d.Landed() : d)];
+    }
 }
 
 /// <summary>Flight-safety rules evaluated on every telemetry point.</summary>
