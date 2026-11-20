@@ -274,7 +274,7 @@ This publishes the Lambdas (linux-arm64, ReadyToRun), builds the SPA, and runs `
 
 GitHub Actions: `.github/workflows/ci.yml` builds, tests and runs `cdk synth` on every push and PR. `deploy.yml` is run by hand (**Actions → Deploy → Run workflow**) and deploys through GitHub OIDC with no stored AWS keys (see `docs/github-oidc.md`).
 
-**Cost:** everything is serverless and pay-per-request. With simulated drones only, a stack costs about $1–2 a month, mostly CloudWatch logs and alarms. Demo flights run only on demand; each costs well under a cent (a few hundred IoT messages and Lambda invocations). CloudWatch custom metrics, often the surprise line item, are kept to **5 series**, inside the always-free 10:
+**Cost:** everything is serverless and pay-per-request. With simulated drones only, a stack costs about $1–2 a month, mostly CloudWatch logs. Alarms are kept to **10**, the always-free allowance. Demo flights run only on demand; each costs well under a cent (a few hundred IoT messages and Lambda invocations). CloudWatch custom metrics, often the surprise line item, are kept to **5 series**, inside the always-free 10:
 
 | Kept as custom metrics | Replaced by free AWS metrics |
 |---|---|
@@ -292,7 +292,7 @@ GitHub Actions: `.github/workflows/ci.yml` builds, tests and runs `cdk synth` on
 - **Out-of-order tolerant.** The drone "shadow" only moves forward in time (`LastSeen <= :ts`). Late MQTT QoS 1 redeliveries don't jump a drone backwards on the map.
 - **At-least-once everywhere, effects exactly once.** The SQS notifier uses partial batch responses and a DynamoDB idempotency key per event. SLA escalation is guarded by an `Escalated` flag, so a duplicate scheduler fire never pages twice.
 - **Alert onset, not alert spam.** Alerts fire on the transition into a condition. LowBattery is suppressed while CriticalBattery is active.
-- **Ops-grade observability.** Powertools structured logs and a small set of EMF business metrics, alongside free AWS service metrics, feed a CloudWatch dashboard. Alarms cover Lambda errors, API 5xx, stream iterator age and every DLQ, and all of them go to an SNS alarm topic.
+- **Ops-grade observability.** Powertools structured logs and a small set of EMF business metrics, alongside free AWS service metrics, feed a CloudWatch dashboard. Alarms cover Lambda errors, API 5xx, stream iterator age and every DLQ (10 in all, each failure path watched once), and all of them go to an SNS alarm topic.
 - **Least privilege.** Each Lambda gets only the grants it needs. The scheduler role can invoke only the escalation function.
 
 ## Why I built this

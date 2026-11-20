@@ -703,8 +703,10 @@ public sealed class GridSafetyStack : Stack
             alarm.AddAlarmAction(alarmAction);
         }
 
-        var functions = new[] { apiFn, ingestFn, streamFn, slaFn, escalationFn, notifierFn, reportFn, demoFn };
-        foreach (var f in functions)
+        // Ten alarms in all, the most CloudWatch keeps free. Functions whose failures another alarm already catches don't get
+        // their own: the API (its 5xx alarm), the outbox publisher (its DLQ and iterator age) and the notifier (its DLQ).
+        var functions = new[] { apiFn, ingestFn, streamFn, slaFn, escalationFn, notifierFn, reportFn, demoFn }; // all on the dashboard
+        foreach (var f in new[] { ingestFn, slaFn, escalationFn, reportFn, demoFn })
         {
             Alarm($"{f.Node.Id}Errors", f.MetricErrors(new MetricOptions { Period = Duration.Minutes(5) }), 1, $"{f.Node.Id} threw errors");
         }
