@@ -5,7 +5,7 @@ import { canTake } from './lib/field';
 import type {
   AlertKind, AlertSettings, AlertSettingsView,
   AssigneeOption, Circuit, Crew, CrewView, FieldJobs, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint, SimulationSettings,
- DroneReport, PilotReport, TechnicianReport, Vehicle, VehicleReport, CrewWorkReport, DepotReport, FlightCrewReport, ActivityReport, RateCard, EmployeeProfile, FindingType,} from './types';
+ DroneReport, PilotReport, TechnicianReport, Vehicle, VehicleReport, CrewWorkReport, DepotReport, FlightCrewReport, ActivityReport, RateCard, EmployeeProfile, FindingType, ScheduleView, ScheduleDispatchResult,} from './types';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public fieldErrors?: Record<string, string[]>) {
@@ -127,6 +127,30 @@ export const useFieldJobs = () => {
   const api = useFetcher();
   return useQuery({ queryKey: ['field-jobs'], queryFn: () => api<FieldJobs>('/field-jobs'), refetchInterval: 5_000 });
 };
+
+/** The forward schedule: triaged work orders not sent yet, most important first, with who'd take each and when. */
+export const useSchedule = () => {
+  const api = useFetcher();
+  return useQuery({ queryKey: ['schedule'], queryFn: () => api<ScheduleView>('/schedule'), refetchInterval: 5_000 });
+};
+
+/** Sends every work order on the schedule that can start now, most important first (or just one, by finding id). */
+export function useDispatchSchedule() {
+  const api = useFetcher();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (findingId?: string) =>
+      api<ScheduleDispatchResult>(`/schedule/dispatch${findingId ? `?findingId=${encodeURIComponent(findingId)}` : ''}`, { method: 'POST' }),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['schedule'] }),
+      qc.invalidateQueries({ queryKey: ['findings'] }),
+      qc.invalidateQueries({ queryKey: ['field-jobs'] }),
+      qc.invalidateQueries({ queryKey: keys.crews }),
+      qc.invalidateQueries({ queryKey: keys.stats }),
+      qc.invalidateQueries({ queryKey: ['assignees'] }),
+    ]),
+  });
+}
 
 /** Who a finding's work order can go to: qualified, on-duty technicians nearest first, then whole crews. */
 export const useAssignees = (findingId: string, enabled = true) => {

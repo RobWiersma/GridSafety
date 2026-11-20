@@ -73,6 +73,7 @@ public static partial class Endpoints
         guest.MapGet("/resources", ListResources);
         MapReports(guest);
         MapFieldJobs(guest);
+        MapSchedule(guest, canDispatch: false);
 
         var secured = api.MapGroup("/").AddEndpointFilter(RequireUser);
         secured.MapGet("/me", (HttpContext ctx) => { var u = User(ctx); return TypedResults.Ok(new MeView(u.Id, u.DisplayName, u.IsSupervisor, u.Groups)); });
@@ -99,6 +100,7 @@ public static partial class Endpoints
         secured.MapPost("/findings/{id}/status", ChangeFindingStatus);
         secured.MapGet("/crews", ListCrews);
         MapFieldJobs(secured);
+        MapSchedule(secured, canDispatch: true);
         MapResources(secured);
         MapAlertSettings(secured);
         MapSimulationSettings(secured);

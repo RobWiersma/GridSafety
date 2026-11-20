@@ -5,9 +5,10 @@ namespace GridSafety.Core;
 /// to fix (null: whatever the crew handles) and <paramref name="DepotId"/> is where they start the day (null: the crew's depot).
 /// <paramref name="PayRate"/> is their own hourly rate, set by a supervisor (null: the standard rate for their role, see
 /// <see cref="Costs"/> and <see cref="PayRates"/>). <paramref name="Profile"/> is their employee record (contact details and such).
+/// <paramref name="PayHistory"/> is every change to their rate, oldest first, so past work is costed at the rate it was done at.
 /// </summary>
 public sealed record CrewMember(string Name, string Role, IReadOnlyList<FindingType>? Skills = null, string? DepotId = null, double? PayRate = null,
-    EmployeeProfile? Profile = null);
+    EmployeeProfile? Profile = null, IReadOnlyList<PayChange>? PayHistory = null);
 
 public enum CrewStatus { Available, OffDuty }
 

@@ -241,6 +241,8 @@ export interface EmployeeProfile {
   notes?: string | null;
 }
 
+export interface PayChange { from: string; rate: number | null }
+
 export interface CrewMember {
   name: string;
   role: string;
@@ -250,6 +252,8 @@ export interface CrewMember {
   depotId?: string;
   /** Their own hourly rate, set by a supervisor; absent means the standard rate for their role. Hidden from guests. */
   payRate?: number | null;
+  /** Every change to their own rate, oldest first (rate null: back to standard). Hidden from guests. */
+  payHistory?: PayChange[] | null;
   /** Their employee record. Hidden from guests. */
   profile?: EmployeeProfile | null;
 }
@@ -489,6 +493,8 @@ export interface ShiftReport {
   restHours?: number;
   limitHours: number;
   jobs: ShiftJob[];
+  /** Hours worked at their rate when the shift started. */
+  laborCost: number;
 }
 
 export interface TechnicianReport {
@@ -586,3 +592,18 @@ export interface RateCard {
 export interface UpkeepCosts { fuel: number; service: number; batteries: number; repairs: number; total: number }
 export interface FlightCrewReport { crewId: string; crewName: string; homeBase: string; report: FlightReport; now: string }
 export interface PilotReport { crewId: string; crewName: string; member: string; role: string; report: FlightReport; now: string }
+
+/** One work order on the forward schedule, most important first. Times are real (demo) time. */
+export interface ScheduledJob {
+  rank: number; findingId: string; structureLabel: string; circuitId: string; type: FindingType; severity: number;
+  score: number; reasons: string[]; foundAt: string; repairBy?: string | null;
+  assignee?: string | null; crewId?: string | null; member?: string | null; depotName?: string | null; vehicleId?: string | null;
+  startsAt?: string | null; repairedAt?: string | null; backAt?: string | null; startsNow: boolean; late: boolean; blocked?: string | null;
+}
+export interface ScheduleView { jobs: ScheduledJob[]; untriaged: number; now: string; shiftHours: number; restHours: number }
+export interface ScheduleDispatchResult {
+  dispatched: { findingId: string; structureLabel: string; assignee: string }[];
+  skipped: { findingId: string; structureLabel: string; reason: string }[];
+  /** Stopped at its time budget with more ready to go. */
+  more: boolean;
+}

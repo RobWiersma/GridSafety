@@ -104,7 +104,7 @@ export function ReportsView({ selected, onSelect }: { selected: string | null; o
               <dt>Battery pack</dt><dd>{money(rates.batteryPack)}</dd>
               <dt>Repairs</dt><dd>as logged; otherwise {money(rates.truckRepairDefault)} a truck, {money(rates.droneRepairDefault)} a drone</dd>
             </dl>
-            <p className="muted small">Labor and flight crew rates are the standard ones; a supervisor can set someone's own rate on Resources, and their hours are costed at it.</p>
+            <p className="muted small">Labor and flight crew rates are the standard ones; a supervisor can set someone's own rate on Resources. Hours are costed at the rate in effect when they were worked, so a raise doesn't reprice past work.</p>
           </details>
         )}
       </aside>

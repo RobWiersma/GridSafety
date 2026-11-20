@@ -18,6 +18,10 @@ const PILOT = 'Remote pilot (PIC)';
 const OBSERVER = 'Visual observer';
 const ALL_TYPES = Object.keys(FINDING_TYPE_LABEL) as FindingType[];
 
+/** When a rate took effect; a rate set before history was kept shows as "From the start". */
+const since = (iso: string) =>
+  iso.startsWith('0001-') ? 'From the start:' : `From ${new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}:`;
+
 /**
  * Supervisor-only: one employee's crew details (name, role, and for technicians their yard and skills), their employee
  * record (ID, hire date, contact and emergency details, certification, notes) and their own hourly rate.
@@ -32,6 +36,7 @@ export function EmployeeDialog({ target, depots, onClose, onDone }: { target: Em
   const p: EmployeeProfile = member.profile ?? {};
   const [skills, setSkills] = useState<FindingType[] | undefined>(member.skills ?? undefined);
   const [ownRate, setOwnRate] = useState(member.payRate != null);
+  const history = [...(member.payHistory ?? [])].reverse(); // newest first
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -147,10 +152,27 @@ export function EmployeeDialog({ target, depots, onClose, onDone }: { target: Em
               Their own hourly rate ($)
               <input className="input" name="payRate" type="number" min={20} max={400} step={0.5} required defaultValue={member.payRate ?? standard} />
               <span className="muted small">
-                {ground ? 'Fully loaded (wages, benefits, overhead). Every hour they spend in a truck is costed at it, past work included.'
-                  : "Their share of the flight crew rate. Flights are costed at the pilot's rate plus their crew's first observer's, past flights included."}
+                {ground ? 'Fully loaded (wages, benefits, overhead). Hours they spend in a truck from now on are costed at it.'
+                  : "Their share of the flight crew rate. Flights from now on are costed at the pilot's rate plus their crew's first observer's."}
               </span>
             </label>
+          )}
+          <p className="muted small">A change applies from when you save it; work already done keeps the rate it was done at.</p>
+          {history.length > 0 && (
+            <div className="pay-history">
+              <span className="muted small">Rate history</span>
+              <ul className="small">
+                {history.map((c, i) => (
+                  <li key={`${c.from}-${i}`}>
+                    <span className="muted">{since(c.from)}</span> {c.rate != null ? <strong>{money(c.rate)}/h</strong> : <>standard ({money(standard)}/h)</>}
+                    {i === history.length - 1 && <span className="muted"> · current</span>}
+                  </li>
+                ))}
+                {!history[history.length - 1].from.startsWith('0001-') && (
+                  <li><span className="muted">Before that:</span> standard ({money(standard)}/h)</li>
+                )}
+              </ul>
+            </div>
           )}
         </fieldset>
 

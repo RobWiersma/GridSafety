@@ -421,6 +421,7 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         static CrewMember? Lenny(ResourcesView? r) => r!.GroundCrews.Single(c => c.Crew.Id == "sector-7g").Crew.Members.FirstOrDefault(m => m.Name == "Lenny Leonardo");
         var res = await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts);
         Assert.Equal(150, Lenny(res)!.PayRate);
+        Assert.Equal([150.0], Lenny(res)!.PayHistory!.Select(c => c.Rate));
         Assert.Equal(150, (await sup.GetFromJsonAsync<MemberShiftReports>("/api/resources/ground-crews/sector-7g/members/Lenny%20Leonardo/report", JsonOpts))!.PayRate);
 
         // Editing the crew (which sends no rates) keeps it.
@@ -428,14 +429,18 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         var edit = crew with { Members = [.. crew.Members.Select(m => m with { PayRate = null })] };
         (await sup.PutAsJsonAsync("/api/resources/ground-crews/sector-7g", edit, JsonOpts)).EnsureSuccessStatusCode();
         Assert.Equal(150, Lenny(await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts))!.PayRate);
+        Assert.Single(Lenny(await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts))!.PayHistory!);
 
         // Guests don't see pay.
         var guest = await factory.CreateClient().GetStringAsync("/api/public/resources");
         Assert.DoesNotContain("payRate", guest, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("payHistory", guest, StringComparison.OrdinalIgnoreCase);
 
         // Back to the standard rate.
         (await sup.PutAsJsonAsync(path, new PayRateRequest(null), JsonOpts)).EnsureSuccessStatusCode();
-        Assert.Null(Lenny(await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts))!.PayRate);
+        var back = Lenny(await sup.GetFromJsonAsync<ResourcesView>("/api/resources", JsonOpts))!;
+        Assert.Null(back.PayRate);
+        Assert.Equal([150.0, null], back.PayHistory!.Select(c => c.Rate));
     }
 
     [Fact]
@@ -559,6 +564,38 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         // Once the work order is resolved the crew can go.
         (await sup.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Resolved, "Fixed", null), JsonOpts)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.NoContent, (await sup.DeleteAsync("/api/resources/ground-crews/test-gc")).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_schedule_ranks_waiting_work_and_sends_what_can_start_now()
+    {
+        var sup = Client("dana", supervisor: true);
+        var m = await PlanAsync(sup, "DRN-SCHED");
+        var id = await ReportFindingAsync(sup, m, 5);
+        Assert.DoesNotContain((await sup.GetFromJsonAsync<ScheduleView>("/api/schedule", JsonOpts))!.Jobs, j => j.FindingId == id); // not triaged yet
+        (await sup.PostAsJsonAsync($"/api/findings/{id}/status", new FindingStatusRequest(FindingStatus.Triaged, null, null), JsonOpts)).EnsureSuccessStatusCode();
+
+        var schedule = (await sup.GetFromJsonAsync<ScheduleView>("/api/schedule", JsonOpts))!;
+        var job = schedule.Jobs.Single(j => j.FindingId == id);
+        Assert.Equal(["Critical", "115 kV line"], job.Reasons);
+        Assert.Equal(job.FoundAt.AddDays(1), job.RepairBy);
+        Assert.All(schedule.Jobs.Zip(schedule.Jobs.Skip(1)), p => Assert.True(p.First.Severity >= p.Second.Severity));
+        Assert.Equal(Enumerable.Range(1, schedule.Jobs.Count), schedule.Jobs.Select(j => j.Rank));
+
+        // Guests can look but not send anyone.
+        var guest = factory.CreateClient();
+        Assert.Contains(id, await guest.GetStringAsync("/api/public/schedule"), StringComparison.Ordinal);
+        Assert.NotEqual(HttpStatusCode.OK, (await guest.PostAsync("/api/public/schedule/dispatch", null)).StatusCode);
+
+        // Sending just this one goes through the same checks as assigning it by hand.
+        Assert.True(job.StartsNow, "someone qualified should be free for a critical crossarm job");
+        var result = await (await Client("alex").PostAsync($"/api/schedule/dispatch?findingId={id}", null)).Content.ReadFromJsonAsync<ScheduleDispatchResult>(JsonOpts);
+        Assert.Equal(job.Assignee, result!.Dispatched.Single().Assignee);
+        var f = (await sup.GetFromJsonAsync<FindingView>($"/api/findings/{id}", JsonOpts))!.Finding;
+        Assert.Equal((FindingStatus.Assigned, job.Assignee), (f.Status, f.AssignedTo));
+        Assert.NotNull(f.Dispatch);
+        Assert.Equal("Dispatched from the schedule.", f.History[^1].Note);
+        Assert.DoesNotContain((await sup.GetFromJsonAsync<ScheduleView>("/api/schedule", JsonOpts))!.Jobs, j => j.FindingId == id);
     }
 
     [Fact]

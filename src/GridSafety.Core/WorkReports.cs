@@ -36,13 +36,16 @@ public static class WorkReports
     /// The report for the jobs <paramref name="include"/> picks, broken down by the names <paramref name="keysOf"/> gives
     /// each job. <paramref name="always"/> lists breakdown lines to show even with no jobs (e.g. every truck at a yard),
     /// with a detail line each.
+    /// <paramref name="hourly"/> prices an hour of a job (by default: everyone in the truck, each at their rate then).
     /// </summary>
     public static WorkReport Of(IEnumerable<Finding> findings, Func<FieldDispatch, bool> include, Func<FieldDispatch, IEnumerable<string>> keysOf,
-        DateTimeOffset now, IReadOnlyList<(string Name, string? Detail)>? always = null, int max = 200, PayRates? rates = null)
+        DateTimeOffset now, IReadOnlyList<(string Name, string? Detail)>? always = null, int max = 200, PayRates? rates = null,
+        Func<FieldDispatch, double>? hourly = null)
     {
         rates ??= PayRates.Standard;
-        // Labor: the job's simulated hours for everyone in the truck, each at their own rate.
-        double Labor(IEnumerable<Finding> fs) => Costs.Money(fs.Sum(f => Shifts.DemoSpeed * Spent(f.Dispatch!, now).TotalHours * rates.Truck(f.Dispatch!)));
+        hourly ??= rates.Truck;
+        // Labor: the job's simulated hours for everyone in the truck, each at their own rate when it left.
+        double Labor(IEnumerable<Finding> fs) => Costs.Money(fs.Sum(f => Shifts.DemoSpeed * Spent(f.Dispatch!, now).TotalHours * hourly(f.Dispatch!)));
         var all = findings.Where(f => f.Dispatch is not null).ToList();
         var picked = all.Where(f => include(f.Dispatch!)).OrderByDescending(f => f.Dispatch!.DepartedAt).ToList();
         // A job that another one handed over to isn't a new trip.

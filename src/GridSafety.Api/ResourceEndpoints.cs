@@ -92,16 +92,16 @@ public static partial class Endpoints
         secured.MapPost("/resources/maintenance/{recordId}/done", FinishRepair);
 
         // One employee: their details, employee record and own pay rate. Supervisors only.
-        secured.MapPut("/resources/ground-crews/{crewId}/members/{member}", (string crewId, string member, EmployeeEdit body, HttpContext ctx, IGridRepository repo, IResourceStore resources, CancellationToken ct) =>
-            PutEmployee("ground-crews", crewId, member, body, ctx, repo, resources, ct));
-        secured.MapPut("/resources/flight-crews/{crewId}/members/{member}", (string crewId, string member, EmployeeEdit body, HttpContext ctx, IGridRepository repo, IResourceStore resources, CancellationToken ct) =>
-            PutEmployee("flight-crews", crewId, member, body, ctx, repo, resources, ct));
+        secured.MapPut("/resources/ground-crews/{crewId}/members/{member}", (string crewId, string member, EmployeeEdit body, HttpContext ctx, IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct) =>
+            PutEmployee("ground-crews", crewId, member, body, ctx, repo, resources, clock, ct));
+        secured.MapPut("/resources/flight-crews/{crewId}/members/{member}", (string crewId, string member, EmployeeEdit body, HttpContext ctx, IGridRepository repo, IResourceStore resources, TimeProvider clock, CancellationToken ct) =>
+            PutEmployee("flight-crews", crewId, member, body, ctx, repo, resources, clock, ct));
 
         // Pay: a person's own hourly rate, in place of the standard one. Supervisors only.
-        secured.MapPut("/resources/ground-crews/{crewId}/members/{member}/pay", (string crewId, string member, PayRateRequest body, HttpContext ctx, IResourceStore resources, CancellationToken ct) =>
-            PutPayRate("ground-crews", crewId, member, body, ctx, resources, ct));
-        secured.MapPut("/resources/flight-crews/{crewId}/members/{member}/pay", (string crewId, string member, PayRateRequest body, HttpContext ctx, IResourceStore resources, CancellationToken ct) =>
-            PutPayRate("flight-crews", crewId, member, body, ctx, resources, ct));
+        secured.MapPut("/resources/ground-crews/{crewId}/members/{member}/pay", (string crewId, string member, PayRateRequest body, HttpContext ctx, IResourceStore resources, TimeProvider clock, CancellationToken ct) =>
+            PutPayRate("ground-crews", crewId, member, body, ctx, resources, clock, ct));
+        secured.MapPut("/resources/flight-crews/{crewId}/members/{member}/pay", (string crewId, string member, PayRateRequest body, HttpContext ctx, IResourceStore resources, TimeProvider clock, CancellationToken ct) =>
+            PutPayRate("flight-crews", crewId, member, body, ctx, resources, clock, ct));
     }
 
     private static async Task<Results<Ok<DroneReportView>, NotFound>> GetDroneReport(
@@ -456,8 +456,8 @@ public static partial class Endpoints
     /// </summary>
     private static List<CrewMember> KeepPersonal(IReadOnlyList<CrewMember>? before, List<CrewMember> after) =>
         [.. after.Select(m => before?.FirstOrDefault(b => b.Name.Equals(m.Name, StringComparison.OrdinalIgnoreCase)) is { } was
-            ? m with { PayRate = was.PayRate, Profile = m.Profile ?? was.Profile }
-            : m with { PayRate = null })];
+            ? m with { PayRate = was.PayRate, PayHistory = was.PayHistory, Profile = m.Profile ?? was.Profile }
+            : m with { PayRate = null, PayHistory = null })];
 
     private static Dictionary<string, string[]>? PayError(double? rate) =>
         rate is { } r && (double.IsNaN(r) || r < Costs.MinPayRate || r > Costs.MaxPayRate)
@@ -467,29 +467,35 @@ public static partial class Endpoints
     /// <summary>
     /// Edits one employee: name, role, (ground crews) skills and depot, their employee record, and their own pay rate (null:
     /// the standard rate). Supervisors only. Goes through the same checks as editing their crew, so a rename that would
-    /// orphan open work orders is refused.
+    /// orphan open work orders is refused. A new rate applies from now on; earlier work keeps the rate it was done at.
     /// </summary>
     private static Task<IResult> PutEmployee(string kind, string crewId, string member, EmployeeEdit body, HttpContext ctx, IGridRepository repo,
-        IResourceStore resources, CancellationToken ct) =>
+        IResourceStore resources, TimeProvider clock, CancellationToken ct) =>
         EditAsync(ctx, resources, async catalog =>
         {
             if (PayError(body.PayRate) is { } payError) return TypedResults.ValidationProblem(payError);
             if (Employees.Validate(body.Profile?.Cleaned()) is { Count: > 0 } profileErrors) return TypedResults.ValidationProblem(profileErrors);
-            var updated = new CrewMember(body.Name?.Trim() ?? "", body.Role?.Trim() ?? "", body.Skills?.Distinct().ToList(), Clean(body.DepotId),
-                body.PayRate is { } rate ? Costs.Money(rate) : null, body.Profile?.Cleaned());
-            static List<CrewMember>? Replace(IReadOnlyList<CrewMember> members, string name, CrewMember with) =>
-                members.Any(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
-                    ? [.. members.Select(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase) ? with : m)]
-                    : null;
+            var now = clock.GetUtcNow();
+            CrewMember updated = null!;
+            List<CrewMember>? Replace(IReadOnlyList<CrewMember> members)
+            {
+                if (members.FirstOrDefault(m => m.Name.Equals(member, StringComparison.OrdinalIgnoreCase)) is not { } was) return null;
+                updated = PayRates.Change(was, body.PayRate is { } rate ? Costs.Money(rate) : null, now) with
+                {
+                    Name = body.Name?.Trim() ?? "", Role = body.Role?.Trim() ?? "", Skills = body.Skills?.Distinct().ToList(),
+                    DepotId = Clean(body.DepotId), Profile = body.Profile?.Cleaned(),
+                };
+                return [.. members.Select(m => ReferenceEquals(m, was) ? updated : m)];
+            }
 
             if (kind == "ground-crews")
             {
-                if (catalog.GroundCrews.FirstOrDefault(c => c.Id == crewId) is not { } crew || Replace(crew.Members, member, updated) is not { } members)
+                if (catalog.GroundCrews.FirstOrDefault(c => c.Id == crewId) is not { } crew || Replace(crew.Members) is not { } members)
                     return TypedResults.NotFound();
                 var saved = await SaveGroundCrewAsync(catalog, crew with { Members = members }, repo, ct);
                 return saved is Ok<Crew> ? TypedResults.Ok(updated) : saved;
             }
-            if (catalog.FlightCrews.FirstOrDefault(c => c.Id == crewId) is not { } flight || Replace(flight.Members, member, updated) is not { } flyers)
+            if (catalog.FlightCrews.FirstOrDefault(c => c.Id == crewId) is not { } flight || Replace(flight.Members) is not { } flyers)
                 return TypedResults.NotFound();
             var result = SaveFlightCrew(catalog, flight with { Members = flyers });
             return result is Ok<FlightCrew> ? TypedResults.Ok(updated with { Skills = null, DepotId = null }) : result;
@@ -500,14 +506,14 @@ public static partial class Endpoints
     /// Flight crews: a pilot's or an observer's share of the flight crew rate.
     /// </summary>
     private static Task<IResult> PutPayRate(string kind, string crewId, string member, PayRateRequest body, HttpContext ctx, IResourceStore resources,
-        CancellationToken ct) =>
+        TimeProvider clock, CancellationToken ct) =>
         EditAsync(ctx, resources, catalog =>
         {
             if (PayError(body.Rate) is { } payError) return Task.FromResult<IResult>(TypedResults.ValidationProblem(payError));
             var rate = body.Rate is { } set ? Costs.Money(set) : (double?)null;
             CrewMember? updated = null;
             List<CrewMember> Set(IReadOnlyList<CrewMember> members) =>
-                [.. members.Select(m => m.Name.Equals(member, StringComparison.OrdinalIgnoreCase) ? updated = m with { PayRate = rate } : m)];
+                [.. members.Select(m => m.Name.Equals(member, StringComparison.OrdinalIgnoreCase) ? updated = PayRates.Change(m, rate, clock.GetUtcNow()) : m)];
             if (kind == "ground-crews" && catalog.GroundCrews.FindIndex(c => c.Id == crewId) is var g and >= 0)
                 catalog.GroundCrews[g] = catalog.GroundCrews[g] with { Members = Set(catalog.GroundCrews[g].Members) };
             else if (kind == "flight-crews" && catalog.FlightCrews.FindIndex(c => c.Id == crewId) is var f and >= 0)

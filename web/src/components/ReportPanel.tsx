@@ -1,4 +1,4 @@
-import { useRates, useReport, type AnyReport, type ReportTarget } from '../api';
+import { useReport, type AnyReport, type ReportTarget } from '../api';
 import { REST_HOURS, SHIFT_HOURS } from '../lib/field';
 import { FINDING_TYPE_LABEL, miles, money, pct } from '../lib/format';
 import type { PeriodSize } from '../lib/periods';
@@ -48,10 +48,10 @@ const TECH_METRICS: PeriodMetric<WorkDay>[] = [
   { key: 'repair_h', label: 'Repairing', value: (d) => d.repairHours, format: hours },
 ];
 
-/** Their own hours at the labor rate. */
-const techMetrics = (rate: number): PeriodMetric<WorkDay>[] => [
+/** Their own hours, each at the rate they were on at the time. */
+const TECH_COST_METRICS: PeriodMetric<WorkDay>[] = [
   ...TECH_METRICS,
-  { key: 'labor_cost', label: 'Labor cost', value: (d) => (d.driveHours + d.repairHours) * rate, format: money, chart: true },
+  { key: 'labor_cost', label: 'Labor cost', value: (d) => d.laborCost, format: money, chart: true },
 ];
 
 const FLIGHT_METRICS: PeriodMetric<FlightDay>[] = [
@@ -100,10 +100,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: 'nume
  */
 export function ReportPanel({ target }: { target: ReportTarget }) {
   const report = useReport(target);
-  const rates = useRates().data;
   const data = report.data;
-  // A technician's own rate when a supervisor set one, otherwise the standard rate.
-  const techRate = (data && 'payRate' in data ? data.payRate : undefined) ?? rates?.laborPerPersonHour ?? 0;
 
   const title = titleOf(target);
   const csv = data ? toCsv(target, data) : null;
@@ -136,8 +133,8 @@ export function ReportPanel({ target }: { target: ReportTarget }) {
         </>
       )}
       {data && 'shifts' in data && (
-        <ShiftReports data={data} rate={techRate}>
-          <PeriodReport days={data.days} metrics={techMetrics(techRate)} now={data.now} onDownload={periodCsv} />
+        <ShiftReports data={data}>
+          <PeriodReport days={data.days} metrics={TECH_COST_METRICS} now={data.now} onDownload={periodCsv} />
         </ShiftReports>
       )}
       {data && 'report' in data && (
@@ -202,9 +199,10 @@ function subtitle(target: ReportTarget, data: AnyReport | undefined) {
   return `${data.role}, ${data.crewName}${target.kind === 'pilot' && data.role !== 'Remote pilot (PIC)' ? ' · missions record the pilot in command only' : ''}`;
 }
 
-function ShiftReports({ data, rate, children }: { data: TechnicianReport; rate: number; children?: React.ReactNode }) {
+function ShiftReports({ data, children }: { data: TechnicianReport; children?: React.ReactNode }) {
   const shifts = data.shifts;
   const worked = shifts.reduce((a, s) => a + s.workedHours, 0);
+  const cost = shifts.reduce((a, s) => a + s.laborCost, 0);
   const repaired = shifts.reduce((a, s) => a + s.repaired, 0);
   return (
     <>
@@ -213,7 +211,7 @@ function ShiftReports({ data, rate, children }: { data: TechnicianReport; rate: 
         <Tile label="Shifts">{shifts.length}</Tile>
         <Tile label="Hours worked">{worked.toFixed(1)} h</Tile>
         <Tile label="Repairs">{repaired}</Tile>
-        <Tile label="Labor cost">{money(worked * rate)}{repaired ? <span className="muted small"> · {money((worked * rate) / repaired)} a repair</span> : ''}</Tile>
+        <Tile label="Labor cost">{money(cost)}{repaired ? <span className="muted small"> · {money(cost / repaired)} a repair</span> : ''}</Tile>
       </div>
       <p className="muted small">
         Each shift is up to {SHIFT_HOURS} h of driving and repairs, then {REST_HOURS} h off. Hours are simulated (1 s = 1 min); times are when it happened.

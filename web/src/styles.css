@@ -636,6 +636,34 @@ button { font: inherit; color: inherit; }
 /* Pay on crew cards: a person's own rate stands out from the standard one. */
 .pay-own { color: var(--text); font-weight: 600; }
 .member-edit { margin-left: 6px; }
+.pay-history ul { margin: 4px 0 0; padding-left: 18px; }
+.pay-history li { margin: 2px 0; }
 .employee-dialog { width: min(640px, calc(100vw - 32px)); }
 .employee-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
 @media (max-width: 560px) { .employee-grid { grid-template-columns: 1fr; } }
+
+/* Work schedule */
+.schedule { display: flex; flex-direction: column; gap: 12px; }
+.schedule-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.schedule-head p { margin: 4px 0 0; max-width: 72ch; }
+.schedule-result { display: flex; flex-direction: column; gap: 4px; }
+.danger-text { color: var(--danger); font-weight: 600; }
+.schedule-table { min-width: 820px; }
+.schedule-table td { vertical-align: top; }
+.schedule-table tr.schedule-ready td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.schedule-wo { display: inline-flex; gap: 8px; align-items: center; text-align: left; color: var(--text); }
+.schedule-score { height: 5px; width: 110px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin: 6px 0 4px; }
+.schedule-score i { display: block; height: 100%; border-radius: 3px; }
+.schedule-timeline { gap: 6px; }
+.schedule-axis, .schedule-lane { display: grid; grid-template-columns: 150px 1fr; gap: 8px; align-items: center; }
+.schedule-axis > div { position: relative; height: 16px; font-size: 11px; color: var(--muted); }
+.schedule-axis > div span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.schedule-axis > div span:first-child { transform: none; }
+.schedule-axis > div span:last-child { transform: translateX(-100%); }
+.schedule-lane > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-track { position: relative; height: 22px; border-radius: 6px; background: var(--surface-2); }
+.schedule-bar { position: absolute; top: 2px; bottom: 2px; border: 0; border-radius: 4px; padding: 0 4px; color: #fff; font-size: 11px; font-weight: 700;
+  cursor: pointer; overflow: hidden; display: flex; align-items: center; box-shadow: 0 0 0 1px var(--surface); }
+@media (max-width: 640px) {
+  .schedule-axis, .schedule-lane { grid-template-columns: 90px 1fr; }
+}

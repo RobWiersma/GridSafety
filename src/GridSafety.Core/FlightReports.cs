@@ -32,7 +32,7 @@ public static class FlightReports
     public static FlightReport Of(IEnumerable<Mission> missions, Func<string, Circuit?> findCircuit, int max = 100, PayRates? rates = null)
     {
         rates ??= PayRates.Standard;
-        double Crew(IEnumerable<Mission> ms) => Costs.Money(ms.Sum(m => Hours(m) * rates.Flight(m.Pilot)));
+        double Crew(IEnumerable<Mission> ms) => Costs.Money(ms.Sum(m => Hours(m) * rates.Flight(m)));
         var all = missions.OrderByDescending(m => m.StartedAt ?? m.CreatedAt).ToList();
         var flights = all.Take(max).Select(m =>
         {

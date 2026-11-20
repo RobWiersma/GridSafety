@@ -42,7 +42,8 @@ public static partial class GuestView
                 foreach (var (key, child) in obj.ToList())
                 {
                     if (key.Equals("nextStatuses", StringComparison.OrdinalIgnoreCase)) obj[key] = new JsonArray();
-                    else if (key.Equals("payRate", StringComparison.OrdinalIgnoreCase) || key.Equals("profile", StringComparison.OrdinalIgnoreCase))
+                    else if (key.Equals("payRate", StringComparison.OrdinalIgnoreCase) || key.Equals("payHistory", StringComparison.OrdinalIgnoreCase)
+                        || key.Equals("profile", StringComparison.OrdinalIgnoreCase))
                         obj.Remove(key); // pay and employee records are for signed-in users
                     else if (child is JsonValue v && v.TryGetValue<string>(out var s))
                         obj[key] = PersonFields.Contains(key) && !SystemActors.Contains(s) ? Redacted : Scrub(s);

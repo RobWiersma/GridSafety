@@ -9,6 +9,7 @@ import { FindingsView } from './components/FindingsView';
 import { MissionDetail } from './components/MissionDetail';
 import { MissionsView } from './components/MissionsView';
 import { OpsView } from './components/OpsView';
+import { ScheduleView } from './components/ScheduleView';
 import { ReportsView, reportKey } from './components/ReportsView';
 import { ResourcesView } from './components/ResourcesView';
 import { StatsBar } from './components/StatsBar';
@@ -18,7 +19,7 @@ import { Toast, type ToastMessage } from './components/Toast';
 import { recordVisit } from './lib/visits';
 import { Logo, useSession } from './session';
 
-type Tab = 'ops' | 'findings' | 'missions' | 'resources' | 'reports' | 'visitors' | 'settings';
+type Tab = 'ops' | 'findings' | 'schedule' | 'missions' | 'resources' | 'reports' | 'visitors' | 'settings';
 type Route = { tab: Tab; mission: string | null; report?: string | null };
 
 /**
@@ -30,7 +31,7 @@ function parseHash(): Route {
   if (h.startsWith('mission/')) return { tab: 'missions', mission: decodeURIComponent(h.slice('mission/'.length)) };
   if (h === 'reports' || h.startsWith('reports/')) return { tab: 'reports', mission: null, report: h.slice('reports/'.length) || null };
   if (h === 'alerts') return { tab: 'settings', mission: null }; // old link to the email alerts page
-  return { tab: h === 'findings' || h === 'missions' || h === 'resources' || h === 'visitors' || h === 'settings' ? h : 'ops', mission: null };
+  return { tab: h === 'findings' || h === 'schedule' || h === 'missions' || h === 'resources' || h === 'visitors' || h === 'settings' ? h : 'ops', mission: null };
 }
 
 /**
@@ -60,7 +61,7 @@ export function App() {
   const [findingsFilter, setFindingsFilter] = useState('open');
 
   const isSupervisor = Boolean(me.data?.isSupervisor);
-  const tabs: [Tab, string][] = [['ops', 'Operations'], ['findings', 'Findings'], ['missions', 'Missions'], ['resources', 'Resources'], ['reports', 'Reports']];
+  const tabs: [Tab, string][] = [['ops', 'Operations'], ['findings', 'Findings'], ['schedule', 'Schedule'], ['missions', 'Missions'], ['resources', 'Resources'], ['reports', 'Reports']];
 
   const page = missionId ? 'mission' : tab;
   useEffect(() => recordVisit(page, !session.guest), [page, session.guest]);
@@ -138,6 +139,7 @@ export function App() {
             <CrewsPanel />
           </>
         )}
+        {tab === 'schedule' && <ScheduleView onOpenFinding={setFindingId} onToast={setToast} />}
         {tab === 'resources' && <ResourcesView onToast={setToast} onOpenMission={openMission} onOpenReport={(t) => { openReport(reportKey(t)); window.scrollTo(0, 0); }} />}
         {tab === 'reports' && <ReportsView selected={route.report ?? null} onSelect={openReport} />}
         {tab === 'settings' && (session.guest ? <div className="banner banner-info">Sign in to see settings.</div> : (

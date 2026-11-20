@@ -179,7 +179,11 @@ public sealed record ShiftJob(string FindingId, string StructureLabel, FindingTy
 /// including jobs lined up. <see cref="RestHours"/> is the break before their next shift, once there is one.
 /// </summary>
 public sealed record ShiftReport(DateTimeOffset StartedAt, DateTimeOffset EndsAt, ShiftStatus Status, double WorkedHours, double BookedHours,
-    double DriveHours, double RepairHours, int Repaired, double? RestHours, double LimitHours, IReadOnlyList<ShiftJob> Jobs);
+    double DriveHours, double RepairHours, int Repaired, double? RestHours, double LimitHours, IReadOnlyList<ShiftJob> Jobs)
+{
+    /// <summary>The hours worked at the technician's rate when the shift started.</summary>
+    public double LaborCost { get; init; }
+}
 
 /// <summary>
 /// Hours of service to check candidates against: every truck roll so far, the time, and how bad the defect is (repairs

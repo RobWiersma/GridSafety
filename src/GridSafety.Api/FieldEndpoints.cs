@@ -10,7 +10,7 @@ public sealed record FieldJobView(string FindingId, string StructureLabel, Findi
 public sealed record FieldJobsView(DateTimeOffset Now, IReadOnlyList<FieldJobView> Jobs);
 
 /// <summary>A technician's shift reports, newest first, with where their current shift stands.</summary>
-/// <param name="PayRate">Their hourly rate: their own, or the standard technician rate.</param>
+/// <param name="PayRate">Their hourly rate now: their own, or the standard technician rate. Shifts and days are costed at the rate then.</param>
 public sealed record MemberShiftReports(string CrewId, string CrewName, string Member, string Role, string? DepotName, MemberShift Current,
     IReadOnlyList<ShiftReport> Shifts, IReadOnlyList<WorkDay> Days, DateTimeOffset Now, double PayRate);
 
@@ -34,9 +34,11 @@ public static partial class Endpoints
         var findings = await ListSettledFindingsAsync(repo, now, ct);
         var hours = new FieldHours(FieldWork.History(findings), now);
         var current = MemberShifts(crew, hours).Single(s => s.Member == m.Name);
+        var rates = PayRates.Of(catalog);
         return TypedResults.Ok(new MemberShiftReports(crew.Id, crew.Name, m.Name, m.Role, catalog.FindDepot(crew.DepotOf(m))?.Name, current,
-            Shifts.Reports(findings, crew.Id, m.Name, now),
-            WorkReports.Of(findings, d => d.Involves(crew.Id, m.Name), _ => [], now, max: 0).Days, now, m.PayRate ?? Costs.LaborPerPersonHour));
+            [.. Shifts.Reports(findings, crew.Id, m.Name, now).Select(s => s with { LaborCost = Costs.Money(s.WorkedHours * rates.Technician(crew.Id, m.Name, s.StartedAt)) })],
+            WorkReports.Of(findings, d => d.Involves(crew.Id, m.Name), _ => [], now, max: 0, hourly: d => rates.Technician(crew.Id, m.Name, d.DepartedAt)).Days,
+            now, rates.Technician(crew.Id, m.Name)));
     }
 
     private static async Task<Ok<FieldJobsView>> ListFieldJobs(IGridRepository repo, TimeProvider clock, CancellationToken ct)
