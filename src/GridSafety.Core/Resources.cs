@@ -33,8 +33,8 @@ public sealed partial class ResourceCatalog
     /// <summary>Which demo additions this catalog has had (see <see cref="Normalize"/>); each is applied once, so deleting one sticks.</summary>
     public int SeedVersion { get; set; }
 
-    /// <summary>2: Alameda and Solano County yards and crews. 3: trucks at every yard.</summary>
-    public const int CurrentSeedVersion = 3;
+    /// <summary>2: Alameda and Solano County yards and crews. 3: trucks at every yard. 4: yards staffed to fill their trucks' seats.</summary>
+    public const int CurrentSeedVersion = 4;
 
     public List<DroneAsset> Drones { get; init; } = [];
     public List<FlightCrew> FlightCrews { get; init; } = [];
@@ -75,7 +75,7 @@ public sealed partial class ResourceCatalog
                 [new("Patty Bouvay", FlightCrew.PilotRole), new("Selma Bouvay", FlightCrew.PilotRole), new("Hans Moleman", FlightCrew.ObserverRole)],
                 CrewStatus.OffDuty),
         ],
-        GroundCrews = [.. CrewRoster.All],
+        GroundCrews = [.. CrewRoster.All, .. CrewRoster.YardCrews(CrewRoster.Depots, Fleet.Default(CrewRoster.Depots), CrewRoster.All)],
         Depots = [.. CrewRoster.Depots],
         Vehicles = [.. Fleet.Default(CrewRoster.Depots)],
         SeedVersion = CurrentSeedVersion,
@@ -103,6 +103,12 @@ public sealed partial class ResourceCatalog
             // Trucks are tracked now: the demo fleet, at the yards this catalog has. Applied once.
             Vehicles.AddRange(Fleet.Default(CrewRoster.Depots).Where(v => FindDepot(v.DepotId) is not null && FindVehicle(v.Id) is null));
             SeedVersion = 3;
+        }
+        if (SeedVersion < 4)
+        {
+            // Enough people at each yard to fill its trucks' seats, counting whoever is there already. Applied once.
+            GroundCrews.AddRange(CrewRoster.YardCrews(Depots, Vehicles, GroundCrews));
+            SeedVersion = 4;
         }
         for (var i = 0; i < GroundCrews.Count; i++)
         {

@@ -146,6 +146,69 @@ public static class CrewRoster
             DepotId: "fairfield"),
     ];
 
+    /// <summary>
+    /// A crew at each yard that has fewer people than its trucks have seats, staffed to fill them: everyone already departing
+    /// from the yard (whatever their crew) counts, and new hires make up the rest. Each yard crew is led by a foreman and has
+    /// a mix of skills, so every yard can take every kind of defect. Fictional names; deterministic, so the same catalog
+    /// always gets the same people.
+    /// </summary>
+    public static IReadOnlyList<Crew> YardCrews(IReadOnlyList<Depot> depots, IReadOnlyList<Vehicle> vehicles, IReadOnlyList<Crew> crews)
+    {
+        ArgumentNullException.ThrowIfNull(depots);
+        ArgumentNullException.ThrowIfNull(vehicles);
+        ArgumentNullException.ThrowIfNull(crews);
+        var taken = crews.SelectMany(c => c.Members).Select(m => m.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var next = 0;
+        string NewName()
+        {
+            while (true)
+            {
+                var (first, last) = (next % FirstNames.Length, (next % FirstNames.Length + next / FirstNames.Length) % LastNames.Length);
+                next++;
+                var name = $"{FirstNames[first]} {LastNames[last]}";
+                if (taken.Add(name)) return name;
+            }
+        }
+
+        var yardCrews = new List<Crew>();
+        foreach (var depot in depots)
+        {
+            var seats = vehicles.Where(v => v.DepotId == depot.Id).Sum(v => v.Seats);
+            var staffed = crews.Sum(c => c.Members.Count(m => c.DepotOf(m) == depot.Id));
+            var hires = seats - staffed;
+            if (hires <= 0 || crews.Any(c => c.Id == YardCrewId(depot))) continue;
+            var members = Enumerable.Range(0, hires).Select(i => i == 0
+                ? new CrewMember(NewName(), "Foreman", [FindingType.ConductorDamage, FindingType.CrossarmDamage, FindingType.DamagedInsulator, FindingType.MissingHardware])
+                : new CrewMember(NewName(), YardRoles[(i - 1) % YardRoles.Length].Role, YardRoles[(i - 1) % YardRoles.Length].Skills)).ToList();
+            var place = depot.Name.EndsWith(" yard", StringComparison.OrdinalIgnoreCase) ? depot.Name[..^5] : depot.Name;
+            yardCrews.Add(new Crew(YardCrewId(depot), $"{place} Yard Crew", $"General line work out of the {depot.Name}",
+                Enum.GetValues<FindingType>(), members, DepotId: depot.Id));
+        }
+        return yardCrews;
+    }
+
+    private static string YardCrewId(Depot depot) => $"yard-{depot.Id}";
+
+    /// <summary>The roles a yard crew is made of after its foreman, in hiring order, so even a small crew covers the common defects.</summary>
+    private static readonly (string Role, FindingType[] Skills)[] YardRoles =
+    [
+        ("Journeyman lineman", [FindingType.ConductorDamage, FindingType.CrossarmDamage, FindingType.MissingHardware]),
+        ("Arborist", [FindingType.VegetationEncroachment]),
+        ("Lineman", [FindingType.DamagedInsulator, FindingType.MissingHardware, FindingType.CrossarmDamage]),
+        ("Thermographer", [FindingType.ThermalHotspot]),
+        ("Groundman", [FindingType.VegetationEncroachment, FindingType.MissingHardware]),
+        ("Hot-stick lineman", [FindingType.ThermalHotspot, FindingType.ConductorDamage]),
+        ("Apprentice lineman", [FindingType.MissingHardware]),
+    ];
+
+    private static readonly string[] FirstNames =
+        ["Ana", "Ben", "Carmen", "Dev", "Elena", "Felix", "Grace", "Hiro", "Ines", "Jamal", "Kara", "Luis",
+         "Mei", "Nate", "Olivia", "Priya", "Quinn", "Rosa", "Sam", "Tomas", "Uma", "Victor", "Wendy", "Yusuf"];
+
+    private static readonly string[] LastNames =
+        ["Alvarez", "Brooks", "Chen", "Delgado", "Evans", "Fischer", "Garcia", "Hayes", "Ibarra", "Jensen", "Kim", "Lopez",
+         "Moreno", "Nguyen", "Okafor", "Patel", "Quintero", "Reyes", "Singh", "Torres", "Usman", "Vasquez", "Walsh", "Young"];
+
     /// <summary>The crew that normally handles this kind of defect.</summary>
     public static Crew SuggestFor(FindingType type) => SuggestFor(All, type)!;
 
