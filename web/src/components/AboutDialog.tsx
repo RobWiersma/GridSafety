@@ -18,15 +18,19 @@ const PROBLEMS = ['Vegetation growing into lines', 'Cracked or missing insulator
 const STACK = ['.NET 10', 'AWS Lambda', 'IoT Core (MQTT)', 'DynamoDB', 'EventBridge', 'Cognito', 'CloudFront', 'AWS CDK', 'React 19', 'TypeScript', 'TanStack Query', 'Leaflet', 'OpenStreetMap', 'OSRM', 'GitHub Actions'];
 
 /** Project info: what GridSafety is for, how the workflow runs, and what is simulated. */
-export function AboutDialog({ onClose }: { onClose(): void }) {
+export function AboutDialog({ onClose, tour = false }: { onClose(): void; /** Opened from "Watch the tour": start the video. */ tour?: boolean }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    closeRef.current?.focus();
+    if (tour && videoRef.current) {
+      videoRef.current.focus();
+      videoRef.current.play().catch(() => { /* autoplay blocked: the controls are there */ });
+    } else closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, tour]);
 
   return (
     <>
@@ -47,6 +51,15 @@ export function AboutDialog({ onClose }: { onClose(): void }) {
             inspections, live monitoring, triage, scheduling, crew dispatch and reporting all happen in one place, so
             problems get found and fixed before they cause a fire or an outage.
           </p>
+
+          <section>
+            <h3>Watch the 90-second tour</h3>
+            <video ref={videoRef} className="about-video" src="/tour/gridsafety-tour.mp4" poster="/tour/poster.jpg"
+              controls playsInline preload={tour ? 'auto' : 'none'}
+              aria-label="Walkthrough: a demo drone flight, triaging and assigning a severity 5 finding, the truck driving out, the repair schedule, a flight overview, costs and resources">
+              <a href="/tour/gridsafety-tour.mp4">Download the tour (MP4)</a>
+            </video>
+          </section>
 
           <section>
             <h3>How it works</h3>

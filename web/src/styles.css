@@ -257,7 +257,9 @@ button { font: inherit; color: inherit; }
   .user-name { display: none; }
   .grid-2 { grid-template-columns: 1fr; }
 }
-.guest-banner { margin-bottom: 12px; }
+.guest-banner { margin-bottom: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.guest-banner > span { flex: 1 1 320px; }
+.guest-tour { white-space: nowrap; }
 
 /* ───────────── Mission overview ───────────── */
 .mission-detail { display: flex; flex-direction: column; gap: 14px; }
@@ -339,6 +341,7 @@ button { font: inherit; color: inherit; }
 .about-body p { margin: 0; }
 .about-body h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .about-lead { font-size: 16.5px; line-height: 1.55; }
+.about-video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; background: #000; border: 1px solid var(--border); }
 .about-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .about-steps li:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .about-steps li { display: flex; gap: 10px; padding: 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }

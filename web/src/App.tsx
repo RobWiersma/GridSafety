@@ -57,7 +57,7 @@ export function App() {
   }, []);
   const [findingId, setFindingId] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
-  const [aboutOpen, setAboutOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState<false | 'about' | 'tour'>(false);
   const [findingsFilter, setFindingsFilter] = useState('open');
 
   const isSupervisor = Boolean(me.data?.isSupervisor);
@@ -96,7 +96,7 @@ export function App() {
           ))}
         </nav>
         <div className="topbar-right">
-          <button className="btn btn-ghost" onClick={() => setAboutOpen(true)}>About</button>
+          <button className="btn btn-ghost" onClick={() => setAboutOpen('about')}>About</button>
           {session.devMode && session.setDevRole ? (
             <label className="role-switch" title="Dev mode: switch role to see RBAC in action">
               <span className="pill pill-warn">dev</span>
@@ -125,7 +125,8 @@ export function App() {
       <main className="content">
         {session.guest && (
           <div className="banner banner-info guest-banner">
-            You're viewing the live demo as a guest, so everything is read-only. Signed-in users plan missions, fly the demo drone and triage findings.
+            <span>You're viewing the live demo as a guest, so everything is read-only. Signed-in users plan missions, fly the demo drone and triage findings.</span>
+            <button className="btn btn-secondary guest-tour" onClick={() => setAboutOpen('tour')}>▶ Watch the 90-second tour</button>
           </div>
         )}
         <StatsBar onOpenFindings={() => go('findings')} />
@@ -158,7 +159,7 @@ export function App() {
       {findingId && (
         <FindingDrawer id={findingId} isSupervisor={Boolean(me.data?.isSupervisor)} onClose={() => setFindingId(null)} onToast={setToast} />
       )}
-      {aboutOpen && <AboutDialog onClose={() => setAboutOpen(false)} />}
+      {aboutOpen && <AboutDialog tour={aboutOpen === 'tour'} onClose={() => setAboutOpen(false)} />}
       <Toast message={toast} onDone={() => setToast(null)} />
     </div>
   );
