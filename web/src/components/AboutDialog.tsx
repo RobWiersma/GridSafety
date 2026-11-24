@@ -55,7 +55,7 @@ export function AboutDialog({ onClose, tour = false }: { onClose(): void; /** Op
           <section>
             <h3>Watch the 90-second tour</h3>
             <video ref={videoRef} className="about-video" src="/tour/gridsafety-tour.mp4" poster="/tour/poster.jpg"
-              controls playsInline preload={tour ? 'auto' : 'none'}
+              controls muted playsInline preload={tour ? 'auto' : 'none'}
               aria-label="Walkthrough: a demo drone flight, triaging and assigning a severity 5 finding, the truck driving out, the repair schedule, a flight overview, costs and resources">
               <a href="/tour/gridsafety-tour.mp4">Download the tour (MP4)</a>
             </video>
