@@ -22,11 +22,39 @@
 
 </div>
 
-**Drone power-line inspection platform on AWS: a proof of concept for a SaaS product** (see [Project scope](#project-scope-a-saas-proof-of-concept)). Drones fly distribution and transmission circuits, stream telemetry over MQTT, and report defects (vegetation encroachment, damaged insulators, thermal hotspots…). GridSafety turns that stream into a live ops map, safety alerts, a triage queue with SLA escalation, and an inspection report for every mission.
+**A working drone power-line inspection platform on AWS**, built as a proof of concept for a SaaS product. Drones fly real power lines, stream telemetry over MQTT and report defects. GridSafety carries every defect through the whole loop, from the drone to a repaired line and a costed report.
+
+### **[▶ Try the live demo](https://gridsafety.bswiersma.com)**
+
+No sign-in needed: visitors get a read-only view of everything. Open **Missions** and pick a completed flight for its map, flight profile and findings; open **Findings** to follow a defect from detection to repair; open **Reports** for the costs.
+
+![86-second demo: launching a drone flight, triaging and assigning a severity 5 damaged insulator, the truck driving out on real roads, the repair schedule, a flight overview, costs and resources](docs/demo/gridsafety-demo.gif)
+
+<sub>86-second walkthrough, recorded from the app. [Full-resolution MP4](docs/demo/gridsafety-demo.mp4).</sub>
+
+```mermaid
+flowchart LR
+  A["✈ Fly<br/>battery-sized flights"] --> B["🔎 Detect<br/>defects + safety alerts"]
+  B --> C["⏱ Triage<br/>severity SLA, escalates"]
+  C --> D["📋 Schedule<br/>ranked by risk"]
+  D --> E["🚚 Dispatch<br/>nearest qualified tech"]
+  E --> F["🔧 Repair<br/>on real roads"]
+  F --> G["📊 Report<br/>labor, fuel, upkeep"]
+```
+
+**At a glance**
+
+- **Event-driven AWS backend, all infrastructure as code:** IoT Core → Lambda → DynamoDB Streams outbox → EventBridge → Scheduler, SQS and SNS, about 100 resources in CDK (C#), deployed by GitHub Actions over OIDC with no stored keys. ([Architecture](#architecture))
+- **Real map data:** 878 public OpenStreetMap power lines and about 19,700 towers (12 to 500 kV) across Contra Costa, Alameda and Solano counties; crew trucks drive real road routes. No non-public utility data is used.
+- **Operations logic from the field:** flights split to a 20-minute battery and booked as outings, triage SLAs with escalation, work orders only to qualified, on-shift technicians nearest first, hours of service, a risk-ranked repair schedule, and trucks with seats, fuel and service intervals.
+- **Every hour costed:** labor, flight crews, fuel and maintenance by day, week or month, from a rate card with dated pay history, all downloadable as CSV.
+- **Secure by default:** Cognito roles enforced by the API, a separate read-only guest API with names removed, device identity taken from the MQTT topic, least-privilege IAM per function.
+- **Costs cents a month:** pay-per-use services only, and nothing runs until someone clicks, so an idle deployment costs next to nothing. Ten CloudWatch alarms (the free tier) watch every failure path.
+- **Tested and shipped continuously:** 238 .NET tests plus frontend tests on every push, then deploy and a smoke test against the live site.
+
+**Contents:** [Scope](#project-scope-a-saas-proof-of-concept) · [What it does](#what-it-does) · [Architecture](#architecture) · [Design decisions](#design-decisions) · [Run it locally](#run-it-locally-no-aws-account-needed) · [Deploy](#deploy-to-aws) · [Why I built this](#why-i-built-this)
 
 Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · DynamoDB · EventBridge (+ Scheduler) · SQS · SNS · S3 · Cognito · CloudFront · AWS CDK (C#) · React 19 + TypeScript + Leaflet**.
-
-> **Real map data:** the transmission lines and towers are real, public [OpenStreetMap](https://www.openstreetmap.org/copyright) data for Contra Costa, Alameda and Solano counties, CA (878 lines and about 19,700 towers from 12 to 500 kV, such as *Pittsburg - Martinez 115 kV* and *Table Mountain - Tesla 500 kV*), imported by `tools/GridSafety.CircuitImport`. Drones, missions and defects are simulated. No non-public utility data is used.
 
 ![Live ops map: the demo drone flying the Lakewood–Clayton 115 kV line past Walnut Creek, with the mission in flight, battery, link and coverage](docs/screenshots/ops-live.png)
 
@@ -131,32 +159,56 @@ No non-public utility data is used anywhere in the project.
 ## Architecture
 
 ```mermaid
-flowchart LR
-  subgraph Field
-    D[Drone / Simulator]
+flowchart TB
+  subgraph Drones
+    D["Drone or simulator"]
+    DEMO["DemoFlight λ<br/>on demand"]
   end
-  U2[Supervisor: Demo flight] -.-> API2[API] -. async invoke .-> DEMO[DemoFlight λ] -- publishes like a drone --> IOT
-  D -- MQTT gridsafety/drones/{id}/{kind} --> IOT[IoT Core<br/>topic rule]
-  IOT --> ING[DroneIngest λ]
-  ING --> DDB[(DynamoDB<br/>single table)]
-  ING -- DroneAlertRaised --> BUS
-  DDB -- stream SK=META --> PUB[StreamPublisher λ<br/>outbox]
-  PUB --> BUS{{EventBridge bus}}
-  BUS -- FindingCreated/StatusChanged --> SLA[SlaScheduler λ]
-  SLA -- at&#40;due&#41; --> SCH[EventBridge Scheduler]
-  SCH --> ESC[SlaEscalation λ]
-  BUS -- Critical alert / sev≥4 --> Q[SQS + DLQ] --> NOT[AlertNotifier λ]
-  ESC --> SNS[[SNS ops pages]]
-  NOT --> SNS
-  BUS -- Mission Completed/Aborted --> REP[MissionReport λ] --> S3[(S3 reports)]
-  BUS --> ARC[(Archive 30d)]
+  subgraph Ingest
+    IOT["IoT Core<br/>topic rule"]
+    ING["DroneIngest λ"]
+  end
+  subgraph State
+    DDB[("DynamoDB<br/>single table")]
+    S3R[("S3<br/>mission reports")]
+  end
+  subgraph Workflow["Events and workflow"]
+    PUB["StreamPublisher λ<br/>outbox"]
+    BUS{{"EventBridge bus<br/>30-day archive"}}
+    SLA["SlaScheduler λ"]
+    SCH["EventBridge Scheduler<br/>a timer per finding"]
+    ESC["SlaEscalation λ"]
+    Q["SQS + DLQ"]
+    NOT["AlertNotifier λ"]
+    REP["MissionReport λ"]
+  end
+  subgraph Console["Ops console"]
+    U["React SPA"]
+    CF["CloudFront"]
+    SITE[("S3<br/>static site")]
+    APIGW["HTTP API<br/>Cognito JWT"]
+    API["ASP.NET Core λ"]
+  end
+  SNS[["SNS<br/>on-call email"]]
+  OSRM["OSRM<br/>public road routing"]
 
-  U[Ops console<br/>React] --> CF[CloudFront]
-  CF --> SITE[(S3 SPA)]
-  CF -- /api/* --> APIGW[HTTP API<br/>Cognito JWT] --> API[ASP.NET Core λ]
-  API --> DDB
-  API -. presigned GET .-> S3
+  D -- "MQTT gridsafety/drones/id/kind" --> IOT
+  DEMO -- "publishes like a drone" --> IOT
+  DEMO -. "next flight of an outing" .-> DEMO
+  IOT --> ING --> DDB
+  ING -- "DroneAlertRaised" --> BUS
+  DDB -- "stream, SK = META" --> PUB --> BUS
+  BUS -- "finding created / triaged" --> SLA --> SCH --> ESC --> SNS
+  BUS -- "critical alert, severity 4+" --> Q --> NOT --> SNS
+  BUS -- "mission completed / aborted" --> REP --> S3R
+  U --> CF --> SITE
+  CF -- "/api/*" --> APIGW --> API --> DDB
+  API -. "presigned download" .-> S3R
+  API -. "async invoke" .-> DEMO
+  API -. "truck routes" .-> OSRM
 ```
+
+Every arrow out of the bus is at-least-once with its effect made exactly-once (idempotency keys, conditional writes, an `Escalated` flag), and every failure path ends in a DLQ or a Lambda error that a CloudWatch alarm watches. The [design decisions](#design-decisions) below say why it's built this way.
 
 ### Projects
 
@@ -164,12 +216,29 @@ flowchart LR
 |---|---|
 | `src/GridSafety.Core` | Domain: missions, findings, workflows, flight rules, geo math, SLA policy, ingest service, DynamoDB + in-memory repositories |
 | `src/GridSafety.Api` | ASP.NET Core Minimal API, which runs on Lambda and also locally with Kestrel |
-| `src/GridSafety.Functions` | Event handlers: DroneIngest, StreamPublisher, SlaScheduler, SlaEscalation, AlertNotifier, MissionReportGenerator, plus the on-demand DemoFlight |
+| `src/GridSafety.Functions` | Event handlers: DroneIngest, StreamPublisher, SlaScheduler, SlaEscalation, AlertNotifier, MissionReportGenerator, plus the on-demand DemoFlight, which chains an outing's flights |
 | `tools/GridSafety.CircuitImport` | Pulls real power lines + towers from OpenStreetMap (Overpass API) and builds the circuit dataset |
 | `tools/GridSafety.Simulator` | A drone that flies a circuit, with scripted incidents, posting to the local API or publishing to IoT Core |
-| `web/` | React ops console: live map, findings queue, missions |
+| `web/` | React ops console: live map, findings, missions, schedule, resources and reports |
 | `infra/` | AWS CDK app in C# (~100 resources) |
-| `tests/GridSafety.Tests` | xUnit tests covering domain, ingest, events, SLA, paging, reports, OSM import and HTTP/RBAC (76 tests) |
+| `tests/GridSafety.Tests` | xUnit tests covering domain, ingest, events, SLA, paging, reports, OSM import, flight legs, scheduling, costs, staffing and HTTP/RBAC (238 tests) |
+
+## Design decisions
+
+- **Device identity comes from the topic, not the payload.** The IoT rule injects `topic(3) AS droneId`, and the IoT policy only lets a Thing publish under `gridsafety/drones/${ThingName}/*`. A compromised drone cannot report as another drone.
+- **Transactional outbox through DynamoDB Streams.** State changes are written once. The stream publisher turns them into domain events, so there are no dual writes. A stream filter (`SK = META`) keeps telemetry and idempotency records from invoking it at all.
+- **Optimistic concurrency.** Every entity carries a `Version`, and writes are conditional. Concurrent telemetry and finding messages for one mission retry instead of losing updates (this is tested).
+- **Out-of-order tolerant.** The drone "shadow" only moves forward in time (`LastSeen <= :ts`). Late MQTT QoS 1 redeliveries don't jump a drone backwards on the map.
+- **At-least-once everywhere, effects exactly once.** The SQS notifier uses partial batch responses and a DynamoDB idempotency key per event. SLA escalation is guarded by an `Escalated` flag, so a duplicate scheduler fire never pages twice.
+- **Alert onset, not alert spam.** Alerts fire on the transition into a condition. LowBattery is suppressed while CriticalBattery is active.
+- **Ops-grade observability.** Powertools structured logs and a small set of EMF business metrics, alongside free AWS service metrics, feed a CloudWatch dashboard. Alarms cover Lambda errors, API 5xx, stream iterator age and every DLQ (10 in all, each failure path watched once), and all of them go to an SNS alarm topic.
+- **Least privilege.** Each Lambda gets only the grants it needs. The scheduler role can invoke only the escalation function.
+- **Long work as a chain of short invocations.** An outing of up to 6 back-to-back flights could outlast one Lambda invocation, so each flight's invocation starts the next itself (an async self-invoke, allowed by a narrowly scoped IAM grant). That keeps it serverless without Step Functions or a long-running container.
+- **Nothing runs until someone clicks.** There are no cron jobs: demo flights, outings and schedule dispatch all start from a button. An idle deployment pays only for storage, and the alarms were trimmed to the 10 that CloudWatch gives free.
+- **Guests get their own read-only API, not a guest role.** `/api/public/*` maps only reads and removes names; every write sits behind the Cognito JWT authorizer. A misconfigured role can't turn a visitor into an operator.
+- **History is costed as it happened.** Pay rates keep a dated history, so hours are priced at the rate in effect when they were worked and a raise never reprices past work.
+- **Demo data migrates forward exactly once.** The resource catalog is one versioned document with a seed version. A change to the demo roster (new yards, trucks, staff) is applied to the live data once, and never overwrites what supervisors have edited.
+- **Deterministic defect images.** Each capture is drawn from the finding's id, so the same finding always looks the same and no image is stored.
 
 ## Run it locally (no AWS account needed)
 
@@ -283,17 +352,6 @@ GitHub Actions: `.github/workflows/ci.yml` builds, tests and runs `cdk synth` on
 `CostGuardTests` fails the build if a handler turns cold-start capture back on or emits a metric that isn't on the list. The free allowance is per account, so other workloads in the same account share it.
 
 **Budget alert:** when `opsEmail` is set, the stack also creates an AWS Budget (`GridSafety-<stage>-monthly`, default **$5/month**) that emails at 85% and 100% of actual spend, and as soon as the month's *forecast* goes over. It covers the whole account and only alerts; nothing is shut off. Change it with `-c monthlyBudgetUsd=10`, or `-c monthlyBudgetUsd=0` to skip it (for example on a second stage in the same account).
-
-## Design decisions
-
-- **Device identity comes from the topic, not the payload.** The IoT rule injects `topic(3) AS droneId`, and the IoT policy only lets a Thing publish under `gridsafety/drones/${ThingName}/*`. A compromised drone cannot report as another drone.
-- **Transactional outbox through DynamoDB Streams.** State changes are written once. The stream publisher turns them into domain events, so there are no dual writes. A stream filter (`SK = META`) keeps telemetry and idempotency records from invoking it at all.
-- **Optimistic concurrency.** Every entity carries a `Version`, and writes are conditional. Concurrent telemetry and finding messages for one mission retry instead of losing updates (this is tested).
-- **Out-of-order tolerant.** The drone "shadow" only moves forward in time (`LastSeen <= :ts`). Late MQTT QoS 1 redeliveries don't jump a drone backwards on the map.
-- **At-least-once everywhere, effects exactly once.** The SQS notifier uses partial batch responses and a DynamoDB idempotency key per event. SLA escalation is guarded by an `Escalated` flag, so a duplicate scheduler fire never pages twice.
-- **Alert onset, not alert spam.** Alerts fire on the transition into a condition. LowBattery is suppressed while CriticalBattery is active.
-- **Ops-grade observability.** Powertools structured logs and a small set of EMF business metrics, alongside free AWS service metrics, feed a CloudWatch dashboard. Alarms cover Lambda errors, API 5xx, stream iterator age and every DLQ (10 in all, each failure path watched once), and all of them go to an SNS alarm topic.
-- **Least privilege.** Each Lambda gets only the grants it needs. The scheduler role can invoke only the escalation function.
 
 ## Why I built this
 
