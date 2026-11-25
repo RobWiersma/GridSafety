@@ -1,23 +1,29 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react';
 import { useMe } from './api';
 import { AboutDialog } from './components/AboutDialog';
-import { AlertsView } from './components/AlertsView';
-import { SimulationSettingsPanel } from './components/SimulationSettingsPanel';
-import { FindingDrawer } from './components/FindingDrawer';
 import { CrewsPanel } from './components/CrewsPanel';
-import { FindingsView } from './components/FindingsView';
-import { MissionDetail } from './components/MissionDetail';
-import { MissionsView } from './components/MissionsView';
 import { OpsView } from './components/OpsView';
-import { ScheduleView } from './components/ScheduleView';
-import { ReportsView, reportKey } from './components/ReportsView';
-import { ResourcesView } from './components/ResourcesView';
+import { reportKey } from './lib/reportKey';
 import { StatsBar } from './components/StatsBar';
 import { UserMenu } from './components/UserMenu';
-import { VisitorsView } from './components/VisitorsView';
 import { Toast, type ToastMessage } from './components/Toast';
 import { recordVisit } from './lib/visits';
 import { Logo, useSession } from './session';
+
+// Only the Operations map loads up front; every other screen downloads the first time it's opened.
+const named = <K extends string, M extends Record<K, ComponentType<any>>>(load: () => Promise<M>, key: K) =>
+  lazy(() => load().then((m) => ({ default: m[key] })));
+const AlertsView = named(() => import('./components/AlertsView'), 'AlertsView');
+const SimulationSettingsPanel = named(() => import('./components/SimulationSettingsPanel'), 'SimulationSettingsPanel');
+const FindingDrawer = named(() => import('./components/FindingDrawer'), 'FindingDrawer');
+const FindingsView = named(() => import('./components/FindingsView'), 'FindingsView');
+const MissionDetail = named(() => import('./components/MissionDetail'), 'MissionDetail');
+const MissionsView = named(() => import('./components/MissionsView'), 'MissionsView');
+const ScheduleView = named(() => import('./components/ScheduleView'), 'ScheduleView');
+const ReportsView = named(() => import('./components/ReportsView'), 'ReportsView');
+const ResourcesView = named(() => import('./components/ResourcesView'), 'ResourcesView');
+const VisitorsView = named(() => import('./components/VisitorsView'), 'VisitorsView');
+const Loading = () => <div className="center-pad" aria-label="Loading"><div className="spinner" /></div>;
 
 type Tab = 'ops' | 'findings' | 'schedule' | 'missions' | 'resources' | 'reports' | 'visitors' | 'settings';
 type Route = { tab: Tab; mission: string | null; report?: string | null };
@@ -65,6 +71,8 @@ export function App() {
 
   const page = missionId ? 'mission' : tab;
   useEffect(() => recordVisit(page, !session.guest), [page, session.guest]);
+  // On a phone the tab row scrolls sideways: keep the current tab in view.
+  useEffect(() => { document.querySelector('.tabs .tab-active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [tab]);
 
   const go = (t: Tab) => {
     setRoute({ tab: t, mission: null });
@@ -130,6 +138,7 @@ export function App() {
           </div>
         )}
         <StatsBar onOpenFindings={() => go('findings')} />
+        <Suspense fallback={<Loading />}>
         {tab === 'ops' && (
           <OpsView onOpenFinding={setFindingId} onToast={setToast} onOpenMission={openMission}
             onOpenTriageQueue={() => { setFindingsFilter('New'); go('findings'); window.scrollTo(0, 0); }} />
@@ -154,11 +163,14 @@ export function App() {
         {tab === 'missions' && missionId && (
           <MissionDetail missionId={missionId} onBack={() => go('missions')} onOpenFinding={setFindingId} onToast={setToast} />
         )}
+        </Suspense>
       </main>
 
-      {findingId && (
-        <FindingDrawer id={findingId} isSupervisor={Boolean(me.data?.isSupervisor)} onClose={() => setFindingId(null)} onToast={setToast} />
-      )}
+      <Suspense fallback={null}>
+        {findingId && (
+          <FindingDrawer id={findingId} isSupervisor={Boolean(me.data?.isSupervisor)} onClose={() => setFindingId(null)} onToast={setToast} />
+        )}
+      </Suspense>
       {aboutOpen && <AboutDialog tour={aboutOpen === 'tour'} onClose={() => setAboutOpen(false)} />}
       <Toast message={toast} onDone={() => setToast(null)} />
     </div>
