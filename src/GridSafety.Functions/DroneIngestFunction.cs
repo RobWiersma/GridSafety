@@ -3,6 +3,7 @@ using Amazon.EventBridge;
 using Amazon.Lambda.Core;
 using AWS.Lambda.Powertools.Logging;
 using AWS.Lambda.Powertools.Metrics;
+using AWS.Lambda.Powertools.Tracing;
 using GridSafety.Core;
 
 namespace GridSafety.Functions;
@@ -24,15 +25,20 @@ public sealed class DroneIngestFunction(DroneIngestService ingest)
 
     [Logging(LogEvent = false)]
     [Metrics(Namespace = "GridSafety")]
+    [Tracing(CaptureMode = TracingCaptureMode.Error)]
     public async Task HandleAsync(Stream input, ILambdaContext context)
     {
         var msg = await JsonSerializer.DeserializeAsync<DroneMessage>(input, Json.Options)
                   ?? throw new InvalidOperationException("Empty drone message");
+        Traced.Annotate("kind", msg.Kind);
+        Traced.Annotate("droneId", msg.DroneId);
+        Traced.Annotate("missionId", msg.MissionId);
 
         try
         {
             var result = await ingest.HandleAsync(msg);
             Metrics.AddMetric("TelemetryPoints", result.PointsStored, MetricUnit.Count);
+            Traced.Annotate("findingId", result.FindingId); // the first hop of this finding's trail
             if (result.FindingId is not null) Metrics.AddMetric("FindingsReported", 1, MetricUnit.Count);
             if (result.AlertsRaised.Count > 0) Metrics.AddMetric("DroneAlerts", result.AlertsRaised.Count, MetricUnit.Count);
         }

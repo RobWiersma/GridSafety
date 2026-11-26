@@ -45,16 +45,17 @@ flowchart LR
 **At a glance**
 
 - **Event-driven AWS backend, all infrastructure as code:** IoT Core → Lambda → DynamoDB Streams outbox → EventBridge → Scheduler, SQS and SNS, about 100 resources in CDK (C#), deployed by GitHub Actions over OIDC with no stored keys. ([Architecture](#architecture))
+- **Live, and traceable end to end:** changes are pushed to every open browser over API Gateway WebSockets the moment they're written, and X-Ray follows one finding from the drone's MQTT message to the on-call page with a single query. ([Live push](#live-push) · [Tracing](#tracing-one-finding))
 - **Real map data:** 878 public OpenStreetMap power lines and about 19,700 towers (12 to 500 kV) across Contra Costa, Alameda and Solano counties; crew trucks drive real road routes. No non-public utility data is used.
 - **Operations logic from the field:** flights split to a 20-minute battery and booked as outings, triage SLAs with escalation, work orders only to qualified, on-shift technicians nearest first, hours of service, a risk-ranked repair schedule, and trucks with seats, fuel and service intervals.
 - **Every hour costed:** labor, flight crews, fuel and maintenance by day, week or month, from a rate card with dated pay history, all downloadable as CSV.
 - **Secure by default:** Cognito roles enforced by the API, a separate read-only guest API with names removed, device identity taken from the MQTT topic, least-privilege IAM per function.
 - **Costs cents a month:** pay-per-use services only, and nothing runs until someone clicks, so an idle deployment costs next to nothing. Ten CloudWatch alarms (the free tier) watch every failure path.
-- **Tested and shipped continuously:** 238 .NET tests plus frontend tests on every push, then deploy and a smoke test against the live site.
+- **Tested and shipped continuously:** 253 .NET tests plus frontend tests on every push, then deploy and a smoke test against the live site.
 
 **Contents:** [Scope](#project-scope-a-saas-proof-of-concept) · [What it does](#what-it-does) · [Architecture](#architecture) · [Design decisions](#design-decisions) · [Run it locally](#run-it-locally-no-aws-account-needed) · [Deploy](#deploy-to-aws) · [Why I built this](#why-i-built-this)
 
-Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · DynamoDB · EventBridge (+ Scheduler) · SQS · SNS · S3 · Cognito · CloudFront · AWS CDK (C#) · React 19 + TypeScript + Leaflet**.
+Built with **.NET 10 · ASP.NET Core Minimal APIs · AWS Lambda · IoT Core · DynamoDB · EventBridge (+ Scheduler) · SQS · SNS · S3 · Cognito · CloudFront · API Gateway WebSockets · X-Ray · AWS CDK (C#) · React 19 + TypeScript + Leaflet**.
 
 ![Live ops map: the demo drone flying the Lakewood–Clayton 115 kV line past Walnut Creek, with the mission in flight, battery, link and coverage](docs/screenshots/ops-live.png)
 
@@ -188,7 +189,9 @@ flowchart TB
     SITE[("S3<br/>static site")]
     APIGW["HTTP API<br/>Cognito JWT"]
     API["ASP.NET Core λ"]
+    WS["WebSocket API<br/>live push"]
   end
+  LIVE["LiveBroadcaster λ"]
   SNS[["SNS<br/>on-call email"]]
   OSRM["OSRM<br/>public road routing"]
 
@@ -203,6 +206,7 @@ flowchart TB
   BUS -- "mission completed / aborted" --> REP --> S3R
   U --> CF --> SITE
   CF -- "/api/*" --> APIGW --> API --> DDB
+  DDB -- "stream, META / STATE / CATALOG" --> LIVE -- "topic names" --> WS -. "push" .-> U
   API -. "presigned download" .-> S3R
   API -. "async invoke" .-> DEMO
   API -. "truck routes" .-> OSRM
@@ -210,18 +214,41 @@ flowchart TB
 
 Every arrow out of the bus is at-least-once with its effect made exactly-once (idempotency keys, conditional writes, an `Escalated` flag), and every failure path ends in a DLQ or a Lambda error that a CloudWatch alarm watches. The [design decisions](#design-decisions) below say why it's built this way.
 
+### Live push
+
+The console doesn't ask the API for news every few seconds; the backend tells it the moment something changes.
+
+1. Every browser holds a WebSocket to an **API Gateway WebSocket API**. `$connect` and `$disconnect` keep one row per socket in the table (with a TTL, in case a disconnect is missed).
+2. The **LiveBroadcaster** Lambda is a second consumer of the table's change stream, next to the outbox publisher. Its filter lets through only rows a screen shows: missions and findings (`META`), drone positions (`STATE`) and the resource catalog (`CATALOG`). Telemetry points, visits and the socket rows never invoke it.
+3. It turns a batch of writes into topic names, `{"topics":["drones","missions"]}`, and posts that to every socket.
+4. The browser refetches just the screens those topics feed, through the normal API.
+
+The message carries **no data**, only what changed. Sign-in, roles and the guest view's redaction all stay in the HTTP API, so the socket can be open to anyone. Each screen refetches straight away on the first push and then at most once a second or so while a drone is flying, which keeps the call rate near the old polling during a flight and close to zero when nothing is happening. If the socket drops, the app goes back to its old polling until it reconnects. Locally, the API holds the sockets itself at `/api/live` and signals its own writes, so the same client code works with no AWS account.
+
+### Tracing one finding
+
+Every Lambda runs with X-Ray active tracing (Powertools Tracing), and every AWS SDK call shows as a subsegment: the DynamoDB writes, `PutEvents`, `CreateSchedule`, the SNS publish. EventBridge carries the trace on to its rule targets, so the stream publisher, the SLA scheduler and the report generator join one trace.
+
+Two hops start fresh traces by nature: a **DynamoDB stream** carries no trace context, and an **EventBridge Scheduler** timer fires hours after it was booked. So each hop also tags its segment with the ids it handled (`findingId`, `missionId`, `droneId`, `detailType`), and one X-Ray query follows a finding across all of them:
+
+```text
+annotation.findingId = "01JD3…"
+```
+
+That returns the ingest that created it from the MQTT message, the outbox publish, the SLA timer being booked, the page to on-call and, if nobody triages it in time, the escalation. Batch handlers (the stream publisher, the SQS notifier) give each record its own subsegment, so a batch holding several findings still tags each one.
+
 ### Projects
 
 | Path | What |
 |---|---|
 | `src/GridSafety.Core` | Domain: missions, findings, workflows, flight rules, geo math, SLA policy, ingest service, DynamoDB + in-memory repositories |
 | `src/GridSafety.Api` | ASP.NET Core Minimal API, which runs on Lambda and also locally with Kestrel |
-| `src/GridSafety.Functions` | Event handlers: DroneIngest, StreamPublisher, SlaScheduler, SlaEscalation, AlertNotifier, MissionReportGenerator, plus the on-demand DemoFlight, which chains an outing's flights |
+| `src/GridSafety.Functions` | Event handlers: DroneIngest, StreamPublisher, SlaScheduler, SlaEscalation, AlertNotifier, MissionReportGenerator, the live-push LiveConnections and LiveBroadcaster, plus the on-demand DemoFlight, which chains an outing's flights |
 | `tools/GridSafety.CircuitImport` | Pulls real power lines + towers from OpenStreetMap (Overpass API) and builds the circuit dataset |
 | `tools/GridSafety.Simulator` | A drone that flies a circuit, with scripted incidents, posting to the local API or publishing to IoT Core |
 | `web/` | React ops console: live map, findings, missions, schedule, resources and reports |
 | `infra/` | AWS CDK app in C# (~100 resources) |
-| `tests/GridSafety.Tests` | xUnit tests covering domain, ingest, events, SLA, paging, reports, OSM import, flight legs, scheduling, costs, staffing and HTTP/RBAC (238 tests) |
+| `tests/GridSafety.Tests` | xUnit tests covering domain, ingest, events, SLA, paging, reports, OSM import, flight legs, scheduling, costs, staffing, live push and HTTP/RBAC (253 tests) |
 
 ## Design decisions
 
@@ -231,6 +258,8 @@ Every arrow out of the bus is at-least-once with its effect made exactly-once (i
 - **Out-of-order tolerant.** The drone "shadow" only moves forward in time (`LastSeen <= :ts`). Late MQTT QoS 1 redeliveries don't jump a drone backwards on the map.
 - **At-least-once everywhere, effects exactly once.** The SQS notifier uses partial batch responses and a DynamoDB idempotency key per event. SLA escalation is guarded by an `Escalated` flag, so a duplicate scheduler fire never pages twice.
 - **Alert onset, not alert spam.** Alerts fire on the transition into a condition. LowBattery is suppressed while CriticalBattery is active.
+- **Push a signal, pull the data.** Live updates name what changed and the browser refetches it, instead of pushing the data itself. One code path serves every screen, nothing new needs securing, and a missed message is healed by the next refetch, so the broadcaster never retries.
+- **A second stream consumer, not more events.** Live push reads the same table stream as the outbox, so it catches every write from every writer (ingest, API, escalations) without any of them knowing about browsers, and puts nothing extra on the event bus or its archive.
 - **Ops-grade observability.** Powertools structured logs and a small set of EMF business metrics, alongside free AWS service metrics, feed a CloudWatch dashboard. Alarms cover Lambda errors, API 5xx, stream iterator age and every DLQ (10 in all, each failure path watched once), and all of them go to an SNS alarm topic.
 - **Least privilege.** Each Lambda gets only the grants it needs. The scheduler role can invoke only the escalation function.
 - **Long work as a chain of short invocations.** An outing of up to 6 back-to-back flights could outlast one Lambda invocation, so each flight's invocation starts the next itself (an async self-invoke, allowed by a narrowly scoped IAM grant). That keeps it serverless without Step Functions or a long-running container.

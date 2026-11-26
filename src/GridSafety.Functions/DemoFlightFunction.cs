@@ -9,6 +9,7 @@ using Amazon.Lambda;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.Model;
 using AWS.Lambda.Powertools.Logging;
+using AWS.Lambda.Powertools.Tracing;
 using GridSafety.Core;
 using GridSafety.Core.Simulation;
 
@@ -33,6 +34,7 @@ public sealed class DemoFlightFunction
     private static readonly TimeSpan LandingReserve = TimeSpan.FromSeconds(15);
 
     [Logging(LogEvent = true)]
+    [Tracing(CaptureMode = TracingCaptureMode.Error)]
 #pragma warning disable CA1822 // The Lambda runtime invokes handlers on an instance.
     public async Task HandleAsync(System.IO.Stream input, ILambdaContext context)
 #pragma warning restore CA1822
@@ -40,6 +42,8 @@ public sealed class DemoFlightFunction
         ArgumentNullException.ThrowIfNull(context);
         var launch = await JsonSerializer.DeserializeAsync<DemoFlightLaunch>(input, Json.Options)
                      ?? throw new InvalidOperationException("Empty demo flight request");
+        Traced.Annotate("missionId", launch.MissionId);
+        Traced.Annotate("droneId", launch.DroneId);
         var circuit = (StaticCircuitCatalog.Instance.Find(launch.CircuitId) ?? throw new NotFoundException($"Circuit {launch.CircuitId}")).Stretch(launch.Leg);
         var tick = int.TryParse(Env.Optional("DEMO_TICK_MS"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var ms)
             ? TimeSpan.FromMilliseconds(ms)

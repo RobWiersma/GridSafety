@@ -7,6 +7,7 @@ using Amazon.Scheduler;
 using Amazon.Scheduler.Model;
 using AWS.Lambda.Powertools.Logging;
 using AWS.Lambda.Powertools.Metrics;
+using AWS.Lambda.Powertools.Tracing;
 using GridSafety.Core;
 
 namespace GridSafety.Functions;
@@ -26,9 +27,11 @@ public sealed class SlaScheduler(IAmazonScheduler scheduler, SlaSettings setting
     { }
 
     [Logging(LogEvent = false)]
+    [Tracing(CaptureMode = TracingCaptureMode.Error)]
     public async Task HandleAsync(CloudWatchEvent<JsonElement> evt, ILambdaContext context)
     {
         var e = evt.Detail.Deserialize<GridEvent>(Json.Options) ?? throw new InvalidOperationException("Empty event detail");
+        Traced.Annotate(e);
         var name = ScheduleName(e.EntityId);
 
         if (ShouldSchedule(e))
@@ -98,10 +101,14 @@ public sealed class SlaEscalation(IGridRepository repo, IOpsNotifier notifier, T
 
     [Logging(LogEvent = true)]
     [Metrics(Namespace = "GridSafety")]
+    [Tracing(CaptureMode = TracingCaptureMode.Error)]
     public async Task HandleAsync(Stream input, ILambdaContext context)
     {
         var payload = await JsonSerializer.DeserializeAsync<EscalationPayload>(input, Json.Options)
                       ?? throw new InvalidOperationException("Empty escalation payload");
+        // Scheduler starts a new trace (it doesn't carry one over from when the timer was booked); the id ties it in.
+        Traced.Annotate("findingId", payload.FindingId);
+        Traced.Annotate("detailType", "SlaEscalation");
 
         var f = await repo.GetFindingAsync(payload.FindingId);
         if (f is null || f.Status != FindingStatus.New || f.Escalated)

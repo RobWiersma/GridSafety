@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+declare const process: { env: Record<string, string | undefined> }; // Node globals without @types/node
+
 export default defineConfig({
   plugins: [react()],
   build: {
@@ -20,7 +22,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // Same-origin /api in every environment: Vite proxies it locally, CloudFront routes it in AWS.
-    proxy: { '/api': 'http://localhost:5080' },
+    // Same-origin /api in every environment: Vite proxies it locally, CloudFront routes it in AWS. ws: the API's
+    // /api/live push socket. GRIDSAFETY_API points the proxy at an API on another port.
+    proxy: { '/api': { target: process.env.GRIDSAFETY_API ?? 'http://localhost:5080', ws: true } },
   },
 });

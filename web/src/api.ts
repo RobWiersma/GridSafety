@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext } from 'react';
 import { useSession } from './session';
 import { canTake } from './lib/field';
+import { livePoll } from './live';
 import type {
   AlertKind, AlertSettings, AlertSettingsView,
   AssigneeOption, Circuit, Crew, CrewView, FieldJobs, DroneAsset, FlightCrew, Resources, VisitorStats, DroneState, FindingStatus, FindingView, Me, MissionStatus, MissionView, OpsStats, TelemetryPoint, SimulationSettings,
@@ -85,20 +86,23 @@ export const useCircuits = () => {
   return useQuery({ queryKey: keys.circuits, queryFn: () => api<Circuit[]>('/circuits'), staleTime: Infinity });
 };
 
-/** Live ops data polls; React Query pauses polling when the tab is hidden. */
+/**
+ * Live ops data. Changes are pushed (see live.ts), so these poll only as a slow safety net while the push connection is
+ * up, and at the old fast rates while it isn't. React Query pauses polling when the tab is hidden.
+ */
 export const useStats = () => {
   const api = useFetcher();
-  return useQuery({ queryKey: keys.stats, queryFn: () => api<OpsStats>('/stats'), refetchInterval: 5000 });
+  return useQuery({ queryKey: keys.stats, queryFn: () => api<OpsStats>('/stats'), refetchInterval: livePoll(5000) });
 };
 
 export const useDrones = () => {
   const api = useFetcher();
-  return useQuery({ queryKey: keys.drones, queryFn: () => api<DroneState[]>('/drones'), refetchInterval: 2000 });
+  return useQuery({ queryKey: keys.drones, queryFn: () => api<DroneState[]>('/drones'), refetchInterval: livePoll(2000) });
 };
 
 export const useMissions = () => {
   const api = useFetcher();
-  return useQuery({ queryKey: keys.missions, queryFn: () => api<MissionView[]>('/missions'), refetchInterval: 3000 });
+  return useQuery({ queryKey: keys.missions, queryFn: () => api<MissionView[]>('/missions'), refetchInterval: livePoll(3000) });
 };
 
 export const useTrack = (missionId: string | null, live: boolean) => {
@@ -107,7 +111,7 @@ export const useTrack = (missionId: string | null, live: boolean) => {
     queryKey: keys.track(missionId ?? ''),
     queryFn: () => api<TelemetryPoint[]>(`/missions/${missionId}/track`),
     enabled: Boolean(missionId),
-    refetchInterval: live ? 2000 : false,
+    refetchInterval: live ? livePoll(2000) : false,
   });
 };
 
@@ -116,7 +120,7 @@ export const useFindings = (filter: string) => {
   return useQuery({
     queryKey: keys.findings(filter),
     queryFn: () => api<FindingView[]>(`/findings?status=${encodeURIComponent(filter)}`),
-    refetchInterval: 5000,
+    refetchInterval: livePoll(5000),
   });
 };
 
@@ -129,19 +133,22 @@ export const useVisitorStats = (days: number) => {
 /** Field crews and their open work-order counts. */
 export const useCrews = () => {
   const api = useFetcher();
-  return useQuery({ queryKey: keys.crews, queryFn: () => api<CrewView[]>('/crews'), refetchInterval: 15_000 });
+  return useQuery({ queryKey: keys.crews, queryFn: () => api<CrewView[]>('/crews'), refetchInterval: livePoll(15_000) });
 };
 
-/** Trucks out on simulated field jobs (and ones just back), with the server's clock. */
+/**
+ * Trucks out on simulated field jobs (and ones just back), with the server's clock. Jobs also finish with the clock
+ * alone, without a write to push, so this and the schedule keep a moderate poll even while live.
+ */
 export const useFieldJobs = () => {
   const api = useFetcher();
-  return useQuery({ queryKey: ['field-jobs'], queryFn: () => api<FieldJobs>('/field-jobs'), refetchInterval: 5_000 });
+  return useQuery({ queryKey: ['field-jobs'], queryFn: () => api<FieldJobs>('/field-jobs'), refetchInterval: livePoll(5_000, 15_000) });
 };
 
 /** The forward schedule: triaged work orders not sent yet, most important first, with who'd take each and when. */
 export const useSchedule = () => {
   const api = useFetcher();
-  return useQuery({ queryKey: ['schedule'], queryFn: () => api<ScheduleView>('/schedule'), refetchInterval: 5_000 });
+  return useQuery({ queryKey: ['schedule'], queryFn: () => api<ScheduleView>('/schedule'), refetchInterval: livePoll(5_000, 15_000) });
 };
 
 /** Sends every work order on the schedule that can start now, most important first (or just one, by finding id). */
@@ -171,7 +178,7 @@ export const useAssignees = (findingId: string, enabled = true) => {
 /** Drones, flight crews and ground crews, with live state and usage. */
 export const useResources = () => {
   const api = useFetcher();
-  return useQuery({ queryKey: keys.resources, queryFn: () => api<Resources>('/resources'), refetchInterval: 15_000 });
+  return useQuery({ queryKey: keys.resources, queryFn: () => api<Resources>('/resources'), refetchInterval: livePoll(15_000) });
 };
 
 export type ResourceKind = 'drones' | 'flight-crews' | 'ground-crews' | 'vehicles';
@@ -282,7 +289,7 @@ export const useMission = (id: string) => {
     // Poll while airborne, or while a simulated flight is taking off.
     refetchInterval: (q) => {
       const m = q.state.data?.mission;
-      return m?.status === 'InFlight' || (m?.status === 'Planned' && m.simulatedAt) ? 3000 : false;
+      return m?.status === 'InFlight' || (m?.status === 'Planned' && m.simulatedAt) ? livePoll(3000)() : false;
     },
   });
 };
@@ -292,7 +299,7 @@ export const useMissionFindings = (missionId: string, live: boolean) => {
   return useQuery({
     queryKey: ['findings', `mission:${missionId}`],
     queryFn: () => api<FindingView[]>(`/findings?status=all&missionId=${encodeURIComponent(missionId)}`),
-    refetchInterval: live ? 3000 : false,
+    refetchInterval: live ? livePoll(3000) : false,
   });
 };
 
@@ -482,7 +489,7 @@ export function useReport(target: ReportTarget) {
   return useQuery({
     queryKey: ['report', path],
     queryFn: () => api<AnyReport>(path),
-    refetchInterval: 10_000,
+    refetchInterval: livePoll(10_000, 30_000), // reports count hours, which tick on with the clock
   });
 }
 

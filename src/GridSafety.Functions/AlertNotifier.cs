@@ -3,6 +3,7 @@ using Amazon.DynamoDBv2;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.SQSEvents;
 using AWS.Lambda.Powertools.Logging;
+using AWS.Lambda.Powertools.Tracing;
 using GridSafety.Core;
 
 namespace GridSafety.Functions;
@@ -21,6 +22,7 @@ public sealed class AlertNotifier(IOpsNotifier notifier, IdempotencyGuard idempo
         : this(SnsOpsNotifier.FromEnvironment(), new IdempotencyGuard(db, table), new DynamoAlertSettingsStore(db, table)) { }
 
     [Logging(LogEvent = false)]
+    [Tracing(CaptureMode = TracingCaptureMode.Error)]
     public async Task<SQSBatchResponse> HandleAsync(SQSEvent evt, ILambdaContext context)
     {
         var failures = new List<SQSBatchResponse.BatchItemFailure>();
@@ -42,7 +44,7 @@ public sealed class AlertNotifier(IOpsNotifier notifier, IdempotencyGuard idempo
                 }
                 try
                 {
-                    await notifier.NotifyAsync(page.Subject, page.Body, page.Severity, page.Type);
+                    await Traced.Step("Page", e, () => notifier.NotifyAsync(page.Subject, page.Body, page.Severity, page.Type));
                 }
                 catch
                 {

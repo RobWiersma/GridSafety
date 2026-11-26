@@ -7,6 +7,7 @@ using Amazon.Lambda.Core;
 using Amazon.S3;
 using Amazon.S3.Model;
 using AWS.Lambda.Powertools.Logging;
+using AWS.Lambda.Powertools.Tracing;
 using GridSafety.Core;
 
 namespace GridSafety.Functions;
@@ -21,9 +22,11 @@ public sealed class MissionReportGenerator(
     { }
 
     [Logging(LogEvent = false)]
+    [Tracing(CaptureMode = TracingCaptureMode.Error)]
     public async Task HandleAsync(CloudWatchEvent<JsonElement> evt, ILambdaContext context)
     {
         var e = evt.Detail.Deserialize<GridEvent>(Json.Options) ?? throw new InvalidOperationException("Empty event detail");
+        Traced.Annotate(e);
         var mission = await repo.GetMissionAsync(e.EntityId) ?? throw new NotFoundException($"Mission {e.EntityId}");
         var circuit = circuits.Find(mission.CircuitId) ?? throw new NotFoundException($"Circuit {mission.CircuitId}");
         var track = await repo.GetTrackAsync(mission.Id);

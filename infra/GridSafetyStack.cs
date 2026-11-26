@@ -74,6 +74,8 @@ public sealed class GridSafetyStackProps : StackProps
 ///
 ///   Browser ─► CloudFront ─┬─► S3 (React ops console)
 ///                          └─► /api/* ─► API Gateway (Cognito JWT) ─► Lambda (ASP.NET Core)
+///      ▲
+///      └── WebSocket API ◄── LiveBroadcaster λ ◄── table stream (META/STATE/CATALOG): "what changed" pushes
 /// </summary>
 public sealed class GridSafetyStack : Stack
 {
@@ -361,6 +363,61 @@ public sealed class GridSafetyStack : Stack
                         ["Keys"] = new Dictionary<string, object>
                         {
                             ["SK"] = new Dictionary<string, object> { ["S"] = new object[] { "META" } },
+                        },
+                    },
+                }),
+            },
+        }));
+
+        // ───────────── Live push ─────────────
+        // Browsers keep a WebSocket open to API Gateway. A second consumer of the table stream turns each batch of writes
+        // into topic names ("drones", "missions", "findings", "resources") and posts them to every open socket; the
+        // browser then refetches just those screens through the normal API. Messages never carry data, so anyone may
+        // listen (guests too) and auth stays in the HTTP API. Polling remains as a slow fallback.
+        var liveConnectFn = NewFunction("LiveConnections", $"{fn}LiveConnectionFunction::HandleAsync", "functions", 256, new()
+        {
+            ["TABLE_NAME"] = table.TableName,
+        }, timeoutSeconds: 10);
+        table.GrantWriteData(liveConnectFn);
+        var liveApi = new WebSocketApi(this, "LiveApi", new WebSocketApiProps
+        {
+            ApiName = $"gridsafety-live-{props.Stage}",
+            Description = "GridSafety live push (topic signals only)",
+            ConnectRouteOptions = new WebSocketRouteOptions { Integration = new WebSocketLambdaIntegration("LiveConnect", liveConnectFn) },
+            DisconnectRouteOptions = new WebSocketRouteOptions { Integration = new WebSocketLambdaIntegration("LiveDisconnect", liveConnectFn) },
+        });
+        var liveStage = new WebSocketStage(this, "LiveStage", new WebSocketStageProps
+        {
+            WebSocketApi = liveApi,
+            StageName = "live",
+            AutoDeploy = true,
+            // Connects are the only thing a browser sends; this caps a reconnect storm or a script opening sockets.
+            Throttle = new ThrottleSettings { RateLimit = 10, BurstLimit = 20 },
+        });
+
+        var liveFn = NewFunction("LiveBroadcaster", $"{fn}LiveBroadcaster::HandleAsync", "functions", 512, new()
+        {
+            ["TABLE_NAME"] = table.TableName,
+            ["LIVE_ENDPOINT"] = liveStage.CallbackUrl,
+        }, timeoutSeconds: 15);
+        table.GrantReadWriteData(liveFn); // lists sockets, deletes the ones that are gone
+        liveStage.GrantManagementApiAccess(liveFn);
+        liveFn.AddEventSource(new DynamoEventSource(table, new DynamoEventSourceProps
+        {
+            StartingPosition = StartingPosition.LATEST, // a push about something old is worthless
+            BatchSize = 100,
+            RetryAttempts = 0,                          // best effort: browsers also poll slowly, so a miss heals itself
+            Filters = new[]
+            {
+                // Same rows as LiveTopics.SortKeys: missions and findings (META), drone state (STATE), the resource
+                // catalog (CATALOG). Telemetry points, visits, idempotency keys and the socket rows never invoke it.
+                FilterCriteria.Filter(new Dictionary<string, object>
+                {
+                    ["dynamodb"] = new Dictionary<string, object>
+                    {
+                        ["Keys"] = new Dictionary<string, object>
+                        {
+                            ["SK"] = new Dictionary<string, object> { ["S"] = new object[] { "META", "STATE", "CATALOG" } },
                         },
                     },
                 }),
@@ -680,6 +737,7 @@ public sealed class GridSafetyStack : Stack
                     ["clientId"] = client.UserPoolClientId,
                     ["cognitoDomain"] = domain.BaseUrl(),
                     ["redirectUri"] = $"{siteUrl}/",
+                    ["liveUrl"] = liveStage.Url, // wss://…/live
                 }),
             },
             Distribution = distribution,
@@ -705,7 +763,7 @@ public sealed class GridSafetyStack : Stack
 
         // Ten alarms in all, the most CloudWatch keeps free. Functions whose failures another alarm already catches don't get
         // their own: the API (its 5xx alarm), the outbox publisher (its DLQ and iterator age) and the notifier (its DLQ).
-        var functions = new[] { apiFn, ingestFn, streamFn, slaFn, escalationFn, notifierFn, reportFn, demoFn }; // all on the dashboard
+        var functions = new[] { apiFn, ingestFn, streamFn, slaFn, escalationFn, notifierFn, reportFn, demoFn, liveConnectFn, liveFn }; // all on the dashboard
         foreach (var f in new[] { ingestFn, slaFn, escalationFn, reportFn, demoFn })
         {
             Alarm($"{f.Node.Id}Errors", f.MetricErrors(new MetricOptions { Period = Duration.Minutes(5) }), 1, $"{f.Node.Id} threw errors");
@@ -773,6 +831,7 @@ public sealed class GridSafetyStack : Stack
         new CfnOutput(this, "ApiUrl", new CfnOutputProps { Value = $"{siteUrl}/api" });
         new CfnOutput(this, "UserPoolId", new CfnOutputProps { Value = userPool.UserPoolId });
         new CfnOutput(this, "UserPoolClientId", new CfnOutputProps { Value = client.UserPoolClientId });
+        new CfnOutput(this, "LiveUrl", new CfnOutputProps { Value = liveStage.Url, Description = "WebSocket for live push" });
         new CfnOutput(this, "TableName", new CfnOutputProps { Value = table.TableName });
         new CfnOutput(this, "EventBusName", new CfnOutputProps { Value = bus.EventBusName });
         new CfnOutput(this, "OpsTopicArn", new CfnOutputProps { Value = opsTopic.TopicArn });

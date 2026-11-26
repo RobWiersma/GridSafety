@@ -12,6 +12,9 @@
     <PackageReference Include="Amazon.Lambda.CloudWatchEvents" Version="4.*" />
     <PackageReference Include="AWS.Lambda.Powertools.Logging" Version="*" />
     <PackageReference Include="AWS.Lambda.Powertools.Metrics" Version="*" />
+    <PackageReference Include="AWS.Lambda.Powertools.Tracing" Version="*" />
+    <PackageReference Include="Amazon.Lambda.APIGatewayEvents" Version="2.*" />
+    <PackageReference Include="AWSSDK.ApiGatewayManagementApi" Version="4.*" />
     <PackageReference Include="AWSSDK.EventBridge" Version="4.*" />
     <PackageReference Include="AWSSDK.IoT" Version="4.*" />
     <PackageReference Include="AWSSDK.Lambda" Version="4.*" />

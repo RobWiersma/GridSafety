@@ -58,6 +58,12 @@ else
     }
 }
 
+// Live push. Outside Lambda the API holds the browsers' sockets itself (/api/live) and signals its own writes. In AWS the
+// API is a Lambda that can't hold sockets: an API Gateway WebSocket API and the LiveBroadcaster Lambda do it from the
+// table's change stream, and the browser gets that address from config.json.
+var inLambda = Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION_NAME") is { Length: > 0 };
+if (!inLambda) builder.Services.AddLocalLivePush();
+
 // Only used by the dev ingest endpoint. In AWS, drones publish to IoT Core and the
 // DroneIngest Lambda uses an EventBridge publisher instead.
 builder.Services.AddSingleton<InMemoryEventPublisher>();
@@ -117,6 +123,12 @@ if (config.GetValue<bool>("GridSafety:AllowDevUser"))
 {
     // Local development only: impersonate a user with X-Dev-User / X-Dev-Role headers instead of Cognito.
     app.UseMiddleware<DevUserMiddleware>();
+}
+
+if (!inLambda)
+{
+    app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
+    app.Map("/api/live", (HttpContext ctx, LiveHub hub) => hub.RunAsync(ctx));
 }
 
 app.MapGridSafetyApi(devIngest: config.GetValue<bool>("GridSafety:AllowDevIngest"));

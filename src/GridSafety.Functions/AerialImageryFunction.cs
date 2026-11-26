@@ -2,6 +2,7 @@ using System.Text.Json;
 using Amazon.DynamoDBv2;
 using Amazon.Lambda.Core;
 using AWS.Lambda.Powertools.Logging;
+using AWS.Lambda.Powertools.Tracing;
 using GridSafety.Core;
 
 namespace GridSafety.Functions;
@@ -22,6 +23,7 @@ public sealed class AerialImageryFunction(IGridRepository repo, IAerialSource so
     { }
 
     [Logging(LogEvent = true)]
+    [Tracing(CaptureMode = TracingCaptureMode.Error)]
     public async Task HandleAsync(Stream input, ILambdaContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -38,6 +40,7 @@ public sealed class AerialImageryFunction(IGridRepository repo, IAerialSource so
         if (doc.RootElement.TryGetProperty("detail", out var detail))
         {
             var e = detail.Deserialize<GridEvent>(Json.Options) ?? throw new InvalidOperationException("Empty event detail");
+            Traced.Annotate(e);
             if (await repo.GetFindingAsync(e.EntityId, ct) is not { } f) return $"finding {e.EntityId} not found";
             if (!await store.TryClaimAsync(f.StructureId, clock.GetUtcNow(), ct)) return $"{f.StructureId} already cached or in progress";
             req = new AerialRequest(f.StructureId, f.Location);

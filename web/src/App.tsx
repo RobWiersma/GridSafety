@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react';
 import { useMe } from './api';
+import { useLive } from './live';
 import { AboutDialog } from './components/AboutDialog';
 import { CrewsPanel } from './components/CrewsPanel';
 import { OpsView } from './components/OpsView';
@@ -54,6 +55,7 @@ function startRoute(): Route {
 export function App() {
   const session = useSession();
   const me = useMe();
+  const live = useLive();
   const [route, setRoute] = useState<Route>(startRoute);
   const { tab, mission: missionId } = route;
   useEffect(() => {
@@ -104,6 +106,11 @@ export function App() {
           ))}
         </nav>
         <div className="topbar-right">
+          {live && (
+            <span className="pill pill-live" title="Connected for live updates: changes appear the moment they happen">
+              <span className="live-dot" aria-hidden="true" />Live
+            </span>
+          )}
           <button className="btn btn-ghost" onClick={() => setAboutOpen('about')}>About</button>
           {session.devMode && session.setDevRole ? (
             <label className="role-switch" title="Dev mode: switch role to see RBAC in action">

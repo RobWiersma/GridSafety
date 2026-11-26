@@ -3,6 +3,7 @@ using Amazon.EventBridge;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.DynamoDBEvents;
 using AWS.Lambda.Powertools.Logging;
+using AWS.Lambda.Powertools.Tracing;
 using GridSafety.Core;
 
 namespace GridSafety.Functions;
@@ -17,6 +18,7 @@ public sealed class StreamPublisher(IEventPublisher publisher)
     public StreamPublisher() : this(new EventBridgePublisher(new AmazonEventBridgeClient(), Env.Required("EVENT_BUS_NAME"))) { }
 
     [Logging(LogEvent = false)]
+    [Tracing(CaptureMode = TracingCaptureMode.Error)]
     public async Task<StreamsEventResponse> HandleAsync(DynamoDBEvent evt, ILambdaContext context)
     {
         var response = new StreamsEventResponse { BatchItemFailures = [] };
@@ -31,7 +33,7 @@ public sealed class StreamPublisher(IEventPublisher publisher)
                     Attr(record.Dynamodb?.NewImage, "Doc"));
                 if (e is null) continue;
 
-                await publisher.PublishAsync([e]);
+                await Traced.Step("Publish", e, () => publisher.PublishAsync([e]));
                 Logger.LogInformation("Published {DetailType} for {EntityId}", e.DetailType, e.EntityId);
             }
             catch (Exception ex)

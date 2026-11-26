@@ -9,6 +9,8 @@ export interface AppConfig {
   clientId?: string;
   cognitoDomain?: string;
   redirectUri?: string;
+  /** WebSocket for live push (AWS: API Gateway). Without it the app uses the API's own `${apiBaseUrl}/live`. */
+  liveUrl?: string;
   stage?: string;
 }
 

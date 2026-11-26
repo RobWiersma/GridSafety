@@ -8,7 +8,10 @@ using Amazon.Lambda.Core;
 using Amazon.Lambda.Serialization.SystemTextJson;
 using Amazon.SimpleNotificationService;
 using Amazon.SimpleNotificationService.Model;
+using System.Runtime.CompilerServices;
+using Amazon.XRay.Recorder.Core;
 using AWS.Lambda.Powertools.Logging;
+using AWS.Lambda.Powertools.Tracing;
 using GridSafety.Core;
 
 [assembly: LambdaSerializer(typeof(DefaultLambdaJsonSerializer))]
@@ -24,6 +27,74 @@ internal static class Env
 
     public static string? Optional(string name) =>
         Environment.GetEnvironmentVariable(name) is { Length: > 0 } v ? v : null;
+}
+
+/// <summary>
+/// X-Ray. Every function runs with active tracing and every AWS SDK call becomes a subsegment. Each hop also tags its
+/// trace with the ids it handled (findingId, missionId, droneId), so one finding can be followed from the drone's MQTT
+/// message through ingest, the table stream, EventBridge, the SLA timer and the page with a single X-Ray query:
+/// <c>annotation.findingId = "..."</c>. Off outside Lambda, so tests and local runs never touch the X-Ray SDK.
+/// </summary>
+internal static class Traced
+{
+    internal static readonly bool Enabled =
+        Env.Optional("AWS_LAMBDA_FUNCTION_NAME") is not null && Env.Optional("POWERTOOLS_TRACE_DISABLED") is not "true";
+
+    // Before any function builds its SDK clients, so their calls are traced. This assembly is the Lambda app itself.
+#pragma warning disable CA2255
+    [ModuleInitializer]
+#pragma warning restore CA2255
+    internal static void Init()
+    {
+        if (Enabled) Tracing.RegisterForAllServices();
+    }
+
+    /// <summary>The current trace header, handed to EventBridge so the rule targets join this trace.</summary>
+    public static string? Header => Enabled ? Env.Optional("_X_AMZN_TRACE_ID") : null;
+
+    public static void Annotate(string key, string? value)
+    {
+        if (Enabled && value is { Length: > 0 }) Tracing.AddAnnotation(key, value);
+    }
+
+    /// <summary>Tags the function's segment with the ids an event is about.</summary>
+    public static void Annotate(GridEvent e)
+    {
+        foreach (var (k, v) in Ids(e)) Annotate(k, v);
+    }
+
+    /// <summary>
+    /// One record of a batch as its own subsegment, tagged with that record's ids (a batch can hold several findings,
+    /// and an annotation on the function's segment holds only one value).
+    /// </summary>
+    public static async Task Step(string name, GridEvent? e, Func<Task> work)
+    {
+        if (!Enabled) { await work(); return; }
+        AWSXRayRecorder.Instance.BeginSubsegment(name);
+        try
+        {
+            if (e is not null)
+                foreach (var (k, v) in Ids(e)) if (v is { Length: > 0 }) AWSXRayRecorder.Instance.AddAnnotation(k, v);
+            await work();
+        }
+        catch (Exception ex)
+        {
+            AWSXRayRecorder.Instance.AddException(ex);
+            throw;
+        }
+        finally
+        {
+            AWSXRayRecorder.Instance.EndSubsegment();
+        }
+    }
+
+    private static IEnumerable<(string, string?)> Ids(GridEvent e)
+    {
+        yield return ("detailType", e.DetailType);
+        if (e.EntityType == "Finding") yield return ("findingId", e.EntityId);
+        yield return ("missionId", e.MissionId);
+        yield return ("droneId", e.DroneId);
+    }
 }
 
 /// <summary>Publishes domain events to the GridSafety EventBridge bus (max 10 entries per call).</summary>
@@ -42,6 +113,7 @@ public sealed class EventBridgePublisher(IAmazonEventBridge eventBridge, string 
                     DetailType = e.DetailType,
                     Detail = JsonSerializer.Serialize(e, Json.Options),
                     Resources = [$"{e.EntityType.ToLowerInvariant()}/{e.EntityId}"],
+                    TraceHeader = Traced.Header, // the rule targets (SLA timer, pager, reports) continue this trace
                 }).ToList(),
             }, ct);
             if (res.FailedEntryCount > 0)
