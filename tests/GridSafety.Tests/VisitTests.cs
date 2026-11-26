@@ -58,7 +58,7 @@ public class VisitTests
     }
 
     [Fact]
-    public async Task Store_counts_unique_visitors_once_per_day_and_views_every_time()
+    public async Task Store_counts_unique_visitors_once_per_day_and_views_every_time_and_keeps_signed_in_views_apart()
     {
         var store = new InMemoryVisitStore();
         PageVisit View(string key, string page, bool signedIn = false) =>
@@ -68,17 +68,17 @@ public class VisitTests
         await store.RecordAsync(View("a", "findings"));
         await store.RecordAsync(View("b", "ops", signedIn: true));
         await store.RecordAsync(View("c", "ops"));
-        await store.RecordAsync(View("c", "mission", signedIn: true)); // signed in after arriving as a guest
+        await store.RecordAsync(View("c", "mission", signedIn: true)); // signed in after arriving as a guest: still one visitor
         await store.RecordAsync(View("c", "mission", signedIn: true));
         await store.RecordAsync(View("a", "ops") with { Day = Today.AddDays(1) });
 
         var days = await store.GetDaysAsync(Today, Today.AddDays(1));
         var d = days[0];
-        Assert.Equal((6, 3, 2), (d.PageViews, d.UniqueVisitors, d.SignedInVisitors));
-        Assert.Equal(3, d.Pages["ops"]);
+        Assert.Equal((3, 2, 3), (d.PageViews, d.UniqueVisitors, d.SignedInViews));
+        Assert.Equal(2, d.Pages["ops"]);
         Assert.Equal(1, d.Pages["findings"]);
-        Assert.Equal(3, d.Referrers["linkedin.com"]); // per visitor, not per view
-        Assert.Equal(3, d.Countries["US"]);
+        Assert.Equal(2, d.Referrers["linkedin.com"]); // per visitor, not per view
+        Assert.Equal(2, d.Countries["US"]);
         Assert.Equal((1, 1), (days[1].PageViews, days[1].UniqueVisitors));
         Assert.Equal(await store.GetDailySaltAsync(Today), await store.GetDailySaltAsync(Today));
         Assert.NotEqual(await store.GetDailySaltAsync(Today), await store.GetDailySaltAsync(Today.AddDays(1)));

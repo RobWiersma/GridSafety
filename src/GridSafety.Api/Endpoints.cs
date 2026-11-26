@@ -46,7 +46,7 @@ public sealed record VisitRequest(string? Page, string? Referrer, bool SignedIn)
 public sealed record CountView(string Name, int Count);
 public sealed record DayVisitsView(DateOnly Day, int PageViews, int UniqueVisitors);
 public sealed record VisitorStatsView(
-    int Days, int PageViews, int VisitorDays, int SignedInVisitorDays, IReadOnlyList<DayVisitsView> Daily,
+    int Days, int PageViews, int VisitorDays, int SignedInViews, IReadOnlyList<DayVisitsView> Daily,
     IReadOnlyList<CountView> Pages, IReadOnlyList<CountView> Referrers, IReadOnlyList<CountView> Devices,
     IReadOnlyList<CountView> Browsers, IReadOnlyList<CountView> OperatingSystems, IReadOnlyList<CountView> Countries,
     IReadOnlyList<CountView> Languages);
@@ -63,7 +63,7 @@ public static partial class Endpoints
         // Guests: a read-only copy of the GET routes, no sign-in needed. API Gateway sends GET /api/public/* to the
         // API without the JWT authorizer; only GETs are mapped here, so nothing can be changed, and GuestView
         // strips who-did-what before it leaves. Must be mapped before the secured catch-all group.
-        // Anonymous page-view beacon for every visitor, signed in or not (see VisitAnonymizer).
+        // Anonymous page-view beacon (see VisitAnonymizer). Signed-in views get their own total, apart from visitors.
         api.MapPost("/public/visit", RecordVisit);
 
         var guest = api.MapGroup("/public").AddEndpointFilter(GuestView.Filter);
@@ -462,7 +462,7 @@ public static partial class Endpoints
             .Take(take).ToList();
 
         return TypedResults.Ok(new VisitorStatsView(n,
-            list.Sum(d => d.PageViews), list.Sum(d => d.UniqueVisitors), list.Sum(d => d.SignedInVisitors),
+            list.Sum(d => d.PageViews), list.Sum(d => d.UniqueVisitors), list.Sum(d => d.SignedInViews),
             list.Select(d => new DayVisitsView(d.Day, d.PageViews, d.UniqueVisitors)).ToList(),
             Top(list.Select(d => d.Pages)), Top(list.Select(d => d.Referrers)), Top(list.Select(d => d.Devices)),
             Top(list.Select(d => d.Browsers)), Top(list.Select(d => d.OperatingSystems)), Top(list.Select(d => d.Countries)),

@@ -17,9 +17,12 @@ public sealed record PageVisit(
     DateOnly Day, string VisitorKey, string Page, string Referrer, string Device, string Browser, string Os,
     string Country, string Language, bool SignedIn);
 
-/// <summary>Visitor totals for one UTC day. Breakdowns count unique visitors, except <see cref="Pages"/>, which counts views.</summary>
+/// <summary>
+/// Visitor totals for one UTC day. Breakdowns count unique visitors, except <see cref="Pages"/>, which counts views.
+/// Signed-in views (the team's own) are only in <see cref="SignedInViews"/>, never in the visitor numbers.
+/// </summary>
 public sealed record DailyVisits(
-    DateOnly Day, int PageViews, int UniqueVisitors, int SignedInVisitors,
+    DateOnly Day, int PageViews, int UniqueVisitors, int SignedInViews,
     IReadOnlyDictionary<string, int> Pages, IReadOnlyDictionary<string, int> Referrers, IReadOnlyDictionary<string, int> Devices,
     IReadOnlyDictionary<string, int> Browsers, IReadOnlyDictionary<string, int> OperatingSystems,
     IReadOnlyDictionary<string, int> Countries, IReadOnlyDictionary<string, int> Languages);
@@ -121,17 +124,17 @@ internal static class VisitCounters
 {
     public const string PageViews = "views";
     public const string Uniques = "uniques";
-    public const string SignedIn = "signedin";
+    public const string SignedInViews = "signedviews";
 
     /// <summary>
-    /// Counters to bump for a view. Per-visitor ones count only that visitor's first view of the day;
-    /// "signed in" counts their first signed-in view, so a guest who signs in later still counts.
+    /// Counters to bump for a view. Per-visitor ones count only that visitor's first view of the day.
+    /// A signed-in view is the team's own: it bumps only its own total and none of the visitor counters.
     /// </summary>
-    public static IEnumerable<string> For(PageVisit v, bool firstViewToday, bool firstSignedInViewToday)
+    public static IEnumerable<string> For(PageVisit v, bool firstViewToday)
     {
+        if (v.SignedIn) { yield return SignedInViews; yield break; }
         yield return PageViews;
         yield return $"page#{v.Page}";
-        if (firstSignedInViewToday) yield return SignedIn;
         if (!firstViewToday) yield break;
         yield return Uniques;
         yield return $"ref#{v.Referrer}";
@@ -148,7 +151,7 @@ internal static class VisitCounters
         IReadOnlyDictionary<string, int> Dim(string prefix) => counters
             .Where(kv => kv.Key.StartsWith(prefix + "#", StringComparison.Ordinal))
             .ToDictionary(kv => kv.Key[(prefix.Length + 1)..], kv => kv.Value);
-        return new(day, Get(PageViews), Get(Uniques), Get(SignedIn),
+        return new(day, Get(PageViews), Get(Uniques), Get(SignedInViews),
             Dim("page"), Dim("ref"), Dim("device"), Dim("browser"), Dim("os"), Dim("country"), Dim("lang"));
     }
 }
@@ -164,9 +167,8 @@ public sealed class InMemoryVisitStore : IVisitStore
 
     public Task RecordAsync(PageVisit visit, CancellationToken ct = default)
     {
-        var first = _seen.TryAdd((visit.Day, visit.VisitorKey), 0);
-        var firstSignedIn = visit.SignedIn && _seen.TryAdd((visit.Day, "S#" + visit.VisitorKey), 0);
-        foreach (var c in VisitCounters.For(visit, first, firstSignedIn)) _counters.AddOrUpdate((visit.Day, c), 1, (_, n) => n + 1);
+        var first = !visit.SignedIn && _seen.TryAdd((visit.Day, visit.VisitorKey), 0);
+        foreach (var c in VisitCounters.For(visit, first)) _counters.AddOrUpdate((visit.Day, c), 1, (_, n) => n + 1);
         return Task.CompletedTask;
     }
 
@@ -214,10 +216,9 @@ public sealed class DynamoVisitStore(IAmazonDynamoDB db, string tableName) : IVi
 
     public async Task RecordAsync(PageVisit visit, CancellationToken ct = default)
     {
-        var first = await MarkAsync(visit, "V#", ct);
-        var firstSignedIn = visit.SignedIn && await MarkAsync(visit, "S#", ct);
+        var first = !visit.SignedIn && await MarkAsync(visit, "V#", ct);
 
-        await Task.WhenAll(VisitCounters.For(visit, first, firstSignedIn).Select(c => db.UpdateItemAsync(new UpdateItemRequest
+        await Task.WhenAll(VisitCounters.For(visit, first).Select(c => db.UpdateItemAsync(new UpdateItemRequest
         {
             TableName = tableName,
             Key = new() { ["PK"] = S($"VISITS#{Day(visit.Day)}"), ["SK"] = S($"C#{c}") },

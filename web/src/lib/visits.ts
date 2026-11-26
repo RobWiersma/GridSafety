@@ -18,7 +18,10 @@ function externalReferrer() {
   }
 }
 
-/** Records one view of a page ('ops', 'findings', 'missions', 'mission', 'visitors'). Never throws. */
+/**
+ * Records one view of a page ('ops', 'findings', 'missions', 'mission', 'visitors'). Never throws.
+ * Signed-in views (the team's own) are counted apart, in their own total, and stay out of the visitor numbers.
+ */
 export function recordVisit(page: string, signedIn: boolean) {
   if (!endpoint || navigator.webdriver) return;
   const now = Date.now();

@@ -41,14 +41,13 @@ export function VisitorsView() {
 function Summary({ s }: { s: VisitorStats }) {
   const perDay = s.visitorDays / s.days;
   const today = s.daily[s.daily.length - 1];
-  const signedInShare = s.visitorDays ? s.signedInVisitorDays / s.visitorDays : 0;
   return (
     <>
       <section className="stats" aria-label="Visitor totals">
         <Tile label="Visitors today" value={String(today?.uniqueVisitors ?? 0)} sub={`${perDay < 10 ? perDay.toFixed(1) : Math.round(perDay)} a day over ${s.days} days (UTC)`} />
         <Tile label="Visitor-days" value={s.visitorDays.toLocaleString()} sub="unique visitors, summed by day" />
         <Tile label="Page views" value={s.pageViews.toLocaleString()} sub={s.visitorDays ? `${(s.pageViews / s.visitorDays).toFixed(1)} per visitor-day` : ' '} />
-        <Tile label="Signed in" value={`${Math.round(signedInShare * 100)}%`} sub={`${s.signedInVisitorDays} visitor-days`} />
+        <Tile label="Signed-in views" value={s.signedInViews.toLocaleString()} sub="the team's own, not in the totals" />
       </section>
 
       <section className="panel">

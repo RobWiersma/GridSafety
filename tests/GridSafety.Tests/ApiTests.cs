@@ -85,7 +85,8 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         Assert.Equal(HttpStatusCode.NoContent, (await guest.PostAsJsonAsync("/api/public/visit", new VisitRequest("ops", "https://www.linkedin.com/in/x", false), JsonOpts)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await guest.PostAsJsonAsync("/api/public/visit", new VisitRequest("findings", null, false), JsonOpts)).StatusCode);
 
-        // Bots are ignored.
+        // A signed-in view (the team's own) gets its own total; bots are ignored.
+        Assert.Equal(HttpStatusCode.NoContent, (await guest.PostAsJsonAsync("/api/public/visit", new VisitRequest("ops", null, true), JsonOpts)).StatusCode);
         var bot = factory.CreateClient();
         bot.DefaultRequestHeaders.UserAgent.ParseAdd("Googlebot/2.1");
         Assert.Equal(HttpStatusCode.NoContent, (await bot.PostAsJsonAsync("/api/public/visit", new VisitRequest("ops", null, false), JsonOpts)).StatusCode);
@@ -96,6 +97,7 @@ public class ApiTests(ApiTests.Factory factory) : IClassFixture<ApiTests.Factory
         var after = (await Client("sam", supervisor: true).GetFromJsonAsync<VisitorStatsView>("/api/visitors?days=1", JsonOpts))!;
         Assert.Equal(before.PageViews + 2, after.PageViews);
         Assert.Equal(before.VisitorDays + 1, after.VisitorDays);
+        Assert.Equal(before.SignedInViews + 1, after.SignedInViews);
         Assert.Contains(after.Referrers, r => r.Name == "linkedin.com");
         var raw = await (await Client("sam", supervisor: true).GetAsync("/api/visitors?days=1")).Content.ReadAsStringAsync();
         Assert.DoesNotContain("198.51.100.23", raw);
