@@ -6,7 +6,6 @@
 
 [![CI](https://github.com/RobWiersma/GridSafety/actions/workflows/ci.yml/badge.svg)](https://github.com/RobWiersma/GridSafety/actions/workflows/ci.yml)
 [![Live demo](docs/badges/live-demo.svg)](https://gridsafety.bswiersma.com)
-![Top language](https://img.shields.io/github/languages/top/RobWiersma/GridSafety)
 
 ![.NET 10](docs/badges/net-10.svg)
 ![C#](docs/badges/csharp.svg)
