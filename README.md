@@ -237,7 +237,7 @@ annotation.findingId = "01JD3…"
 
 That returns the ingest that created it from the MQTT message, the outbox publish, the SLA timer being booked, the page to on-call and, if nobody triages it in time, the escalation. Batch handlers (the stream publisher, the SQS notifier) give each record its own subsegment, so a batch holding several findings still tags each one.
 
-Here is a real one from the live demo: a supervisor's change to a finding, picked off the table stream, published to EventBridge and carried by EventBridge into the SLA scheduler, about 280 ms end to end.
+Here is a real one from the live demo: a supervisor triages a finding, the change is picked off the table stream, published to EventBridge, and carried by EventBridge into the SLA scheduler, which cancels the finding's deadline timer. Both functions had been idle, so the trace also shows their cold starts (`Init`); warm, the same chain takes about 280 ms.
 
 ![X-Ray trace of one finding: StreamPublisher Lambda, EventBridge PutEvents, SlaScheduler Lambda and EventBridge Scheduler in one trace, with the segment timeline](docs/screenshots/xray-trace.png)
 
