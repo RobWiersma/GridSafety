@@ -386,6 +386,13 @@ button { font: inherit; color: inherit; }
 .visit-chart .axis-label { font-size: 10px; fill: var(--muted); }
 .visit-bar { fill: var(--accent); }
 .visit-bar-hover { fill: color-mix(in srgb, var(--accent) 75%, var(--text)); }
+.visit-bar-team { fill: color-mix(in srgb, var(--muted) 70%, transparent); }
+.visit-bar-team-hover { fill: var(--muted); }
+.chart-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+.chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.visit-bar-swatch { background: var(--accent); }
+.visit-bar-team-swatch { background: color-mix(in srgb, var(--muted) 70%, transparent); }
 .chart-tip { position: absolute; top: 0; transform: translateX(-50%); pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
   padding: 6px 10px; font-size: 12px; box-shadow: var(--shadow); white-space: nowrap; z-index: 2; }
 .breakdowns { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }

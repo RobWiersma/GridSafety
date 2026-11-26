@@ -44,7 +44,8 @@ public sealed record AssigneeOption(string Label, string CrewId, string CrewName
 public sealed record AlertAckRequest(DateTimeOffset? At, AlertKind? Kind);
 public sealed record VisitRequest(string? Page, string? Referrer, bool SignedIn);
 public sealed record CountView(string Name, int Count);
-public sealed record DayVisitsView(DateOnly Day, int PageViews, int UniqueVisitors);
+/// <summary>SignedInViews: the team's own signed-in views that day, not in the other two.</summary>
+public sealed record DayVisitsView(DateOnly Day, int PageViews, int UniqueVisitors, int SignedInViews);
 public sealed record VisitorStatsView(
     int Days, int PageViews, int VisitorDays, int SignedInViews, IReadOnlyList<DayVisitsView> Daily,
     IReadOnlyList<CountView> Pages, IReadOnlyList<CountView> Referrers, IReadOnlyList<CountView> Devices,
@@ -463,7 +464,7 @@ public static partial class Endpoints
 
         return TypedResults.Ok(new VisitorStatsView(n,
             list.Sum(d => d.PageViews), list.Sum(d => d.UniqueVisitors), list.Sum(d => d.SignedInViews),
-            list.Select(d => new DayVisitsView(d.Day, d.PageViews, d.UniqueVisitors)).ToList(),
+            list.Select(d => new DayVisitsView(d.Day, d.PageViews, d.UniqueVisitors, d.SignedInViews)).ToList(),
             Top(list.Select(d => d.Pages)), Top(list.Select(d => d.Referrers)), Top(list.Select(d => d.Devices)),
             Top(list.Select(d => d.Browsers)), Top(list.Select(d => d.OperatingSystems)), Top(list.Select(d => d.Countries)),
             Top(list.Select(d => d.Languages))));

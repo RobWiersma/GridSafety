@@ -51,7 +51,7 @@ function Summary({ s }: { s: VisitorStats }) {
       </section>
 
       <section className="panel">
-        <h2>Unique visitors per day</h2>
+        <h2>Visitors per day</h2>
         <DailyChart s={s} />
       </section>
 
@@ -86,19 +86,24 @@ function Tile({ label, value, sub }: { label: string; value: string; sub: string
 function DailyChart({ s }: { s: VisitorStats }) {
   const [hover, setHover] = useState<number | null>(null);
   const W = 1000, H = 190, PAD_L = 28, PAD_B = 22, PAD_T = 8;
-  const max = Math.max(1, ...s.daily.map((d) => d.uniqueVisitors));
+  const max = Math.max(1, ...s.daily.map((d) => Math.max(d.uniqueVisitors, d.signedInViews)));
   const nice = max <= 4 ? 4 : Math.ceil(max / 10) * 10; // even, so the midline tick is a whole number
   const slot = (W - PAD_L) / s.daily.length;
-  const barW = Math.max(2, slot - 2); // 2px gap between bars
+  // Two bars a day, visitors then the team's signed-in views, with a 2px gap between bars.
+  const barW = Math.max(1, (slot - 4) / 2);
   const y = (v: number) => PAD_T + (H - PAD_T - PAD_B) * (1 - v / nice);
   const labelEvery = Math.ceil(s.daily.length / 8);
   const h = hover == null ? null : s.daily[hover];
 
-  if (s.visitorDays === 0) return <p className="muted">No visits recorded in this range yet.</p>;
+  if (s.visitorDays === 0 && s.signedInViews === 0) return <p className="muted">No visits recorded in this range yet.</p>;
 
   return (
     <div className="visit-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Unique visitors per day over the last ${s.days} days`} onMouseLeave={() => setHover(null)}>
+      <div className="chart-legend small muted">
+        <span><i className="legend-swatch visit-bar-swatch" />Unique visitors</span>
+        <span><i className="legend-swatch visit-bar-team-swatch" />Signed-in views (the team's own)</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Unique visitors and signed-in views per day over the last ${s.days} days`} onMouseLeave={() => setHover(null)}>
         {[0, nice / 2, nice].map((t) => (
           <g key={t}>
             <line x1={PAD_L} x2={W} y1={y(t)} y2={y(t)} className="grid-line" />
@@ -107,13 +112,17 @@ function DailyChart({ s }: { s: VisitorStats }) {
         ))}
         {s.daily.map((d, i) => {
           const x = PAD_L + i * slot + 1;
-          const top = y(d.uniqueVisitors);
-          const bh = H - PAD_B - top;
+          const bar = (v: number, bx: number, cls: string) => {
+            const top = y(v);
+            const bh = H - PAD_B - top;
+            return bh > 0 && <path d={roundedTop(bx, top, barW, bh, Math.min(4, barW / 2))} className={`${cls} ${hover === i ? `${cls}-hover` : ''}`} />;
+          };
           return (
             <g key={d.day} onMouseEnter={() => setHover(i)}>
               <rect x={PAD_L + i * slot} y={PAD_T} width={slot} height={H - PAD_T - PAD_B} fill="transparent" />
-              {bh > 0 && <path d={roundedTop(x, top, barW, bh, Math.min(4, barW / 2))} className={`visit-bar ${hover === i ? 'visit-bar-hover' : ''}`} />}
-              {i % labelEvery === 0 && <text x={x + barW / 2} y={H - 6} textAnchor="middle" className="axis-label">{fmtDay(d.day)}</text>}
+              {bar(d.uniqueVisitors, x, 'visit-bar')}
+              {bar(d.signedInViews, x + barW + 2, 'visit-bar-team')}
+              {i % labelEvery === 0 && <text x={x + barW + 1} y={H - 6} textAnchor="middle" className="axis-label">{fmtDay(d.day)}</text>}
             </g>
           );
         })}
@@ -123,12 +132,13 @@ function DailyChart({ s }: { s: VisitorStats }) {
           <strong>{fmtDay(h.day)}</strong>
           <div>{h.uniqueVisitors} visitor{h.uniqueVisitors === 1 ? '' : 's'}</div>
           <div className="muted">{h.pageViews} page view{h.pageViews === 1 ? '' : 's'}</div>
+          <div className="muted">{h.signedInViews} signed-in view{h.signedInViews === 1 ? '' : 's'}</div>
         </div>
       )}
       <table className="sr-only">
         <caption>Visitors per day</caption>
-        <thead><tr><th>Day</th><th>Unique visitors</th><th>Page views</th></tr></thead>
-        <tbody>{s.daily.map((d) => <tr key={d.day}><td>{d.day}</td><td>{d.uniqueVisitors}</td><td>{d.pageViews}</td></tr>)}</tbody>
+        <thead><tr><th>Day</th><th>Unique visitors</th><th>Page views</th><th>Signed-in views</th></tr></thead>
+        <tbody>{s.daily.map((d) => <tr key={d.day}><td>{d.day}</td><td>{d.uniqueVisitors}</td><td>{d.pageViews}</td><td>{d.signedInViews}</td></tr>)}</tbody>
       </table>
     </div>
   );

@@ -266,7 +266,7 @@ export interface VisitorStats {
   pageViews: number;
   visitorDays: number;
   signedInViews: number;
-  daily: { day: string; pageViews: number; uniqueVisitors: number }[];
+  daily: { day: string; pageViews: number; uniqueVisitors: number; signedInViews: number }[];
   pages: CountView[];
   referrers: CountView[];
   devices: CountView[];
