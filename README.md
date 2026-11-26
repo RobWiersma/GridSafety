@@ -51,7 +51,7 @@ flowchart LR
 - **Every hour costed:** labor, flight crews, fuel and maintenance by day, week or month, from a rate card with dated pay history, all downloadable as CSV.
 - **Secure by default:** Cognito roles enforced by the API, a separate read-only guest API with names removed, device identity taken from the MQTT topic, least-privilege IAM per function.
 - **Costs cents a month:** pay-per-use services only, and nothing runs until someone clicks, so an idle deployment costs next to nothing. Ten CloudWatch alarms (the free tier) watch every failure path.
-- **Tested and shipped continuously:** 253 .NET tests plus frontend tests on every push, then deploy and a smoke test against the live site.
+- **Tested and shipped continuously:** 254 .NET tests plus frontend tests on every push, then deploy and a smoke test against the live site.
 
 **Contents:** [Scope](#project-scope-a-saas-proof-of-concept) · [What it does](#what-it-does) · [Architecture](#architecture) · [Design decisions](#design-decisions) · [Run it locally](#run-it-locally-no-aws-account-needed) · [Deploy](#deploy-to-aws) · [Why I built this](#why-i-built-this)
 
@@ -237,6 +237,12 @@ annotation.findingId = "01JD3…"
 
 That returns the ingest that created it from the MQTT message, the outbox publish, the SLA timer being booked, the page to on-call and, if nobody triages it in time, the escalation. Batch handlers (the stream publisher, the SQS notifier) give each record its own subsegment, so a batch holding several findings still tags each one.
 
+Here is a real one from the live demo: a supervisor's change to a finding, picked off the table stream, published to EventBridge and carried by EventBridge into the SLA scheduler, about 280 ms end to end.
+
+![X-Ray trace of one finding: StreamPublisher Lambda, EventBridge PutEvents, SlaScheduler Lambda and EventBridge Scheduler in one trace, with the segment timeline](docs/screenshots/xray-trace.png)
+
+**Sampling.** Lambda records the first request each second plus 5% of the rest, and that rate can't be changed for Lambda. A quiet action like a triage is recorded end to end. In the middle of a flight, when the ingest and the outbox run several times a second, some hops of a given finding go unrecorded, and EventBridge passes that "not recorded" decision on to what it triggers. For the hops X-Ray skipped, the logs fill the gap: every Powertools log line carries its `xray_trace_id`, and the outbox publisher and the SLA functions log the finding id on every event, so a Logs Insights search on the id across those log groups lists those hops whether or not X-Ray recorded them.
+
 ### Projects
 
 | Path | What |
@@ -248,7 +254,7 @@ That returns the ingest that created it from the MQTT message, the outbox publis
 | `tools/GridSafety.Simulator` | A drone that flies a circuit, with scripted incidents, posting to the local API or publishing to IoT Core |
 | `web/` | React ops console: live map, findings, missions, schedule, resources and reports |
 | `infra/` | AWS CDK app in C# (~100 resources) |
-| `tests/GridSafety.Tests` | xUnit tests covering domain, ingest, events, SLA, paging, reports, OSM import, flight legs, scheduling, costs, staffing, live push and HTTP/RBAC (253 tests) |
+| `tests/GridSafety.Tests` | xUnit tests covering domain, ingest, events, SLA, paging, reports, OSM import, flight legs, scheduling, costs, staffing, live push and HTTP/RBAC (254 tests) |
 
 ## Design decisions
 

@@ -39,7 +39,7 @@ public sealed class SlaScheduler(IAmazonScheduler scheduler, SlaSettings setting
             await UpsertAsync(name, e.TriageDueAt!.Value, new EscalationPayload(e.EntityId));
             Logger.LogInformation("SLA timer for {FindingId} due {Due}", e.EntityId, e.TriageDueAt);
         }
-        else if (e.DetailType == EventNames.FindingStatusChanged)
+        else if (ShouldCancel(e))
         {
             try
             {
@@ -55,6 +55,13 @@ public sealed class SlaScheduler(IAmazonScheduler scheduler, SlaSettings setting
 
     public static bool ShouldSchedule(GridEvent e) =>
         e.DetailType == EventNames.FindingCreated && e.TriageDueAt is not null && e.NewStatus == nameof(FindingStatus.New);
+
+    /// <summary>
+    /// Only the move out of New can find a timer to cancel: the first triage (or dismissal) cancels it, so later changes
+    /// (assigned, resolved) would only get a 404 back from Scheduler.
+    /// </summary>
+    public static bool ShouldCancel(GridEvent e) =>
+        e.DetailType == EventNames.FindingStatusChanged && e.PreviousStatus == nameof(FindingStatus.New) && e.NewStatus != nameof(FindingStatus.New);
 
     public static string ScheduleName(string findingId) => $"sla-{findingId}";
 

@@ -247,6 +247,17 @@ public class SlaAndNotifierTests
     }
 
     [Fact]
+    public void Cancels_the_timer_only_when_a_finding_leaves_New()
+    {
+        GridEvent Changed(string from, string to) => Created(5, null) with { DetailType = EventNames.FindingStatusChanged, PreviousStatus = from, NewStatus = to };
+        Assert.True(SlaScheduler.ShouldCancel(Changed("New", "Triaged")));
+        Assert.True(SlaScheduler.ShouldCancel(Changed("New", "Dismissed")));
+        Assert.False(SlaScheduler.ShouldCancel(Changed("Triaged", "Assigned"))); // the timer is already gone
+        Assert.False(SlaScheduler.ShouldCancel(Changed("Assigned", "Resolved")));
+        Assert.False(SlaScheduler.ShouldCancel(Created(5, DateTimeOffset.UtcNow.AddHours(4))));
+    }
+
+    [Fact]
     public void Scheduler_expression_and_name_are_valid()
     {
         Assert.Equal("at(2026-11-22T09:30:00)", SlaScheduler.AtExpression(new DateTimeOffset(2026, 11, 22, 1, 30, 0, TimeSpan.FromHours(-8))));
