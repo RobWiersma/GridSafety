@@ -5,20 +5,19 @@
 # GridSafety
 
 [![CI](https://github.com/RobWiersma/GridSafety/actions/workflows/ci.yml/badge.svg)](https://github.com/RobWiersma/GridSafety/actions/workflows/ci.yml)
-[![Live demo](https://img.shields.io/badge/live_demo-gridsafety.bswiersma.com-f5b301?logo=googlechrome&logoColor=white)](https://gridsafety.bswiersma.com)
-![Last commit](https://img.shields.io/github/last-commit/RobWiersma/GridSafety)
+[![Live demo](docs/badges/live-demo.svg)](https://gridsafety.bswiersma.com)
 ![Top language](https://img.shields.io/github/languages/top/RobWiersma/GridSafety)
 
-![.NET 10](https://img.shields.io/badge/.NET_10-512BD4?logo=dotnet&logoColor=white)
-![C#](https://img.shields.io/badge/C%23-239120)
-![AWS Lambda](https://img.shields.io/badge/AWS_Lambda-FF9900)
-![AWS IoT Core](https://img.shields.io/badge/IoT_Core-232F3E)
-![DynamoDB](https://img.shields.io/badge/DynamoDB-4053D6)
-![AWS CDK](https://img.shields.io/badge/AWS_CDK-232F3E)
-![React 19](https://img.shields.io/badge/React_19-20232A?logo=react&logoColor=61DAFB)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
-![Leaflet](https://img.shields.io/badge/Leaflet-199900?logo=leaflet&logoColor=white)
-![OpenStreetMap](https://img.shields.io/badge/OpenStreetMap-7EBC6F?logo=openstreetmap&logoColor=white)
+![.NET 10](docs/badges/net-10.svg)
+![C#](docs/badges/csharp.svg)
+![AWS Lambda](docs/badges/aws-lambda.svg)
+![AWS IoT Core](docs/badges/aws-iot-core.svg)
+![DynamoDB](docs/badges/dynamodb.svg)
+![AWS CDK](docs/badges/aws-cdk.svg)
+![React 19](docs/badges/react-19.svg)
+![TypeScript](docs/badges/typescript.svg)
+![Leaflet](docs/badges/leaflet.svg)
+![OpenStreetMap](docs/badges/openstreetmap.svg)
 
 </div>
 
